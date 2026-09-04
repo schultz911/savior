@@ -1,0 +1,44 @@
+package com.example
+
+import android.app.Application
+import android.content.Context
+import com.example.data.AppDatabase
+import com.example.data.ExpensePreferences
+import com.example.data.ExpenseRepository
+import com.example.service.LiveExpenditureNotificationService
+
+class SpendTrackerApplication : Application() {
+
+    lateinit var database: AppDatabase
+        private set
+
+    lateinit var repository: ExpenseRepository
+        private set
+
+    lateinit var preferences: ExpensePreferences
+        private set
+
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+
+        database = AppDatabase.getDatabase(this)
+        preferences = ExpensePreferences(this)
+        repository = ExpenseRepository(this, database.expenseDao(), preferences)
+
+        // Initialize Notification Channels
+        LiveExpenditureNotificationService.createNotificationChannel(this)
+
+        // If persistent notification is enabled, ensure it's started/synced
+        if (preferences.isPersistentNotificationEnabled) {
+            LiveExpenditureNotificationService.updateLiveExpenditure(this)
+        }
+    }
+
+    companion object {
+        lateinit var instance: SpendTrackerApplication
+            private set
+
+        fun getAppContext(): Context = instance.applicationContext
+    }
+}
