@@ -14,9 +14,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,9 +36,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ai.OpenRouterCategorizer
 import com.example.data.ExpenseType
-import com.example.ui.theme.BentoLavenderContainer
-import com.example.ui.theme.BentoPurpleDark
-import com.example.ui.theme.BentoPurplePrimary
+import com.example.ui.theme.GlassCardBorder
+import com.example.ui.theme.SavioEmerald
+import com.example.ui.theme.SavioEmeraldContainer
+import com.example.ui.theme.SavioSlateDark
+import com.example.ui.theme.SavioSlateMuted
+import com.example.ui.theme.SavioSpendRose
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -57,7 +63,8 @@ fun ManualAddExpenseDialog(
         title = {
             Text(
                 text = "Add Transaction",
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                color = SavioSlateDark
             )
         },
         text = {
@@ -65,7 +72,7 @@ fun ManualAddExpenseDialog(
                 Text(
                     text = "Record spends not captured by SMS alerts (e.g. cash, untracked cards).",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = SavioSlateMuted
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -83,7 +90,11 @@ fun ManualAddExpenseDialog(
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("manual_amount_input")
+                        .testTag("manual_amount_input"),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SavioEmerald,
+                        unfocusedBorderColor = GlassCardBorder
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -96,19 +107,24 @@ fun ManualAddExpenseDialog(
                         errorMessage = null
                     },
                     label = { Text("Merchant or Payee") },
-                    placeholder = { Text("e.g. Local Market, Taxi, Tea Stall") },
+                    placeholder = { Text("e.g. Local Market, Taxi, Swiggy") },
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("manual_merchant_input")
+                        .testTag("manual_merchant_input"),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SavioEmerald,
+                        unfocusedBorderColor = GlassCardBorder
+                    )
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Transaction Type
+                // Type Chips: Spend, Debit, Transfer
                 Text(
                     text = "Transaction Type",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = SavioSlateDark
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
@@ -116,21 +132,27 @@ fun ManualAddExpenseDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     ExpenseType.entries.forEach { type ->
+                        val isSel = selectedType == type
                         FilterChip(
-                            selected = selectedType == type,
+                            selected = isSel,
                             onClick = { selectedType = type },
                             label = { Text(type.displayName) },
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(10.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = SavioEmerald,
+                                selectedLabelColor = androidx.compose.ui.graphics.Color.White
+                            )
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Category selection
                 Text(
                     text = "Category",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = SavioSlateDark
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 FlowRow(
@@ -138,20 +160,20 @@ fun ManualAddExpenseDialog(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    OpenRouterCategorizer.KNOWN_CATEGORIES.take(8).forEach { cat ->
+                    OpenRouterCategorizer.KNOWN_CATEGORIES.take(7).forEach { cat ->
                         val isChosen = selectedCategory == cat
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = if (isChosen) BentoPurplePrimary else BentoLavenderContainer.copy(alpha = 0.5f),
+                            color = if (isChosen) SavioEmerald else SavioEmeraldContainer.copy(alpha = 0.6f),
                             modifier = Modifier.clickable { selectedCategory = cat }
                         ) {
                             Text(
                                 text = cat,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = if (isChosen) FontWeight.Bold else FontWeight.Normal,
-                                    fontSize = 11.sp
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = if (isChosen) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 11.5.sp
                                 ),
-                                color = if (isChosen) MaterialTheme.colorScheme.onPrimary else BentoPurpleDark,
+                                color = if (isChosen) androidx.compose.ui.graphics.Color.White else SavioEmerald,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
                             )
                         }
@@ -161,9 +183,9 @@ fun ManualAddExpenseDialog(
                 if (errorMessage != null) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = errorMessage!!,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
+                        text = errorMessage ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SavioSpendRose
                     )
                 }
             }
@@ -173,22 +195,30 @@ fun ManualAddExpenseDialog(
                 onClick = {
                     val amt = amountInput.toDoubleOrNull()
                     if (amt == null || amt <= 0.0) {
-                        errorMessage = "Please enter a valid positive amount."
+                        errorMessage = "Please enter a valid amount greater than 0"
                         return@Button
                     }
-                    val merchant = merchantInput.trim().ifEmpty { "Manual Spend" }
-                    onAddExpense(amt, merchant, selectedCategory, selectedType, accountInfoInput)
-                    onDismiss()
+                    if (merchantInput.isBlank()) {
+                        errorMessage = "Please specify a merchant or payee name"
+                        return@Button
+                    }
+                    onAddExpense(
+                        amt,
+                        merchantInput.trim(),
+                        selectedCategory,
+                        selectedType,
+                        accountInfoInput.trim()
+                    )
                 },
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.testTag("submit_manual_spend_button")
+                colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald)
             ) {
                 Text("Add Spend")
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text("Cancel", color = SavioSlateDark)
             }
         }
     )

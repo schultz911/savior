@@ -42,6 +42,9 @@ interface ExpenseDao {
     @Query("UPDATE expenses SET category = :newCategory WHERE id = :id")
     suspend fun updateCategory(id: Long, newCategory: String)
 
+    @Query("UPDATE expenses SET category = :newCategory WHERE LOWER(TRIM(merchantOrRecipient)) = LOWER(TRIM(:merchant))")
+    suspend fun updateCategoryForMerchant(merchant: String, newCategory: String)
+
     @Query("SELECT SUM(amount) FROM expenses WHERE monthKey = :monthKey AND category = :category")
     suspend fun getTotalForCategoryInMonthSync(monthKey: String, category: String): Double?
 

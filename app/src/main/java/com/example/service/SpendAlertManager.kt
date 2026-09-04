@@ -60,7 +60,7 @@ object SpendAlertManager {
 
         val formattedAmount = formatCurrency(amount, currency)
         val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_rupee)
             .setContentTitle("Assign Category to Spend")
             .setContentText("Transaction at $merchant of $formattedAmount needs a category.")
             .setStyle(
@@ -116,7 +116,7 @@ object SpendAlertManager {
             // Overshot limit!
             val overBy = formatCurrency(currentCategoryTotal - categoryLimit, currency)
             val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS)
-                .setSmallIcon(R.mipmap.ic_launcher)
+                .setSmallIcon(R.drawable.ic_stat_rupee)
                 .setContentTitle("⚠️ Category Budget Overshot: $category")
                 .setContentText("Spent $currentFmt of $limitFmt limit (+${overBy} over)!")
                 .setStyle(
@@ -133,7 +133,7 @@ object SpendAlertManager {
             // Reached 80% of limit
             val pct = (ratio * 100).toInt()
             val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS)
-                .setSmallIcon(R.mipmap.ic_launcher)
+                .setSmallIcon(R.drawable.ic_stat_rupee)
                 .setContentTitle("⚡ 80% Budget Alert: $category")
                 .setContentText("You've reached $pct% of your $limitFmt limit ($currentFmt spent).")
                 .setStyle(

@@ -2,47 +2,87 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Bento Grid Palette Tokens (From Bento Grid Theme)
-// Primary Lavender / Purple accents
-val BentoPurplePrimary = Color(0xFF6750A4)
-val BentoPurpleDark = Color(0xFF21005D)
-val BentoLavenderCard = Color(0xFFD0BCFF)
-val BentoLavenderContainer = Color(0xFFEADDFF)
-val BentoLavenderLight = Color(0xFFE8DEF8)
-val BentoCardBg = Color(0xFFF3EDF7)
-val BentoCardBorder = Color(0xFFCAC4D0)
-val BentoBorderLight = Color(0xFFE7E0EC)
-val BentoDarkTile = Color(0xFF1D1B20)
+// ==========================================
+// Savio₹ Light-Mode Glassmorphism Palette
+// ==========================================
 
-// Semantic colors
-val BentoDebitRed = Color(0xFFB3261E)
-val BentoDebitRedBg = Color(0xFFF9DEDC)
-val BentoTransferPurple = Color(0xFF6750A4)
-val BentoTransferPurpleBg = Color(0xFFE8DEF8)
-val BentoSpendPlum = Color(0xFF7D5260)
-val BentoSpendPlumBg = Color(0xFFFFD8E4)
+// Primary Glassmorphic Canvas & Surfaces
+val GlassBackground = Color(0xFFF8FAFC)           // Ultra-light clean slate canvas
+val GlassBackgroundMesh = Color(0xFFF1F5F9)       // Soft mesh tint
+val GlassSurface = Color(0xFFFFFFFF)              // Pure white base
+val GlassSurfaceTranslucent = Color(0xE6FFFFFF)   // 90% opacity frosted glass
+val GlassCardBg = Color(0xF2FFFFFF)              // 95% opacity frosted card
+val GlassCardBorder = Color(0x66E2E8F0)          // Soft translucent glass border
+val GlassCardBorderSubtle = Color(0x33CBD5E1)    // Ultra subtle border
+val GlassPillBg = Color(0x14059669)              // Soft emerald tinted pill
 
-// Neutral Backgrounds and Surfaces - Bento Theme
-val BentoBackgroundLight = Color(0xFFFDF8FF)
-val BentoSurfaceLight = Color(0xFFFFFFFF)
-val BentoTextPrimary = Color(0xFF1C1B1F)
-val BentoTextSecondary = Color(0xFF49454F)
-val BentoTextTertiary = Color(0xFF938F99)
-val BentoPillDark = Color(0xFF49454F)
+// Typography & Text Tokens
+val SavioSlateDark = Color(0xFF0F172A)           // Deep charcoal / slate for "Savio" and primary headings
+val SavioSlateBody = Color(0xFF334155)           // Crisp slate for readable body
+val SavioSlateMuted = Color(0xFF64748B)          // Secondary labels and subtitles
+val SavioSlateSubtle = Color(0xFF94A3B8)         // Placeholders and subtle captions
 
-// Dark theme variants
-val BentoBackgroundDark = Color(0xFF141218)
-val BentoSurfaceDark = Color(0xFF1D1B20)
-val BentoSurfaceVariantDark = Color(0xFF2B2930)
-val BentoTextDarkPrimary = Color(0xFFE6E1E5)
-val BentoTextDarkSecondary = Color(0xFFCAC4D0)
+// Brand & Savings Accent: Emerald Green
+val SavioEmerald = Color(0xFF059669)             // Deep rich Emerald green for ₹ symbol and savings
+val SavioEmeraldLight = Color(0xFF10B981)        // Vibrant emerald green
+val SavioEmeraldContainer = Color(0xFFECFDF5)    // Soft glowing emerald glass container
+val SavioEmeraldBorder = Color(0xFFA7F3D0)       // Delicate emerald border
 
-// Status notification indicator
+// Financial Transaction Semantics (Clean & High Contrast)
+val SavioSpendRose = Color(0xFFE11D48)           // Vivid rose-red for spends & debits
+val SavioSpendRoseBg = Color(0xFFFFF1F2)         // Soft rose-red container
+val SavioSpendRoseBorder = Color(0xFFFECDD3)     // Rose border
+
+val SavioTransferIndigo = Color(0xFF4F46E5)      // Modern electric indigo for transfers
+val SavioTransferIndigoBg = Color(0xFFEEF2FF)    // Soft indigo container
+val SavioTransferIndigoBorder = Color(0xFFC7D2FE)// Indigo border
+
+val SavioGoldNotes = Color(0xFFD97706)           // Warm gold/amber for rupee note wad button
+val SavioGoldNotesBg = Color(0xFFFEF3C7)         // Warm gold glow container
+
+// Blacklisted Merchant States
+val SavioBlacklistRed = Color(0xFFDC2626)        // Blacklisted merchant indicator
+val SavioBlacklistBg = Color(0xFFFEF2F2)         // Excluded merchant container
+val SavioBlacklistMuted = Color(0xFF64748B)      // Muted strikethrough text
+
+// Status & Activity
 val StatusActiveGreen = Color(0xFF10B981)
 
-// SAVIO Brand & Savings tokens
-val SavioLogoAccent = Color(0xFFE879F9) // Distinct bright orchid/fuchsia for "IO"
-val SavioSavingsGreen = Color(0xFF16A34A) // Solid green for amount saved
-val SavioSavingsGreenBg = Color(0xFFDCFCE7) // Soft container for savings
-val SavioSpendRed = Color(0xFFDC2626) // Vivid red for spend line/bar
-val SavioSpendRedBg = Color(0xFFFEE2E2)
+// ==========================================
+// Aliases for Smooth Compatibility
+// ==========================================
+val BentoPurplePrimary = SavioEmerald
+val BentoPurpleDark = SavioSlateDark
+val BentoLavenderCard = GlassCardBg
+val BentoLavenderContainer = SavioEmeraldContainer
+val BentoLavenderLight = Color(0xFFF1F5F9)
+val BentoCardBg = GlassCardBg
+val BentoCardBorder = Color(0xFFE2E8F0)
+val BentoBorderLight = Color(0xFFF1F5F9)
+val BentoDarkTile = SavioSlateDark
+
+val BentoDebitRed = SavioSpendRose
+val BentoDebitRedBg = SavioSpendRoseBg
+val BentoTransferPurple = SavioTransferIndigo
+val BentoTransferPurpleBg = SavioTransferIndigoBg
+val BentoSpendPlum = SavioSpendRose
+val BentoSpendPlumBg = SavioSpendRoseBg
+
+val BentoBackgroundLight = GlassBackground
+val BentoSurfaceLight = GlassSurface
+val BentoTextPrimary = SavioSlateDark
+val BentoTextSecondary = SavioSlateBody
+val BentoTextTertiary = SavioSlateMuted
+val BentoPillDark = SavioSlateDark
+
+val BentoBackgroundDark = GlassBackground
+val BentoSurfaceDark = GlassSurface
+val BentoSurfaceVariantDark = GlassCardBg
+val BentoTextDarkPrimary = SavioSlateDark
+val BentoTextDarkSecondary = SavioSlateBody
+
+val SavioLogoAccent = SavioEmerald
+val SavioSavingsGreen = SavioEmerald
+val SavioSavingsGreenBg = SavioEmeraldContainer
+val SavioSpendRed = SavioSpendRose
+val SavioSpendRedBg = SavioSpendRoseBg

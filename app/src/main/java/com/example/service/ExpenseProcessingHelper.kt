@@ -11,9 +11,9 @@ import kotlinx.coroutines.withContext
 object ExpenseProcessingHelper {
 
     /**
-     * Categorizes with OpenRouter gemini-3.5-flash-lite, inserts the expense,
-     * alerts if category is UNKNOWN, alerts if 80% or 100% of category limit is reached,
-     * and refreshes the persistent live status bar notification.
+     * Categorizes using remembered merchant rules, OpenRouter gemini-3.5-flash-lite,
+     * or heuristic classification. Inserts the expense, alerts if category is UNKNOWN,
+     * alerts if 80% or 100% of category limit is reached, and updates notification.
      */
     suspend fun processAndInsertExpense(
         context: Context,
@@ -34,7 +34,12 @@ object ExpenseProcessingHelper {
         var finalCategory = parsed.category
         var isUnrecognized = false
 
-        if (apiKey.isNotEmpty()) {
+        // Check if user previously mapped this merchant to a category
+        val rememberedCategory = prefs.getMerchantCategory(parsed.title)
+        if (!rememberedCategory.isNullOrBlank()) {
+            finalCategory = rememberedCategory
+            isUnrecognized = false
+        } else if (apiKey.isNotEmpty()) {
             val aiResult = OpenRouterCategorizer.categorizeSms(
                 rawText = parsed.rawText,
                 merchant = parsed.title,

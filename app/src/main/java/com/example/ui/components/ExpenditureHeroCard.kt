@@ -7,6 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,8 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Card
@@ -32,41 +33,34 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.border
-import com.example.ui.theme.BentoCardBg
-import com.example.ui.theme.BentoCardBorder
-import com.example.ui.theme.BentoDebitRed
-import com.example.ui.theme.BentoDebitRedBg
-import com.example.ui.theme.BentoLavenderCard
-import com.example.ui.theme.BentoLavenderContainer
-import com.example.ui.theme.BentoPillDark
-import com.example.ui.theme.BentoPurpleDark
-import com.example.ui.theme.BentoPurplePrimary
-import com.example.ui.theme.BentoSpendPlum
-import com.example.ui.theme.BentoSpendPlumBg
-import com.example.ui.theme.BentoTextPrimary
-import com.example.ui.theme.BentoTextSecondary
-import com.example.ui.theme.BentoTransferPurple
-import com.example.ui.theme.BentoTransferPurpleBg
-import com.example.ui.theme.SavioSavingsGreen
-import com.example.ui.theme.SavioSavingsGreenBg
-import com.example.ui.theme.SavioSpendRed
+import com.example.ui.theme.GlassCardBg
+import com.example.ui.theme.GlassCardBorder
+import com.example.ui.theme.SavioBlacklistBg
+import com.example.ui.theme.SavioBlacklistRed
+import com.example.ui.theme.SavioEmerald
+import com.example.ui.theme.SavioEmeraldBorder
+import com.example.ui.theme.SavioEmeraldContainer
+import com.example.ui.theme.SavioSlateBody
+import com.example.ui.theme.SavioSlateDark
+import com.example.ui.theme.SavioSlateMuted
+import com.example.ui.theme.SavioSpendRose
+import com.example.ui.theme.SavioSpendRoseBg
+import com.example.ui.theme.SavioTransferIndigo
+import com.example.ui.theme.SavioTransferIndigoBg
 import com.example.ui.theme.StatusActiveGreen
 import java.text.NumberFormat
 import java.util.Locale
@@ -83,13 +77,16 @@ fun ExpenditureHeroCard(
     monthlySavings: Double = 0.0,
     savingsGoal: Double = 0.0,
     monthlyBudget: Double = 0.0,
+    blacklistedDeductions: Double = 0.0,
     isNotificationActive: Boolean,
     onToggleNotification: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val numberFormatter = NumberFormat.getNumberInstance(Locale.US).apply {
-        minimumFractionDigits = 2
-        maximumFractionDigits = 2
+    val numberFormatter = remember {
+        NumberFormat.getNumberInstance(Locale.US).apply {
+            minimumFractionDigits = 2
+            maximumFractionDigits = 2
+        }
     }
 
     val totalFormatted = "$currency${numberFormatter.format(totalExpenditure)}"
@@ -118,9 +115,10 @@ fun ExpenditureHeroCard(
         modifier = modifier
             .fillMaxWidth()
             .testTag("hero_expenditure_card"),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = BentoLavenderCard),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(containerColor = GlassCardBg),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder)
     ) {
         Column(
             modifier = Modifier
@@ -140,19 +138,19 @@ fun ExpenditureHeroCard(
                             letterSpacing = 1.2.sp,
                             fontWeight = FontWeight.Bold
                         ),
-                        color = BentoPurpleDark
+                        color = SavioSlateMuted
                     )
                     Text(
-                        text = "Total Monthly Expenditure",
+                        text = "Net Monthly Expenditure",
                         style = MaterialTheme.typography.bodySmall,
-                        color = BentoTextSecondary
+                        color = SavioSlateBody
                     )
                 }
 
-                // Status Bar Notification Pill Indicator (Bento style)
+                // Status Bar Notification Pill Indicator
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = BentoPurpleDark,
+                    color = SavioSlateDark,
                     modifier = Modifier.clickable { onToggleNotification(!isNotificationActive) }
                 ) {
                     Row(
@@ -193,24 +191,53 @@ fun ExpenditureHeroCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Bento Main Large Amount Display
+            // Main Large Amount Display
             Text(
                 text = totalFormatted,
                 style = MaterialTheme.typography.headlineLarge.copy(
-                    fontSize = 40.sp,
+                    fontSize = 38.sp,
                     fontWeight = FontWeight.Black,
                     letterSpacing = (-1.0).sp
                 ),
-                color = BentoPurpleDark
+                color = SavioSlateDark
             )
 
-            // Bento Salary & Live Savings Summary Card
+            // Blacklisted Deductions indicator if any
+            if (blacklistedDeductions > 0.0) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = SavioBlacklistBg,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, SavioBlacklistRed.copy(alpha = 0.3f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Block,
+                            contentDescription = null,
+                            tint = SavioBlacklistRed,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "Blacklisted Deductions: -$currency${numberFormatter.format(blacklistedDeductions)}",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
+                            color = SavioBlacklistRed
+                        )
+                    }
+                }
+            }
+
+            // Glassmorphic Salary & Live Savings Summary Card
             if (monthlySalary > 0) {
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Surface(
                     shape = RoundedCornerShape(18.dp),
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = Color.White.copy(alpha = 0.9f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -227,12 +254,12 @@ fun ExpenditureHeroCard(
                                 Text(
                                     text = "Monthly Salary",
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                    color = BentoTextSecondary
+                                    color = SavioSlateMuted
                                 )
                                 Text(
                                     text = salaryFormatted,
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = BentoPurpleDark
+                                    color = SavioSlateDark
                                 )
                             }
 
@@ -240,12 +267,12 @@ fun ExpenditureHeroCard(
                                 Text(
                                     text = if (monthlySavings >= 0) "Amount Saved Live" else "Overspent Deficit",
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                    color = BentoTextSecondary
+                                    color = SavioSlateMuted
                                 )
                                 Text(
                                     text = savingsFormatted,
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
-                                    color = if (monthlySavings >= 0) SavioSavingsGreen else BentoDebitRed
+                                    color = if (monthlySavings >= 0) SavioEmerald else SavioSpendRose
                                 )
                             }
                         }
@@ -263,12 +290,12 @@ fun ExpenditureHeroCard(
                                 Text(
                                     text = "Goal: $currency${numberFormatter.format(savingsGoal)}",
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                    color = BentoTextSecondary
+                                    color = SavioSlateMuted
                                 )
                                 Text(
                                     text = if (monthlySavings >= savingsGoal) "Goal Achieved! ($goalPercent%)" else "$goalPercent% achieved",
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = if (monthlySavings >= savingsGoal) SavioSavingsGreen else BentoPurplePrimary
+                                    color = if (monthlySavings >= savingsGoal) SavioEmerald else SavioTransferIndigo
                                 )
                             }
 
@@ -280,8 +307,8 @@ fun ExpenditureHeroCard(
                                     .fillMaxWidth()
                                     .height(6.dp)
                                     .clip(RoundedCornerShape(3.dp)),
-                                color = if (monthlySavings >= savingsGoal) SavioSavingsGreen else BentoPurplePrimary,
-                                trackColor = BentoLavenderContainer
+                                color = if (monthlySavings >= savingsGoal) SavioEmerald else SavioTransferIndigo,
+                                trackColor = SavioEmeraldContainer
                             )
                         }
                     }
@@ -304,7 +331,7 @@ fun ExpenditureHeroCard(
                         Text(
                             text = "Budget: $currency${numberFormatter.format(monthlyBudget)}",
                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                            color = BentoPurpleDark
+                            color = SavioSlateDark
                         )
                         Text(
                             text = if (totalExpenditure > monthlyBudget) {
@@ -313,7 +340,7 @@ fun ExpenditureHeroCard(
                                 "$currency${numberFormatter.format(remaining)} left ($percentInt%)"
                             },
                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                            color = if (totalExpenditure > monthlyBudget) BentoDebitRed else BentoPurplePrimary
+                            color = if (totalExpenditure > monthlyBudget) SavioSpendRose else SavioEmerald
                         )
                     }
 
@@ -325,15 +352,15 @@ fun ExpenditureHeroCard(
                             .fillMaxWidth()
                             .height(8.dp)
                             .clip(RoundedCornerShape(4.dp)),
-                        color = if (totalExpenditure > monthlyBudget) BentoDebitRed else BentoPurplePrimary,
-                        trackColor = BentoLavenderContainer,
+                        color = if (totalExpenditure > monthlyBudget) SavioSpendRose else SavioEmerald,
+                        trackColor = SavioEmeraldContainer
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Bento Grid Breakdown Tiles: Debits, Transfers, Spends
+            // Breakdown Tiles: Debits, Transfers, Spends
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -342,8 +369,8 @@ fun ExpenditureHeroCard(
                     label = "Debits",
                     amount = debitsFormatted,
                     icon = Icons.Default.ArrowDownward,
-                    accentColor = BentoDebitRed,
-                    backgroundColor = BentoDebitRedBg,
+                    accentColor = SavioSpendRose,
+                    backgroundColor = SavioSpendRoseBg,
                     modifier = Modifier.weight(1f)
                 )
 
@@ -351,8 +378,8 @@ fun ExpenditureHeroCard(
                     label = "Transfers",
                     amount = transfersFormatted,
                     icon = Icons.Default.SwapHoriz,
-                    accentColor = BentoTransferPurple,
-                    backgroundColor = BentoTransferPurpleBg,
+                    accentColor = SavioTransferIndigo,
+                    backgroundColor = SavioTransferIndigoBg,
                     modifier = Modifier.weight(1f)
                 )
 
@@ -360,8 +387,8 @@ fun ExpenditureHeroCard(
                     label = "Spends",
                     amount = spendsFormatted,
                     icon = Icons.Default.CreditCard,
-                    accentColor = BentoSpendPlum,
-                    backgroundColor = BentoSpendPlumBg,
+                    accentColor = SavioSpendRose,
+                    backgroundColor = SavioSpendRoseBg,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -379,46 +406,46 @@ private fun SpendCategoryPill(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = modifier,
         shape = RoundedCornerShape(16.dp),
-        color = backgroundColor
+        color = backgroundColor,
+        modifier = modifier
     ) {
         Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.Center
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(Color.White),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clip(CircleShape)
-                        .background(accentColor.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = label,
-                        tint = accentColor,
-                        modifier = Modifier.size(12.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = accentColor
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = accentColor,
+                    modifier = Modifier.size(16.dp)
                 )
             }
+
             Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                color = SavioSlateMuted
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
             Text(
                 text = amount,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.Bold,
                     fontSize = 13.sp
                 ),
-                color = BentoTextPrimary,
+                color = accentColor,
                 maxLines = 1
             )
         }

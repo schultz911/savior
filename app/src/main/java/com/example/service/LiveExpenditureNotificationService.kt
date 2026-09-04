@@ -176,7 +176,7 @@ class LiveExpenditureNotificationService : Service() {
         )
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_rupee)
             .setContentTitle(monthTitle)
             .setContentText(totalSpendText)
             .setSubText("Live Spend")

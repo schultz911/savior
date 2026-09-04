@@ -8,6 +8,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -25,12 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Insights
-import androidx.compose.material.icons.filled.Savings
-import androidx.compose.material.icons.filled.TrendingDown
-import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -58,21 +55,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ExpenseEntity
 import com.example.ui.models.MonthAnalytics
-import com.example.ui.theme.BentoCardBg
-import com.example.ui.theme.BentoCardBorder
-import com.example.ui.theme.BentoDarkTile
-import com.example.ui.theme.BentoDebitRed
-import com.example.ui.theme.BentoLavenderCard
-import com.example.ui.theme.BentoLavenderContainer
-import com.example.ui.theme.BentoPurpleDark
-import com.example.ui.theme.BentoPurplePrimary
-import com.example.ui.theme.BentoSpendPlum
-import com.example.ui.theme.BentoTextPrimary
-import com.example.ui.theme.BentoTextSecondary
+import com.example.ui.theme.GlassBackground
+import com.example.ui.theme.GlassCardBg
+import com.example.ui.theme.GlassCardBorder
+import com.example.ui.theme.SavioEmerald
+import com.example.ui.theme.SavioEmeraldBorder
+import com.example.ui.theme.SavioEmeraldContainer
 import com.example.ui.theme.SavioSavingsGreen
 import com.example.ui.theme.SavioSavingsGreenBg
+import com.example.ui.theme.SavioSlateBody
+import com.example.ui.theme.SavioSlateDark
+import com.example.ui.theme.SavioSlateMuted
 import com.example.ui.theme.SavioSpendRed
 import com.example.ui.theme.SavioSpendRedBg
+import com.example.ui.theme.SavioSpendRose
+import com.example.ui.theme.SavioSpendRoseBg
 import java.text.NumberFormat
 import java.util.Calendar
 import java.util.Locale
@@ -99,7 +96,6 @@ fun CalendarAnalyticsTab(
     val currentCal = remember { Calendar.getInstance() }
     val currentYear = currentCal.get(Calendar.YEAR)
 
-    // Year selection state (e.g., currentYear, currentYear - 1, currentYear + 1)
     val availableYears = listOf(currentYear - 1, currentYear, currentYear + 1)
     var selectedYear by remember {
         val initialYear = selectedMonthKey.split("-").firstOrNull()?.toIntOrNull() ?: currentYear
@@ -121,18 +117,18 @@ fun CalendarAnalyticsTab(
     LazyColumn(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("calendar_analytics_tab"),
+            .testTag("analytics_tab"),
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 90.dp)
+        contentPadding = PaddingValues(bottom = 96.dp)
     ) {
-        // 1. Calendar Month & Year Selector Bento Card
+        // 1. Calendar History & Month Selector Glass Card
         item {
             Card(
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = BentoCardBg),
+                colors = CardDefaults.cardColors(containerColor = GlassCardBg),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, BentoCardBorder, RoundedCornerShape(24.dp))
+                    .border(1.dp, GlassCardBorder, RoundedCornerShape(24.dp))
                     .testTag("calendar_picker_card")
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
@@ -144,15 +140,16 @@ fun CalendarAnalyticsTab(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = BentoLavenderContainer,
-                                modifier = Modifier.size(36.dp)
+                                color = SavioEmeraldContainer,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder),
+                                modifier = Modifier.size(40.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.CalendarMonth,
                                         contentDescription = "Calendar",
-                                        tint = BentoPurpleDark,
-                                        modifier = Modifier.size(20.dp)
+                                        tint = SavioEmerald,
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
                             }
@@ -161,12 +158,12 @@ fun CalendarAnalyticsTab(
                                 Text(
                                     text = "Permanent History",
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = BentoTextPrimary
+                                    color = SavioSlateDark
                                 )
                                 Text(
-                                    text = "Select any Year & Month to inspect spend & savings",
+                                    text = "Select any Year & Month to inspect spend and savings",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = BentoTextSecondary
+                                    color = SavioSlateMuted
                                 )
                             }
                         }
@@ -187,24 +184,25 @@ fun CalendarAnalyticsTab(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Previous Year",
-                                tint = BentoPurpleDark
+                                tint = SavioSlateDark
                             )
                         }
 
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             availableYears.forEach { yr ->
+                                val isSel = selectedYear == yr
                                 FilterChip(
-                                    selected = selectedYear == yr,
+                                    selected = isSel,
                                     onClick = { selectedYear = yr },
                                     label = {
                                         Text(
                                             text = yr.toString(),
-                                            fontWeight = if (selectedYear == yr) FontWeight.Bold else FontWeight.Normal
+                                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
                                         )
                                     },
                                     shape = RoundedCornerShape(12.dp),
                                     colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = BentoPurpleDark,
+                                        selectedContainerColor = SavioEmerald,
                                         selectedLabelColor = Color.White
                                     )
                                 )
@@ -218,7 +216,7 @@ fun CalendarAnalyticsTab(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                 contentDescription = "Next Year",
-                                tint = BentoPurpleDark
+                                tint = SavioSlateDark
                             )
                         }
                     }
@@ -241,8 +239,12 @@ fun CalendarAnalyticsTab(
                                     val shortName = mName.take(3)
 
                                     Surface(
-                                        shape = RoundedCornerShape(14.dp),
-                                        color = if (isSelected) BentoPurplePrimary else BentoLavenderCard,
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = if (isSelected) SavioEmerald else GlassBackground,
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            if (isSelected) SavioEmerald else GlassCardBorder
+                                        ),
                                         modifier = Modifier
                                             .weight(1f)
                                             .clickable { onSelectMonth(key) }
@@ -257,7 +259,7 @@ fun CalendarAnalyticsTab(
                                                 style = MaterialTheme.typography.labelLarge.copy(
                                                     fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium
                                                 ),
-                                                color = if (isSelected) Color.White else BentoPurpleDark
+                                                color = if (isSelected) Color.White else SavioSlateDark
                                             )
                                         }
                                     }
@@ -273,7 +275,8 @@ fun CalendarAnalyticsTab(
         item {
             Card(
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = BentoLavenderCard),
+                colors = CardDefaults.cardColors(containerColor = GlassCardBg),
+                border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("selected_month_summary_card")
@@ -290,10 +293,10 @@ fun CalendarAnalyticsTab(
                                 letterSpacing = 1.2.sp,
                                 fontWeight = FontWeight.Bold
                             ),
-                            color = BentoPurpleDark
+                            color = SavioSlateDark
                         )
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(10.dp),
                             color = if (selectedSavings >= 0) SavioSavingsGreenBg else SavioSpendRedBg
                         ) {
                             Text(
@@ -305,7 +308,7 @@ fun CalendarAnalyticsTab(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -314,9 +317,9 @@ fun CalendarAnalyticsTab(
                     ) {
                         Column {
                             Text(
-                                text = "Amount Saved",
+                                text = "Net Amount Saved",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = BentoTextSecondary
+                                color = SavioSlateMuted
                             )
                             Text(
                                 text = if (selectedSavings >= 0) {
@@ -335,19 +338,18 @@ fun CalendarAnalyticsTab(
                             Text(
                                 text = "Total Spent",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = BentoTextSecondary
+                                color = SavioSlateMuted
                             )
                             Text(
                                 text = "$currency${numberFormatter.format(selectedTotalSpend)}",
                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                color = BentoDebitRed
+                                color = SavioSpendRose
                             )
                         }
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Salary vs Spend bar
                     val salaryPercent = if (monthlySalary > 0) {
                         ((selectedTotalSpend / monthlySalary) * 100).toInt()
                     } else 0
@@ -359,26 +361,26 @@ fun CalendarAnalyticsTab(
                         Text(
                             text = "Monthly Salary: $currency${numberFormatter.format(monthlySalary)}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = BentoPurpleDark
+                            color = SavioSlateMuted
                         )
                         Text(
                             text = "$salaryPercent% of salary spent",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = if (selectedTotalSpend > monthlySalary) BentoDebitRed else BentoPurplePrimary
+                            color = if (selectedTotalSpend > monthlySalary) SavioSpendRed else SavioEmerald
                         )
                     }
                 }
             }
         }
 
-        // 3. The 12-Month Spend vs Saved Analytics Vertical Bar Graph
+        // 3. The 12-Month Spend vs Saved Analytics Vertical Bar Graph (Fixed scaling)
         item {
             Card(
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = BentoCardBg),
+                colors = CardDefaults.cardColors(containerColor = GlassCardBg),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, BentoCardBorder, RoundedCornerShape(24.dp))
+                    .border(1.dp, GlassCardBorder, RoundedCornerShape(24.dp))
                     .testTag("spend_savings_graph_card")
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
@@ -390,29 +392,30 @@ fun CalendarAnalyticsTab(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = BentoLavenderContainer,
-                                modifier = Modifier.size(36.dp)
+                                color = SavioEmeraldContainer,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder),
+                                modifier = Modifier.size(40.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.Insights,
-                                        contentDescription = "Graph",
-                                        tint = BentoPurpleDark,
-                                        modifier = Modifier.size(20.dp)
+                                        contentDescription = "Analytics",
+                                        tint = SavioEmerald,
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
                             }
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = "12-Month Spend vs Saved Graph",
+                                    text = "12-Month Spend Analytics",
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = BentoTextPrimary
+                                    color = SavioSlateDark
                                 )
                                 Text(
-                                    text = "Upper red = Spent • Lower green = Saved",
+                                    text = "Dynamic vertical scale across all 12 months",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = BentoTextSecondary
+                                    color = SavioSlateMuted
                                 )
                             }
                         }
@@ -428,37 +431,37 @@ fun CalendarAnalyticsTab(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(12.dp)
-                                    .clip(RoundedCornerShape(3.dp))
-                                    .background(SavioSpendRed)
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(SavioSpendRose)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Upper: Amount Spent (Red)",
+                                text = "Spent (Red)",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = BentoTextPrimary
+                                color = SavioSlateDark
                             )
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(12.dp)
-                                    .clip(RoundedCornerShape(3.dp))
+                                    .size(10.dp)
+                                    .clip(CircleShape)
                                     .background(SavioSavingsGreen)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Lower: Amount Saved (Green)",
+                                text = "Saved (Green)",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = BentoTextPrimary
+                                color = SavioSlateDark
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    // The 12-Month Vertical Stacked Bar Chart
+                    // The 12-Month Vertical Stacked Bar Chart with Full-Height Scaling
                     TwelveMonthStackedBarGraph(
                         months = last12Months,
                         selectedMonthKey = selectedMonthKey,
@@ -469,7 +472,7 @@ fun CalendarAnalyticsTab(
             }
         }
 
-        // 4. Permanent Transactions in Selected Month
+        // 4. Permanent Transactions in Selected Month Header
         item {
             Row(
                 modifier = Modifier
@@ -479,33 +482,44 @@ fun CalendarAnalyticsTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Permanent Records (${currentMonthExpenses.size})",
+                    text = "Transactions in ${ExpenseEntity.formatMonthDisplay(selectedMonthKey)} (${currentMonthExpenses.size})",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = BentoTextPrimary
+                    color = SavioSlateDark
                 )
-                Text(
-                    text = ExpenseEntity.formatMonthDisplay(selectedMonthKey),
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = BentoPurplePrimary
-                )
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = SavioEmeraldContainer,
+                    modifier = Modifier.clickable { onNavigateToDashboard() }
+                ) {
+                    Text(
+                        text = "Open Live Dashboard →",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = SavioEmerald,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
             }
         }
 
         if (currentMonthExpenses.isEmpty()) {
             item {
-                Surface(
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
                     shape = RoundedCornerShape(16.dp),
-                    color = BentoLavenderCard,
-                    modifier = Modifier.fillMaxWidth()
+                    colors = CardDefaults.cardColors(containerColor = GlassCardBg),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder)
                 ) {
                     Box(
                         modifier = Modifier.padding(24.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No expenditures recorded for ${ExpenseEntity.formatMonthDisplay(selectedMonthKey)}. New SMS will be auto-saved here permanently.",
+                            text = "No expenditures recorded for ${ExpenseEntity.formatMonthDisplay(selectedMonthKey)}. Incoming SMS will be auto-saved here permanently.",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = BentoTextSecondary,
+                            color = SavioSlateMuted,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -519,7 +533,7 @@ fun CalendarAnalyticsTab(
                 TransactionItemCard(
                     expense = expense,
                     currency = currency,
-                    onDelete = {} // view-through in calendar
+                    onDelete = {} // view-through in analytics
                 )
             }
         }
@@ -527,10 +541,9 @@ fun CalendarAnalyticsTab(
 }
 
 /**
- * 12-Month Vertical Stacked Bar Chart:
- * Each month has a vertical column:
- * - Upper section is RED (amount spent)
- * - Lower section is GREEN (amount saved)
+ * 12-Month Vertical Stacked Bar Chart with Proper Full-Height Scaling:
+ * Normalizes all month columns against the maximum monthly spend/salary,
+ * ensuring bars dynamically scale across the entire height of the chart!
  */
 @Composable
 fun TwelveMonthStackedBarGraph(
@@ -542,11 +555,11 @@ fun TwelveMonthStackedBarGraph(
 ) {
     val scrollState = rememberScrollState()
 
-    // Find the max value (either salary or max spent) to normalize height
-    val maxBarValue = remember(months) {
-        val maxSpend = months.maxOfOrNull { it.totalSpent } ?: 10000.0
-        val maxSalary = months.maxOfOrNull { it.salary } ?: 50000.0
-        maxOf(maxSpend, maxSalary, 10000.0)
+    // Find the true maximum value across all 12 months to scale the chart height dynamically
+    val maxChartVal = remember(months) {
+        val maxSpend = months.maxOfOrNull { it.totalSpent } ?: 0.0
+        val maxSalary = months.maxOfOrNull { it.salary } ?: 0.0
+        maxOf(maxSpend, maxSalary, 1000.0)
     }
 
     val numberFormat = remember {
@@ -558,11 +571,12 @@ fun TwelveMonthStackedBarGraph(
     var inspectedMonth by remember { mutableStateOf<MonthAnalytics?>(null) }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        // Active inspector chip if tapped
+        // Active inspector banner when user taps any column
         inspectedMonth?.let { item ->
             Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = BentoLavenderContainer,
+                shape = RoundedCornerShape(14.dp),
+                color = SavioEmeraldContainer,
+                border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 12.dp)
@@ -570,7 +584,7 @@ fun TwelveMonthStackedBarGraph(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(10.dp),
+                        .padding(12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -578,30 +592,30 @@ fun TwelveMonthStackedBarGraph(
                         Text(
                             text = item.monthLabel,
                             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                            color = BentoPurpleDark
+                            color = SavioSlateDark
                         )
                         Text(
                             text = "Salary: $currency${numberFormat.format(item.salary)}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = BentoTextSecondary
+                            color = SavioSlateMuted
                         )
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text = "Spent (Upper)",
+                                text = "Spent",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = SavioSpendRed
+                                color = SavioSpendRose
                             )
                             Text(
                                 text = "$currency${numberFormat.format(item.totalSpent)}",
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                color = SavioSpendRed
+                                color = SavioSpendRose
                             )
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text = "Saved (Lower)",
+                                text = "Saved",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = SavioSavingsGreen
                             )
@@ -637,16 +651,23 @@ fun TwelveMonthStackedBarGraph(
                         }
                         .testTag("bar_${monthData.monthKey}")
                 ) {
-                    // Vertical Bar (Height 160.dp)
-                    // Stacked: Top is Red (Spent), Bottom is Green (Saved)
-                    val chartHeightDp = 150.dp
-                    val totalNorm = (monthData.salary / maxBarValue).coerceIn(0.1, 1.0)
-                    val spentRatio = if (monthData.salary > 0) {
-                        (monthData.totalSpent / monthData.salary).coerceIn(0.0, 1.0)
-                    } else 1.0
-                    val savedRatio = (1.0 - spentRatio).coerceAtLeast(0.0)
+                    val chartHeightDp = 160.dp
+                    val barWidth = if (isSelected) 32.dp else 26.dp
 
-                    val barWidth = if (isSelected) 30.dp else 24.dp
+                    // Calculate accurate scaling across the full height
+                    val monthSpend = monthData.totalSpent
+                    val monthSalary = monthData.salary
+                    val monthMax = maxOf(monthSpend, monthSalary)
+
+                    // Height fraction of this month's activity relative to max across 12 months (0.10f floor to 1.0f max)
+                    val columnHeightFraction = (monthMax / maxChartVal).toFloat().coerceIn(0.12f, 1.0f)
+
+                    // Proportion of spent vs saved inside this month's column
+                    val spentRatio = if (monthMax > 0) {
+                        (monthSpend / monthMax).toFloat().coerceIn(0.04f, 1.0f)
+                    } else 0.04f
+
+                    val savedRatio = (1.0f - spentRatio).coerceAtLeast(0f)
 
                     Box(
                         modifier = Modifier
@@ -654,41 +675,50 @@ fun TwelveMonthStackedBarGraph(
                             .width(barWidth),
                         contentAlignment = Alignment.BottomCenter
                     ) {
-                        // Background track
+                        // Background track for full height
                         Box(
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .width(barWidth)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(BentoLavenderContainer.copy(alpha = 0.5f))
+                                .background(GlassBackground)
+                                .border(1.dp, GlassCardBorder, RoundedCornerShape(8.dp))
                         )
 
-                        // The active stacked column representing the salary/expenditure
+                        // Active Stacked Bar scaling across the height
                         Column(
                             modifier = Modifier
-                                .fillMaxHeight(totalNorm.toFloat())
+                                .fillMaxHeight(columnHeightFraction)
                                 .width(barWidth)
                                 .clip(RoundedCornerShape(8.dp))
                                 .then(
-                                    if (isSelected) Modifier.border(2.dp, BentoPurpleDark, RoundedCornerShape(8.dp))
+                                    if (isSelected) Modifier.border(2.dp, SavioEmerald, RoundedCornerShape(8.dp))
                                     else Modifier
                                 )
                         ) {
-                            // UPPER PART: RED for amount spent
+                            // Upper part: RED for amount spent
                             Box(
                                 modifier = Modifier
-                                    .weight((spentRatio.toFloat()).coerceAtLeast(0.05f))
+                                    .weight(spentRatio)
                                     .fillMaxWidth()
-                                    .background(SavioSpendRed)
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(SavioSpendRose, SavioSpendRose.copy(alpha = 0.85f))
+                                        )
+                                    )
                             )
 
-                            // LOWER PART: GREEN for amount saved
-                            if (savedRatio > 0) {
+                            // Lower part: GREEN for amount saved
+                            if (savedRatio > 0.01f) {
                                 Box(
                                     modifier = Modifier
-                                        .weight(savedRatio.toFloat())
+                                        .weight(savedRatio)
                                         .fillMaxWidth()
-                                        .background(SavioSavingsGreen)
+                                        .background(
+                                            Brush.verticalGradient(
+                                                listOf(SavioSavingsGreen.copy(alpha = 0.85f), SavioSavingsGreen)
+                                            )
+                                        )
                                 )
                             }
                         }
@@ -696,14 +726,14 @@ fun TwelveMonthStackedBarGraph(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Month Short Label (e.g. "Sep", "Aug")
+                    // Month Short Label
                     Text(
                         text = monthData.shortLabel,
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = if (isSelected) FontWeight.Black else FontWeight.Medium,
                             fontSize = 11.sp
                         ),
-                        color = if (isSelected) BentoPurpleDark else BentoTextSecondary
+                        color = if (isSelected) SavioEmerald else SavioSlateMuted
                     )
                 }
             }

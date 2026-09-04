@@ -25,7 +25,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 
 enum class ExpenseFilter(val label: String) {
@@ -37,7 +36,8 @@ enum class ExpenseFilter(val label: String) {
 
 enum class SavioScreenTab {
     DASHBOARD,
-    CALENDAR_ANALYTICS
+    ANALYTICS,
+    SETTINGS
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -94,6 +94,10 @@ class ExpenseViewModel(
     private val _categoryLimits = MutableStateFlow(preferences.getAllCategoryLimits())
     val categoryLimits: StateFlow<Map<String, Double>> = _categoryLimits.asStateFlow()
 
+    // Blacklisted merchants set
+    private val _blacklistedMerchants = MutableStateFlow(preferences.getBlacklistedMerchants())
+    val blacklistedMerchants: StateFlow<Set<String>> = _blacklistedMerchants.asStateFlow()
+
     val allMonthKeys: StateFlow<List<String>> = repository.allMonthKeys
         .map { keys ->
             if (!keys.contains(currentDefaultMonth)) {
@@ -145,39 +149,68 @@ class ExpenseViewModel(
         initialValue = emptyList()
     )
 
-    val monthlyTotal: StateFlow<Double> = currentMonthExpenses
-        .map { list -> list.sumOf { it.amount } }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = 0.0
-        )
+    // Deductions from blacklisted merchants in the current selected month
+    val blacklistedDeductions: StateFlow<Double> = combine(
+        currentMonthExpenses,
+        _blacklistedMerchants
+    ) { expenses, blacklisted ->
+        expenses.filter { isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }.sumOf { it.amount }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0.0
+    )
 
-    val debitsTotal: StateFlow<Double> = currentMonthExpenses
-        .map { list -> list.filter { it.type == ExpenseType.DEBIT }.sumOf { it.amount } }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = 0.0
-        )
+    // Net Monthly Total = raw sum - blacklisted deductions
+    val monthlyTotal: StateFlow<Double> = combine(
+        currentMonthExpenses,
+        _blacklistedMerchants
+    ) { list, blacklisted ->
+        val validList = list.filterNot { isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
+        validList.sumOf { it.amount }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0.0
+    )
 
-    val transfersTotal: StateFlow<Double> = currentMonthExpenses
-        .map { list -> list.filter { it.type == ExpenseType.TRANSFER }.sumOf { it.amount } }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = 0.0
-        )
+    val debitsTotal: StateFlow<Double> = combine(
+        currentMonthExpenses,
+        _blacklistedMerchants
+    ) { list, blacklisted ->
+        list.filter { it.type == ExpenseType.DEBIT && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
+            .sumOf { it.amount }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0.0
+    )
 
-    val spendsTotal: StateFlow<Double> = currentMonthExpenses
-        .map { list -> list.filter { it.type == ExpenseType.SPEND }.sumOf { it.amount } }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = 0.0
-        )
+    val transfersTotal: StateFlow<Double> = combine(
+        currentMonthExpenses,
+        _blacklistedMerchants
+    ) { list, blacklisted ->
+        list.filter { it.type == ExpenseType.TRANSFER && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
+            .sumOf { it.amount }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0.0
+    )
 
-    // Live savings for selected month = Monthly Salary - Total Spend
+    val spendsTotal: StateFlow<Double> = combine(
+        currentMonthExpenses,
+        _blacklistedMerchants
+    ) { list, blacklisted ->
+        list.filter { it.type == ExpenseType.SPEND && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
+            .sumOf { it.amount }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0.0
+    )
+
+    // Live savings for selected month = Monthly Salary - Net Spend
     val monthlySavings: StateFlow<Double> = combine(
         _monthlySalary,
         monthlyTotal
@@ -189,12 +222,13 @@ class ExpenseViewModel(
         initialValue = 0.0
     )
 
-    // 12-Month Historical Analytics Flow for the Spend vs Savings Graph
+    // 12-Month Historical Analytics Flow for the Spend vs Savings Graph (deducting blacklisted merchants)
     val last12MonthsAnalytics: StateFlow<List<MonthAnalytics>> = combine(
         repository.allExpenses,
-        _monthlySalary
-    ) { allExpensesList, salary ->
-        computeLast12MonthsAnalytics(allExpensesList, salary)
+        _monthlySalary,
+        _blacklistedMerchants
+    ) { allExpensesList, salary, blacklisted ->
+        computeLast12MonthsAnalytics(allExpensesList, salary, blacklisted)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -203,7 +237,8 @@ class ExpenseViewModel(
 
     private fun computeLast12MonthsAnalytics(
         expenses: List<ExpenseEntity>,
-        salary: Double
+        salary: Double,
+        blacklisted: Set<String>
     ): List<MonthAnalytics> {
         val calendar = Calendar.getInstance()
         val sdfKey = SimpleDateFormat("yyyy-MM", Locale.US)
@@ -212,7 +247,6 @@ class ExpenseViewModel(
 
         val months = mutableListOf<MonthAnalytics>()
 
-        // Generate past 12 months up to current month (chronological order)
         for (i in 11 downTo 0) {
             val cal = Calendar.getInstance().apply {
                 time = calendar.time
@@ -224,7 +258,9 @@ class ExpenseViewModel(
             val year = cal.get(Calendar.YEAR)
             val monthNum = cal.get(Calendar.MONTH) + 1
 
-            val totalSpent = expenses.filter { it.monthKey == monthKey }.sumOf { it.amount }
+            val totalSpent = expenses.filter {
+                it.monthKey == monthKey && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted)
+            }.sumOf { it.amount }
             val savedAmount = salary - totalSpent
             val isOverspent = totalSpent > salary
             val rate = if (salary > 0) (savedAmount / salary) * 100.0 else 0.0
@@ -248,9 +284,37 @@ class ExpenseViewModel(
     }
 
     init {
-        // Ensure sample expenses are imported if app is fresh so user immediately sees live calculations
         viewModelScope.launch {
             repository.importInitialSampleDataIfNeeded()
+        }
+    }
+
+    fun isBlacklistedMerchant(merchant: String, blacklisted: Set<String> = _blacklistedMerchants.value): Boolean {
+        val norm = merchant.trim()
+        if (norm.isBlank()) return false
+        return blacklisted.any { it.equals(norm, ignoreCase = true) }
+    }
+
+    fun blacklistMerchant(merchant: String) {
+        val norm = merchant.trim()
+        if (norm.isBlank()) return
+        preferences.blacklistMerchant(norm)
+        _blacklistedMerchants.value = preferences.getBlacklistedMerchants()
+        _syncFeedback.value = "Merchant '$norm' blacklisted. Spends deducted."
+    }
+
+    fun unblacklistMerchant(merchant: String) {
+        val norm = merchant.trim()
+        preferences.unblacklistMerchant(norm)
+        _blacklistedMerchants.value = preferences.getBlacklistedMerchants()
+        _syncFeedback.value = "Merchant '$norm' removed from blacklist."
+    }
+
+    fun toggleBlacklistMerchant(merchant: String) {
+        if (isBlacklistedMerchant(merchant)) {
+            unblacklistMerchant(merchant)
+        } else {
+            blacklistMerchant(merchant)
         }
     }
 
@@ -377,8 +441,17 @@ class ExpenseViewModel(
         viewModelScope.launch {
             val app = getApplication<Application>() as SpendTrackerApplication
             val dao = app.database.expenseDao()
+            val target = dao.getExpenseById(expenseId)
             dao.updateCategory(expenseId, category)
-            _syncFeedback.value = "Category assigned: $category"
+
+            if (target != null && target.merchantOrRecipient.isNotBlank()) {
+                val merchant = target.merchantOrRecipient.trim()
+                preferences.saveMerchantCategory(merchant, category)
+                dao.updateCategoryForMerchant(merchant, category)
+                _syncFeedback.value = "Category '$category' saved for '$merchant' going forward"
+            } else {
+                _syncFeedback.value = "Category assigned: $category"
+            }
 
             val updatedExpense = dao.getExpenseById(expenseId)
             if (updatedExpense != null) {
@@ -398,14 +471,25 @@ class ExpenseViewModel(
             val context = getApplication<Application>().applicationContext
             val app = context as SpendTrackerApplication
             val dao = app.database.expenseDao()
+
+            val effectiveCategory = if (category.isNotBlank() && !category.equals("Uncategorized", ignoreCase = true)) {
+                category
+            } else {
+                preferences.getMerchantCategory(merchant) ?: "General Spend"
+            }
+
+            if (merchant.isNotBlank() && effectiveCategory.isNotBlank()) {
+                preferences.saveMerchantCategory(merchant, effectiveCategory)
+            }
+
             val entity = ExpenseEntity(
                 amount = amount,
                 currency = preferences.currency,
                 type = type,
                 merchantOrRecipient = merchant,
                 accountInfo = accountInfo,
-                category = category,
-                rawBody = "Manual Entry: $merchant $category",
+                category = effectiveCategory,
+                rawBody = "Manual Entry: $merchant $effectiveCategory",
                 sender = "Manual",
                 timestamp = System.currentTimeMillis()
             )

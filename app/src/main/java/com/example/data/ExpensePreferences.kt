@@ -79,6 +79,69 @@ class ExpensePreferences(context: Context) {
         return limits
     }
 
+    // ==========================================
+    // Merchant Categorization Memory
+    // ==========================================
+    fun saveMerchantCategory(merchant: String, category: String) {
+        val norm = normalizeMerchantKey(merchant)
+        if (norm.isNotBlank()) {
+            prefs.edit().putString(KEY_MERCHANT_CAT_PREFIX + norm, category).apply()
+        }
+    }
+
+    fun getMerchantCategory(merchant: String): String? {
+        val norm = normalizeMerchantKey(merchant)
+        if (norm.isBlank()) return null
+        return prefs.getString(KEY_MERCHANT_CAT_PREFIX + norm, null)
+    }
+
+    fun getAllMerchantCategories(): Map<String, String> {
+        val all = prefs.all
+        val map = mutableMapOf<String, String>()
+        for ((key, value) in all) {
+            if (key.startsWith(KEY_MERCHANT_CAT_PREFIX) && value is String) {
+                val merchant = key.removePrefix(KEY_MERCHANT_CAT_PREFIX)
+                map[merchant] = value
+            }
+        }
+        return map
+    }
+
+    // ==========================================
+    // Merchant Blacklisting
+    // ==========================================
+    fun getBlacklistedMerchants(): Set<String> {
+        return prefs.getStringSet(KEY_BLACKLISTED_MERCHANTS, emptySet()) ?: emptySet()
+    }
+
+    fun blacklistMerchant(merchant: String) {
+        val norm = merchant.trim()
+        if (norm.isBlank()) return
+        val current = getBlacklistedMerchants().toMutableSet()
+        current.add(norm)
+        prefs.edit().putStringSet(KEY_BLACKLISTED_MERCHANTS, current).apply()
+    }
+
+    fun unblacklistMerchant(merchant: String) {
+        val norm = merchant.trim()
+        val current = getBlacklistedMerchants().toMutableSet()
+        val removed = current.removeIf { it.equals(norm, ignoreCase = true) }
+        if (removed) {
+            prefs.edit().putStringSet(KEY_BLACKLISTED_MERCHANTS, current).apply()
+        }
+    }
+
+    fun isMerchantBlacklisted(merchant: String): Boolean {
+        val norm = merchant.trim()
+        if (norm.isBlank()) return false
+        val set = getBlacklistedMerchants()
+        return set.any { it.equals(norm, ignoreCase = true) }
+    }
+
+    private fun normalizeMerchantKey(merchant: String): String {
+        return merchant.trim().lowercase()
+    }
+
     companion object {
         private const val KEY_CURRENCY = "key_currency"
         private const val KEY_MONTHLY_SALARY = "key_monthly_salary"
@@ -89,5 +152,7 @@ class ExpensePreferences(context: Context) {
         private const val KEY_HAS_IMPORTED_SAMPLES = "key_has_imported_samples"
         private const val KEY_OPENROUTER_API_KEY = "key_openrouter_api_key"
         private const val KEY_CATEGORY_LIMIT_PREFIX = "cat_limit_"
+        private const val KEY_MERCHANT_CAT_PREFIX = "merchant_cat_"
+        private const val KEY_BLACKLISTED_MERCHANTS = "key_blacklisted_merchants"
     }
 }

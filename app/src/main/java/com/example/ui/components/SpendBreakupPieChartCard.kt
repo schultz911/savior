@@ -47,30 +47,31 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ExpenseEntity
-import com.example.ui.theme.BentoCardBg
-import com.example.ui.theme.BentoDebitRed
-import com.example.ui.theme.BentoLavenderContainer
-import com.example.ui.theme.BentoPurpleDark
-import com.example.ui.theme.BentoPurplePrimary
-import com.example.ui.theme.BentoSpendPlum
-import com.example.ui.theme.SavioLogoAccent
+import com.example.ui.theme.GlassBackground
+import com.example.ui.theme.GlassCardBg
+import com.example.ui.theme.GlassCardBorder
+import com.example.ui.theme.SavioEmerald
+import com.example.ui.theme.SavioEmeraldContainer
 import com.example.ui.theme.SavioSavingsGreen
+import com.example.ui.theme.SavioSlateBody
+import com.example.ui.theme.SavioSlateDark
+import com.example.ui.theme.SavioSlateMuted
+import com.example.ui.theme.SavioSpendRose
+import com.example.ui.theme.SavioSpendRoseBg
 import java.text.NumberFormat
 import java.util.Locale
 
-// Harmonious vibrant palette for pie chart wedges
 val PiePalette = listOf(
-    Color(0xFF7C3AED), // Purple
-    Color(0xFFEC4899), // Pink
-    Color(0xFFF59E0B), // Amber
-    Color(0xFF10B981), // Emerald
-    Color(0xFF06B6D4), // Cyan
-    Color(0xFF6366F1), // Indigo
-    Color(0xFFEF4444), // Red
-    Color(0xFF14B8A6), // Teal
-    Color(0xFF8B5CF6), // Violet
-    Color(0xFFF97316), // Orange
-    Color(0xFF64748B)  // Slate (Uncategorized)
+    Color(0xFF059669), // Emerald
+    Color(0xFF4F46E5), // Indigo
+    Color(0xFFE11D48), // Rose
+    Color(0xFFD97706), // Amber
+    Color(0xFF0891B2), // Cyan
+    Color(0xFF7C3AED), // Violet
+    Color(0xFFEA580C), // Orange
+    Color(0xFF0D9488), // Teal
+    Color(0xFFDB2777), // Pink
+    Color(0xFF64748B)  // Slate
 )
 
 data class CategorySpendSlice(
@@ -87,16 +88,24 @@ fun SpendBreakupPieChartCard(
     expenses: List<ExpenseEntity>,
     currency: String,
     categoryLimits: Map<String, Double> = emptyMap(),
+    blacklistedMerchants: Set<String> = emptySet(),
     onCategoryClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    if (expenses.isEmpty()) return
+    // Exclude blacklisted merchants from spend breakup
+    val validExpenses = remember(expenses, blacklistedMerchants) {
+        expenses.filterNot { exp ->
+            blacklistedMerchants.any { it.equals(exp.merchantOrRecipient.trim(), ignoreCase = true) }
+        }
+    }
 
-    val totalSpent = expenses.sumOf { it.amount }
+    if (validExpenses.isEmpty()) return
+
+    val totalSpent = validExpenses.sumOf { it.amount }
     if (totalSpent <= 0.0) return
 
     // Group expenses by category
-    val grouped = expenses.groupBy { it.category.ifBlank { "Uncategorized" } }
+    val grouped = validExpenses.groupBy { it.category.ifBlank { "Uncategorized" } }
         .mapValues { (_, list) -> list.sumOf { it.amount } }
         .toList()
         .sortedByDescending { it.second }
@@ -123,7 +132,7 @@ fun SpendBreakupPieChartCard(
     var selectedSlice by remember { mutableStateOf<CategorySpendSlice?>(null) }
     val animatedProgress = remember { Animatable(0f) }
 
-    LaunchedEffect(expenses) {
+    LaunchedEffect(validExpenses) {
         animatedProgress.snapTo(0f)
         animatedProgress.animateTo(1f, animationSpec = tween(durationMillis = 800))
     }
@@ -139,9 +148,10 @@ fun SpendBreakupPieChartCard(
         modifier = modifier
             .fillMaxWidth()
             .testTag("spend_breakup_pie_card"),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = BentoCardBg),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = GlassCardBg),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder)
     ) {
         Column(
             modifier = Modifier
@@ -157,14 +167,14 @@ fun SpendBreakupPieChartCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
                         shape = CircleShape,
-                        color = BentoLavenderContainer,
-                        modifier = Modifier.size(32.dp)
+                        color = SavioEmeraldContainer,
+                        modifier = Modifier.size(34.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.PieChart,
                                 contentDescription = null,
-                                tint = BentoPurpleDark,
+                                tint = SavioEmerald,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -174,7 +184,7 @@ fun SpendBreakupPieChartCard(
                         text = "Spend Breakup",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
-                            color = BentoPurpleDark
+                            color = SavioSlateDark
                         )
                     )
                 }
@@ -183,7 +193,7 @@ fun SpendBreakupPieChartCard(
                     text = "$currency${numberFormatter.format(totalSpent)}",
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Black,
-                        color = BentoPurplePrimary
+                        color = SavioEmerald
                     )
                 )
             }
@@ -238,7 +248,7 @@ fun SpendBreakupPieChartCard(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp
                             ),
-                            color = BentoPurpleDark,
+                            color = SavioSlateDark,
                             maxLines = 1
                         )
                         Text(
@@ -255,7 +265,7 @@ fun SpendBreakupPieChartCard(
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 11.sp
                             ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = SavioSlateMuted
                         )
                     }
                 }
@@ -278,7 +288,11 @@ fun SpendBreakupPieChartCard(
 
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = if (isSelected) slice.color.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+                        color = if (isSelected) slice.color.copy(alpha = 0.12f) else GlassBackground,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isSelected) slice.color else GlassCardBorder
+                        ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
@@ -313,14 +327,14 @@ fun SpendBreakupPieChartCard(
                                         style = MaterialTheme.typography.bodyMedium.copy(
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                                         ),
-                                        color = BentoPurpleDark
+                                        color = SavioSlateDark
                                     )
                                     if (slice.category == "Uncategorized") {
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
                                             text = "(tap to set)",
                                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                            color = BentoDebitRed
+                                            color = SavioSpendRose
                                         )
                                     }
                                 }
@@ -331,7 +345,7 @@ fun SpendBreakupPieChartCard(
                                         style = MaterialTheme.typography.bodyMedium.copy(
                                             fontWeight = FontWeight.Bold
                                         ),
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = SavioSlateDark
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
@@ -344,7 +358,7 @@ fun SpendBreakupPieChartCard(
                                 }
                             }
 
-                            // If category limit is defined, show progress bar and alert badge
+                            // Category limit progress
                             if (hasLimit) {
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Row(
@@ -359,11 +373,11 @@ fun SpendBreakupPieChartCard(
                                             .height(6.dp)
                                             .clip(RoundedCornerShape(3.dp)),
                                         color = when {
-                                            isOverLimit -> BentoDebitRed
+                                            isOverLimit -> SavioSpendRose
                                             isNearLimit -> Color(0xFFF59E0B)
                                             else -> SavioSavingsGreen
                                         },
-                                        trackColor = BentoLavenderContainer
+                                        trackColor = SavioEmeraldContainer
                                     )
 
                                     Spacer(modifier = Modifier.width(10.dp))
@@ -379,9 +393,9 @@ fun SpendBreakupPieChartCard(
                                             fontWeight = if (isOverLimit || isNearLimit) FontWeight.Bold else FontWeight.Normal
                                         ),
                                         color = when {
-                                            isOverLimit -> BentoDebitRed
+                                            isOverLimit -> SavioSpendRose
                                             isNearLimit -> Color(0xFFB45309)
-                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                            else -> SavioSlateMuted
                                         }
                                     )
                                 }

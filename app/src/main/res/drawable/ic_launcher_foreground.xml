@@ -5,43 +5,43 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Payment Card Base -->
+
+    <!-- Soft Glassmorphic Ambient Halo -->
     <path
-        android:pathData="M30,30 L78,30 C82.4,30 86,33.6 86,38 L86,70 C86,74.4 82.4,78 78,78 L30,78 C25.6,78 22,74.4 22,70 L22,38 C22,33.6 25.6,30 30,30 Z">
+        android:pathData="M54,18 C73.88,18 90,34.12 90,54 C90,73.88 73.88,90 54,90 C34.12,90 18,73.88 18,54 C18,34.12 34.12,18 54,18 Z">
         <aapt:attr name="android:fillColor">
             <gradient
-                android:startX="22"
-                android:startY="30"
-                android:endX="86"
-                android:endY="78"
+                android:centerX="54"
+                android:centerY="46"
+                android:gradientRadius="44"
+                android:type="radial">
+                <item android:offset="0.0" android:color="#3310B981" />
+                <item android:offset="0.7" android:color="#1A059669" />
+                <item android:offset="1.0" android:color="#00059669" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Frosted Glass Central Disc -->
+    <path
+        android:pathData="M54,23 C71.12,23 85,36.88 85,54 C85,71.12 71.12,85 54,85 C36.88,85 23,71.12 23,54 C23,36.88 36.88,23 54,23 Z"
+        android:fillColor="#F0FFFFFF"
+        android:strokeColor="#5010B981"
+        android:strokeWidth="1.5" />
+
+    <!-- Emerald Green Rupee Symbol (₹) -->
+    <path
+        android:pathData="M37,33 L71,33 L71,38.5 L58.5,38.5 C63.5,40.5 66.8,44.2 67,49 L71,49 L71,54.5 L66.8,54.5 C65.2,63.5 57.5,69 47,69.5 L43,69.5 L66,92 L53.5,92 L34.5,70 L34.5,64.5 L46,64.5 C52.5,64.5 57.5,61 58.8,54.5 L37,54.5 L37,49 L58.8,49 C57.8,44.5 53,40.5 46,39 L37,39 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="37"
+                android:startY="33"
+                android:endX="71"
+                android:endY="92"
                 android:type="linear">
                 <item android:offset="0.0" android:color="#10B981" />
                 <item android:offset="1.0" android:color="#047857" />
             </gradient>
         </aapt:attr>
     </path>
-    <!-- Card Stripe / Dark Band -->
-    <path
-        android:fillColor="#152A38"
-        android:pathData="M22,40 L86,40 L86,49 L22,49 Z" />
-    <!-- Chip -->
-    <path
-        android:fillColor="#FBBF24"
-        android:pathData="M30,55 L40,55 C41.1,55 42,55.9 42,57 L42,65 C42,66.1 41.1,67 40,67 L30,67 C28.9,67 28,66.1 28,65 L28,57 C28,55.9 28.9,55 30,55 Z" />
-    <!-- Pulse Line / Spend Live Tracker -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="2.8"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M48,63 L55,63 L60,54 L65,68 L70,58 L78,58" />
-    <!-- Live Notification Indicator Dot (Top Right) -->
-    <path
-        android:fillColor="#38BDF8"
-        android:pathData="M78,28 C80.2,28 82,29.8 82,32 C82,34.2 80.2,36 78,36 C75.8,36 74,34.2 74,32 C74,29.8 75.8,28 78,28 Z" />
-    <!-- Inner White Dot for glowing beacon -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M78,30.5 C78.8,30.5 79.5,31.2 79.5,32 C79.5,32.8 78.8,33.5 78,33.5 C77.2,33.5 76.5,32.8 76.5,32 C76.5,31.2 77.2,30.5 78,30.5 Z" />
 </vector>

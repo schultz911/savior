@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Fastfood
@@ -25,11 +28,14 @@ import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,17 +51,26 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ExpenseEntity
 import com.example.data.ExpenseType
-import com.example.ui.theme.BentoDebitRed
-import com.example.ui.theme.BentoDebitRedBg
-import com.example.ui.theme.BentoSpendPlum
-import com.example.ui.theme.BentoSpendPlumBg
-import com.example.ui.theme.BentoTransferPurple
-import com.example.ui.theme.BentoTransferPurpleBg
+import com.example.ui.theme.GlassCardBg
+import com.example.ui.theme.GlassCardBorder
+import com.example.ui.theme.SavioBlacklistBg
+import com.example.ui.theme.SavioBlacklistMuted
+import com.example.ui.theme.SavioBlacklistRed
+import com.example.ui.theme.SavioEmerald
+import com.example.ui.theme.SavioEmeraldContainer
+import com.example.ui.theme.SavioSlateBody
+import com.example.ui.theme.SavioSlateDark
+import com.example.ui.theme.SavioSlateMuted
+import com.example.ui.theme.SavioSpendRose
+import com.example.ui.theme.SavioSpendRoseBg
+import com.example.ui.theme.SavioTransferIndigo
+import com.example.ui.theme.SavioTransferIndigoBg
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -65,26 +80,30 @@ import java.util.Locale
 fun TransactionItemCard(
     expense: ExpenseEntity,
     currency: String = expense.currency,
+    isBlacklisted: Boolean = false,
     onDelete: (Long) -> Unit,
     onAssignCategory: ((ExpenseEntity) -> Unit)? = null,
+    onToggleBlacklist: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var showDetailDialog by remember { mutableStateOf(false) }
 
-    val numberFormatter = NumberFormat.getNumberInstance(Locale.US).apply {
-        minimumFractionDigits = 2
-        maximumFractionDigits = 2
+    val numberFormatter = remember {
+        NumberFormat.getNumberInstance(Locale.US).apply {
+            minimumFractionDigits = 2
+            maximumFractionDigits = 2
+        }
     }
     val effectiveCurrency = if (currency.isNotBlank()) currency else expense.currency
     val formattedAmount = "-${effectiveCurrency}${numberFormatter.format(expense.amount)}"
 
-    val dateFormatter = SimpleDateFormat("MMM dd, hh:mm a", Locale.US)
+    val dateFormatter = remember { SimpleDateFormat("MMM dd, hh:mm a", Locale.US) }
     val formattedDate = dateFormatter.format(Date(expense.timestamp))
 
-    val (typeColor, typeBg, typeIcon) = when (expense.type) {
-        ExpenseType.DEBIT -> Triple(BentoDebitRed, BentoDebitRedBg, Icons.Default.ArrowDownward)
-        ExpenseType.TRANSFER -> Triple(BentoTransferPurple, BentoTransferPurpleBg, Icons.Default.SwapHoriz)
-        ExpenseType.SPEND -> Triple(BentoSpendPlum, BentoSpendPlumBg, Icons.Default.CreditCard)
+    val (typeColor, typeBg, _) = when (expense.type) {
+        ExpenseType.DEBIT -> Triple(SavioSpendRose, SavioSpendRoseBg, Icons.Default.ArrowDownward)
+        ExpenseType.TRANSFER -> Triple(SavioTransferIndigo, SavioTransferIndigoBg, Icons.Default.SwapHoriz)
+        ExpenseType.SPEND -> Triple(SavioSpendRose, SavioSpendRoseBg, Icons.Default.CreditCard)
     }
 
     val categoryIcon = getCategoryIcon(expense.category)
@@ -94,11 +113,10 @@ fun TransactionItemCard(
             .fillMaxWidth()
             .testTag("expense_card_${expense.id}")
             .clickable { showDetailDialog = true },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = GlassCardBg),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder)
     ) {
         Row(
             modifier = Modifier
@@ -111,13 +129,13 @@ fun TransactionItemCard(
                 modifier = Modifier
                     .size(46.dp)
                     .clip(CircleShape)
-                    .background(typeBg),
+                    .background(if (isBlacklisted) SavioBlacklistBg else typeBg),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = categoryIcon,
+                    imageVector = if (isBlacklisted) Icons.Default.Block else categoryIcon,
                     contentDescription = expense.category,
-                    tint = typeColor,
+                    tint = if (isBlacklisted) SavioBlacklistRed else typeColor,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -125,58 +143,74 @@ fun TransactionItemCard(
             Spacer(modifier = Modifier.width(12.dp))
 
             // Transaction Details
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = expense.merchantOrRecipient,
                         style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            textDecoration = if (isBlacklisted) TextDecoration.LineThrough else TextDecoration.None
                         ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        color = if (isBlacklisted) SavioBlacklistMuted else SavioSlateDark,
                         modifier = Modifier.weight(1f, fill = false)
                     )
 
                     Spacer(modifier = Modifier.width(6.dp))
 
-                    // Type Badge
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = typeBg
-                    ) {
-                        Text(
-                            text = expense.type.displayName,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 10.sp
-                            ),
-                            color = typeColor,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+                    if (isBlacklisted) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = SavioBlacklistBg,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, SavioBlacklistRed.copy(alpha = 0.4f))
+                        ) {
+                            Text(
+                                text = "Deducted",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 9.sp
+                                ),
+                                color = SavioBlacklistRed,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else {
+                        // Type Badge
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = typeBg
+                        ) {
+                            Text(
+                                text = expense.type.displayName,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp
+                                ),
+                                color = typeColor,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(3.dp))
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = formattedDate,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = SavioSlateMuted
                     )
 
                     if (expense.accountInfo.isNotBlank()) {
                         Text(
                             text = " • ${expense.accountInfo}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = SavioSlateMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -184,43 +218,44 @@ fun TransactionItemCard(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Amount
-            Column(
-                horizontalAlignment = Alignment.End
-            ) {
+            // Amount & Interactive Category Tag
+            Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = formattedAmount,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
+                        fontSize = 15.sp,
+                        textDecoration = if (isBlacklisted) TextDecoration.LineThrough else TextDecoration.None
                     ),
-                    color = typeColor
+                    color = if (isBlacklisted) SavioBlacklistMuted else typeColor
                 )
 
-                if (expense.category.equals("Uncategorized", ignoreCase = true)) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = BentoDebitRed.copy(alpha = 0.12f),
-                        modifier = Modifier.clickable {
-                            onAssignCategory?.invoke(expense)
-                        }
-                    ) {
-                        Text(
-                            text = "Set Category ✎",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 10.sp
-                            ),
-                            color = BentoDebitRed,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                            maxLines = 1
-                        )
+                Spacer(modifier = Modifier.height(2.dp))
+
+                // Interactive Category Tag for EVERY spend (per user request)
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (expense.category.equals("Uncategorized", ignoreCase = true)) {
+                        SavioSpendRoseBg
+                    } else {
+                        SavioEmeraldContainer
+                    },
+                    modifier = Modifier.clickable {
+                        onAssignCategory?.invoke(expense)
                     }
-                } else {
+                ) {
                     Text(
-                        text = expense.category,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = "${expense.category} ✎",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        ),
+                        color = if (expense.category.equals("Uncategorized", ignoreCase = true)) {
+                            SavioSpendRose
+                        } else {
+                            SavioEmerald
+                        },
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         maxLines = 1
                     )
                 }
@@ -233,7 +268,16 @@ fun TransactionItemCard(
             expense = expense,
             formattedAmount = formattedAmount,
             formattedDate = formattedDate,
+            isBlacklisted = isBlacklisted,
             onDismiss = { showDetailDialog = false },
+            onChangeCategory = {
+                showDetailDialog = false
+                onAssignCategory?.invoke(expense)
+            },
+            onToggleBlacklist = {
+                onToggleBlacklist?.invoke(expense.merchantOrRecipient)
+                showDetailDialog = false
+            },
             onDelete = {
                 onDelete(expense.id)
                 showDetailDialog = false
@@ -247,7 +291,10 @@ private fun TransactionDetailDialog(
     expense: ExpenseEntity,
     formattedAmount: String,
     formattedDate: String,
+    isBlacklisted: Boolean,
     onDismiss: () -> Unit,
+    onChangeCategory: () -> Unit,
+    onToggleBlacklist: () -> Unit,
     onDelete: () -> Unit
 ) {
     AlertDialog(
@@ -260,13 +307,14 @@ private fun TransactionDetailDialog(
             ) {
                 Text(
                     text = "Transaction Details",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = SavioSlateDark
                 )
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Default.DeleteOutline,
                         contentDescription = "Delete Transaction",
-                        tint = BentoDebitRed
+                        tint = SavioSpendRose
                     )
                 }
             }
@@ -277,6 +325,9 @@ private fun TransactionDetailDialog(
                 DetailRow("Amount", formattedAmount)
                 DetailRow("Type", expense.type.displayName)
                 DetailRow("Category", expense.category)
+                if (isBlacklisted) {
+                    DetailRow("Status", "Blacklisted (Excluded from Spends)")
+                }
                 if (expense.accountInfo.isNotBlank()) {
                     DetailRow("Account / Card", expense.accountInfo)
                 }
@@ -290,27 +341,59 @@ private fun TransactionDetailDialog(
                     Text(
                         text = "Original SMS Body:",
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = SavioSlateMuted
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(10.dp),
+                        color = GlassCardBg,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
                             text = expense.rawBody,
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(10.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = SavioSlateBody
                         )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Actions row inside details
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onChangeCategory,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Category, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Category", fontSize = 12.sp)
+                    }
+
+                    Button(
+                        onClick = onToggleBlacklist,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isBlacklisted) SavioEmerald else SavioBlacklistRed
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Block, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(if (isBlacklisted) "Unblacklist" else "Blacklist", fontSize = 12.sp)
                     }
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Close")
+                Text("Close", color = SavioSlateDark)
             }
         }
     )
@@ -327,12 +410,12 @@ private fun DetailRow(label: String, value: String) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = SavioSlateMuted
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-            color = MaterialTheme.colorScheme.onSurface
+            color = SavioSlateDark
         )
     }
 }

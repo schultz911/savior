@@ -1,5 +1,5 @@
 {
-  "name": "SAVIO",
+  "name": "Savio₹",
   "description": "Live SMS spend tracker and savings calculator in rupees (₹) with OpenRouter Gemini AI categorization, spend breakup pie chart, per-category limits & 80%/100% alerts, calendar history, and 12-month analytics.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
