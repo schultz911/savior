@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -94,19 +95,24 @@ fun PermissionsBanner(
                 }
 
                 if (hasSmsPermissions) {
+                    Spacer(modifier = Modifier.width(8.dp))
                     OutlinedButton(
                         onClick = onSyncInbox,
                         enabled = !isSyncing,
                         shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                         modifier = Modifier.testTag("sync_inbox_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Sync,
                             contentDescription = "Sync",
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(if (isSyncing) "Scanning..." else "Scan Inbox")
+                        Text(
+                            text = if (isSyncing) "Scanning..." else "Scan Inbox",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)
+                        )
                     }
                 }
             }

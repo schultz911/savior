@@ -108,7 +108,7 @@ fun InstrumentLiquidityCard(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "Account & Instrument Intelligence",
+                            text = "Instrument Intelligence",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp

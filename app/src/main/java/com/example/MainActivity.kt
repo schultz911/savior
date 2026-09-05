@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -448,6 +449,11 @@ fun SpendTrackerScreen(
         }
     }
 
+    // Gesture back navigation: Swipe-back navigates to the main Dashboard instead of closing the app
+    BackHandler(enabled = currentTab != SavioScreenTab.DASHBOARD) {
+        viewModel.setTab(SavioScreenTab.DASHBOARD)
+    }
+
     Scaffold(
         modifier = modifier
             .fillMaxSize()
@@ -459,8 +465,8 @@ fun SpendTrackerScreen(
                 navigationIcon = {
                     Box(
                         modifier = Modifier
-                            .padding(start = 14.dp)
-                            .size(38.dp)
+                            .padding(start = 12.dp)
+                            .size(46.dp)
                             .clickable {
                                 if (currentTab == SavioScreenTab.SETTINGS) {
                                     viewModel.setTab(SavioScreenTab.DASHBOARD)
@@ -471,7 +477,7 @@ fun SpendTrackerScreen(
                         Image(
                             painter = painterResource(id = R.drawable.ic_savio_logo),
                             contentDescription = "Savio Logo",
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(42.dp)
                         )
                     }
                 },

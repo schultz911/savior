@@ -242,30 +242,6 @@ fun SettingsScreen(
                             )
                         }
                     }
-
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = SavioEmeraldContainer,
-                        modifier = Modifier.clickable { onNavigateBack() }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = SavioEmerald,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Done",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                color = SavioEmerald
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -691,31 +667,47 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        OutlinedTextField(
-                            value = newRulePatternInput,
-                            onValueChange = { newRulePatternInput = it },
-                            placeholder = { Text("Pattern (e.g. SWIGGY*)") },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = SavioEmerald,
-                                unfocusedBorderColor = GlassCardBorder
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Pattern",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = SavioSlateDark
                             )
-                        )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            OutlinedTextField(
+                                value = newRulePatternInput,
+                                onValueChange = { newRulePatternInput = it },
+                                placeholder = { Text("e.g. SWIGGY*") },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = SavioEmerald,
+                                    unfocusedBorderColor = GlassCardBorder
+                                )
+                            )
+                        }
 
-                        OutlinedTextField(
-                            value = newRuleAliasInput,
-                            onValueChange = { newRuleAliasInput = it },
-                            placeholder = { Text("Alias (e.g. Swiggy)") },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = SavioEmerald,
-                                unfocusedBorderColor = GlassCardBorder
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Alias",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = SavioSlateDark
                             )
-                        )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            OutlinedTextField(
+                                value = newRuleAliasInput,
+                                onValueChange = { newRuleAliasInput = it },
+                                placeholder = { Text("e.g. Swiggy") },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = SavioEmerald,
+                                    unfocusedBorderColor = GlassCardBorder
+                                )
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))

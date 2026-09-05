@@ -117,7 +117,7 @@ fun DailyBurnDownChart(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "Spend Velocity & Burn Curve",
+                            text = "Spend Velocity",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
