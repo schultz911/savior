@@ -17,19 +17,22 @@ object SmsParser {
     // Keywords identifying outgoing spend / debit / transfer
     private val DEBIT_KEYWORDS = listOf(
         "debited", "debit alert", "withdrawn", "atm wdl", "cash withdrawal",
-        "deducted", "deduction", "charged to your a/c", "direct debit"
+        "deducted", "deduction", "charged to your a/c", "direct debit",
+        "upi", "via upi", "upi txn", "upi-debit", "upi transfer", "upi payment",
+        "upi/p2m", "upi/p2a", "by upi"
     )
 
     private val TRANSFER_KEYWORDS = listOf(
         "transferred", "transfer of", "transfer to", "sent to", "sent via zelle",
         "zelle to", "venmo to", "wire transfer", "neft", "imps", "upi to",
+        "sent via upi", "transferred via upi", "upi transfer to", "sent to vpa",
         "p2p transfer", "sent money", "you paid"
     )
 
     private val SPEND_KEYWORDS = listOf(
         "spent", "purchase of", "charged", "swiped", "pos txn", "transaction of",
         "payment of", "paid at", "spent on", "apple pay", "google pay", "card ending",
-        "txn of", "paid to"
+        "txn of", "paid to", "paid via upi", "paid using upi", "upi/p2m"
     )
 
     // Regex for matching amounts with currency symbols or codes
@@ -43,16 +46,19 @@ object SmsParser {
         Pattern.compile("""(?i)(?:debited|spent|paid|charged|amount of|sum of|txn of|withdrawn)\s*(?:of|by|for|with)?\s*([$€£¥₹]|Rs\.?|INR|USD|EUR|GBP)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)""")
     )
 
-    // Regex for card / account numbers
+    // Regex for card / account / UPI references
     private val ACCOUNT_PATTERNS = listOf(
         Pattern.compile("""(?i)(?:card|a/c|account|acct)(?:\s*(?:no\.?|ending|xx|\*+|-))*\s*([0-9]{3,4})"""),
         Pattern.compile("""(?i)(?:ending\s+in\s+)([0-9]{4})"""),
-        Pattern.compile("""(?i)(?:xx|[*]{2,})([0-9]{4})""")
+        Pattern.compile("""(?i)(?:xx|[*]{2,})([0-9]{4})"""),
+        Pattern.compile("""(?i)(?:upi\s*(?:ref|reference)?(?:\s*no\.?)?[\s:]+)([0-9]{4,16})""")
     )
 
     // Regex for merchant / recipient
     private val MERCHANT_PATTERNS = listOf(
-        Pattern.compile("""(?i)(?:at|to|towards|in favor of|vpa|paid to)\s+([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s+(?:on|via|using|ref|avl|bal|dated|\.|,|$))"""),
+        Pattern.compile("""(?i)(?:via\s+upi\s+to|by\s+upi\s+to|upi\s+to|transfer\s+to|paid\s+to|to\s+vpa|towards|in\s+favor\s+of)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:on|via|using|upi\s+ref|ref\s+no|ref|avl|bal|\.|,|$))"""),
+        Pattern.compile("""(?i)(?:upi/(?:p2m|p2a)/[0-9]+/)([A-Za-z0-9&.\-_/ ]{2,30})"""),
+        Pattern.compile("""(?i)(?:at|to)\s+([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s+(?:on|via|using|ref|avl|bal|dated|\.|,|$))"""),
         Pattern.compile("""(?i)(?:approved at)\s+([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s+(?:on|for|using|\.|,|$))""")
     )
 
@@ -75,7 +81,9 @@ object SmsParser {
 
         // Determine if message is an expenditure
         val lower = cleanBody.lowercase(Locale.US)
-        val isTransfer = TRANSFER_KEYWORDS.any { lower.contains(it) }
+        val isTransfer = TRANSFER_KEYWORDS.any { lower.contains(it) } ||
+                Regex("""(?i)\b(?:sent|transferred|transfer)\b.{1,35}\bto\b""").containsMatchIn(cleanBody) ||
+                Regex("""(?i)\b(?:upi/p2a/|p2p)\b""").containsMatchIn(cleanBody)
         val isDebit = DEBIT_KEYWORDS.any { lower.contains(it) }
         val isSpend = SPEND_KEYWORDS.any { lower.contains(it) }
 
@@ -186,9 +194,15 @@ object SmsParser {
             if (matcher.find()) {
                 val num = matcher.group(1)
                 if (!num.isNullOrBlank()) {
+                    val isUpi = pattern.pattern().contains("upi", ignoreCase = true) || text.contains("upi", ignoreCase = true)
                     val isCard = text.contains("card", ignoreCase = true)
-                    val prefix = if (isCard) "Card ••" else "A/c ••"
-                    return "$prefix$num"
+                    val prefix = when {
+                        isCard -> "Card ••"
+                        isUpi -> "UPI ••"
+                        else -> "A/c ••"
+                    }
+                    val suffix = if (num.length > 4) num.takeLast(4) else num
+                    return "$prefix$suffix"
                 }
             }
         }
@@ -213,22 +227,35 @@ object SmsParser {
             return cleanSender
         }
 
-        return "Payment"
+        return "UPI / Payment"
     }
 
     private fun cleanMerchantName(name: String): String {
-        var clean = name.replace(Regex("(?i)^(the|a|an)\\s+"), "")
-            .replace(Regex("(?i)\\s+(ltd|inc|corp|co|llc|pvt|services)$"), "")
-            .replace(Regex("[*#_]"), " ")
+        var raw = name
+        // If it's a VPA handle like swiggy@icici or 9876543210@paytm
+        if (raw.contains("@")) {
+            val prefix = raw.substringBefore("@").trim()
+            if (prefix.all { it.isDigit() }) {
+                return "UPI (${prefix.takeLast(4)})"
+            } else if (prefix.isNotBlank()) {
+                raw = prefix
+            }
+        }
+
+        var clean = raw.replace(Regex("(?i)^(the|a|an)\\s+"), "")
+            .replace(Regex("(?i)\\s+(ltd|inc|corp|co|llc|pvt|services|vpa)$"), "")
+            .replace(Regex("[*#_/]"), " ")
             .trim()
 
         // Capitalize words nicely
-        return clean.split(" ")
+        val words = clean.split(" ")
             .filter { it.isNotBlank() }
             .joinToString(" ") { word ->
                 if (word.length <= 3 && word.all { it.isLetter() }) word.uppercase(Locale.US)
                 else word.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
             }
+
+        return words.ifEmpty { "Payment" }
     }
 
     private fun cleanSenderName(sender: String): String {
@@ -237,25 +264,65 @@ object SmsParser {
         return parts.firstOrNull()?.uppercase(Locale.US) ?: ""
     }
 
-    private fun isBankSender(sender: String): Boolean {
+    fun isBankSender(sender: String): Boolean {
         val s = sender.lowercase(Locale.US)
         return s.contains("bank") || s.contains("chase") || s.contains("citi") ||
                 s.contains("amex") || s.contains("wells") || s.contains("hdfc") ||
                 s.contains("icici") || s.contains("sbi") || s.contains("pay") ||
-                s.contains("card") || s.contains("alert") || s.contains("money")
+                s.contains("card") || s.contains("alert") || s.contains("money") ||
+                s.contains("axis") || s.contains("kotak") || s.contains("pnb") ||
+                s.contains("boi") || s.contains("canara") || s.contains("idfc") ||
+                s.contains("indus") || s.contains("yes") || s.contains("rbl") ||
+                s.contains("upi") || s.contains("gpay") || s.contains("phonepe") ||
+                s.contains("paytm") || s.contains("cred")
     }
 
+    /**
+     * Categorizes spend, explicitly identifying UPI transactions alongside specific merchants.
+     */
     private fun categorize(text: String, merchant: String, type: ExpenseType): String {
         val combined = "$text $merchant".lowercase(Locale.US)
 
         return when {
-            type == ExpenseType.TRANSFER || combined.contains("zelle") || combined.contains("venmo") || combined.contains("transfer") -> "Transfers"
-            combined.contains("uber") || combined.contains("lyft") || combined.contains("taxi") || combined.contains("gas") || combined.contains("shell") || combined.contains("chevron") || combined.contains("metro") || combined.contains("flight") -> "Travel & Commute"
-            combined.contains("whole foods") || combined.contains("trader joe") || combined.contains("walmart") || combined.contains("costco") || combined.contains("kroger") || combined.contains("target") || combined.contains("grocery") || combined.contains("supermarket") -> "Groceries"
-            combined.contains("starbucks") || combined.contains("mcdonald") || combined.contains("chipotle") || combined.contains("restaurant") || combined.contains("cafe") || combined.contains("pizza") || combined.contains("burger") || combined.contains("dining") || combined.contains("coffee") || combined.contains("food") -> "Food & Dining"
-            combined.contains("netflix") || combined.contains("spotify") || combined.contains("electric") || combined.contains("utility") || combined.contains("water") || combined.contains("bill") || combined.contains("recharge") || combined.contains("internet") || combined.contains("att") || combined.contains("verizon") -> "Bills & Utilities"
-            combined.contains("amazon") || combined.contains("apple") || combined.contains("ebay") || combined.contains("best buy") || combined.contains("nike") || combined.contains("zara") || combined.contains("store") || combined.contains("mall") -> "Shopping"
+            combined.contains("whole foods") || combined.contains("trader joe") || combined.contains("walmart") || combined.contains("costco") || combined.contains("kroger") || combined.contains("target") || combined.contains("supermarket") || combined.contains("blinkit") || combined.contains("instamart") || combined.contains("zepto") || combined.contains("bigbasket") -> "Groceries"
+            combined.contains("starbucks") || combined.contains("mcdonald") || combined.contains("chipotle") || combined.contains("restaurant") || combined.contains("cafe") || combined.contains("pizza") || combined.contains("burger") || combined.contains("dining") || combined.contains("coffee") || combined.contains("swiggy") || combined.contains("zomato") -> "Food & Dining"
+            combined.contains("uber") || combined.contains("lyft") || combined.contains("taxi") || combined.contains("gas") || combined.contains("shell") || combined.contains("chevron") || combined.contains("metro") || combined.contains("flight") || combined.contains("ola") || combined.contains("rapido") || combined.contains("irctc") || combined.contains("fuel") -> "Travel & Commute"
+            combined.contains("netflix") || combined.contains("spotify") || combined.contains("electric") || combined.contains("utility") || combined.contains("water") || combined.contains("bill") || combined.contains("recharge") || combined.contains("internet") || combined.contains("att") || combined.contains("verizon") || combined.contains("bescom") || combined.contains("airtel") || combined.contains("jio") -> "Bills & Utilities"
+            combined.contains("amazon") || combined.contains("apple") || combined.contains("ebay") || combined.contains("best buy") || combined.contains("nike") || combined.contains("zara") || combined.contains("flipkart") || combined.contains("myntra") -> "Shopping"
+            combined.contains("upi") || combined.contains("vpa") || combined.contains("gpay") || combined.contains("phonepe") || combined.contains("paytm") || combined.contains("bhim") || combined.contains("cred") -> "UPI"
+            type == ExpenseType.TRANSFER || combined.contains("zelle") || combined.contains("venmo") || combined.contains("transfer") || combined.contains("imps") || combined.contains("neft") -> "Transfers"
+            combined.contains("store") || combined.contains("mall") || combined.contains("shop") -> "Shopping"
+            combined.contains("food") -> "Food & Dining"
+            combined.contains("grocery") -> "Groceries"
             else -> "General Spend"
         }
+    }
+
+    /**
+     * Quickly checks if an SMS message is a candidate financial transaction message
+     * prior to dispatching to AI or full parsing.
+     */
+    fun isCandidateFinancialSms(smsBody: String, sender: String = ""): Boolean {
+        val clean = smsBody.trim()
+        if (clean.length < 10) return false
+
+        // Exclude clear OTPs
+        for (pattern in EXCLUSION_PATTERNS) {
+            if (pattern.matcher(clean).find()) {
+                if (clean.contains("otp", ignoreCase = true) || clean.contains("verification code", ignoreCase = true)) {
+                    return false
+                }
+            }
+        }
+
+        val lower = clean.lowercase(Locale.US)
+        val hasDebit = DEBIT_KEYWORDS.any { lower.contains(it) }
+        val hasTransfer = TRANSFER_KEYWORDS.any { lower.contains(it) }
+        val hasSpend = SPEND_KEYWORDS.any { lower.contains(it) }
+        val hasUpi = lower.contains("upi") || lower.contains("vpa")
+        val looksBank = isBankSender(sender)
+        val hasAmount = AMOUNT_PATTERNS.any { it.matcher(clean).find() }
+
+        return (hasDebit || hasTransfer || hasSpend || hasUpi || (looksBank && hasAmount)) && hasAmount
     }
 }

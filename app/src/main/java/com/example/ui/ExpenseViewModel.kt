@@ -328,13 +328,15 @@ class ExpenseViewModel(
     fun syncSmsInbox() {
         viewModelScope.launch {
             _isSyncing.value = true
-            _syncFeedback.value = "Scanning SMS messages..."
+            _syncFeedback.value = "Scanning & AI-validating SMS messages..."
             try {
-                val count = repository.syncInbox()
+                val count = repository.syncInbox { current, total ->
+                    _syncFeedback.value = "Validating transactions with AI ($current/$total)..."
+                }
                 _syncFeedback.value = if (count > 0) {
-                    "Synced $count new expenditure(s) from SMS"
+                    "AI validated & synced $count new expenditure(s) from SMS"
                 } else {
-                    "SMS scan complete. No new messages found."
+                    "SMS scan complete. No new expenditures detected."
                 }
             } catch (e: Exception) {
                 _syncFeedback.value = "Error scanning messages: ${e.localizedMessage}"

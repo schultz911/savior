@@ -5,8 +5,12 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.example.MainActivity
 import com.example.R
 import java.text.NumberFormat
@@ -61,6 +65,8 @@ object SpendAlertManager {
         val formattedAmount = formatCurrency(amount, currency)
         val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS)
             .setSmallIcon(R.drawable.ic_stat_rupee)
+            .setLargeIcon(getNotificationLargeIcon(context))
+            .setColor(0xFF059669.toInt())
             .setContentTitle("Assign Category to Spend")
             .setContentText("Transaction at $merchant of $formattedAmount needs a category.")
             .setStyle(
@@ -117,6 +123,8 @@ object SpendAlertManager {
             val overBy = formatCurrency(currentCategoryTotal - categoryLimit, currency)
             val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS)
                 .setSmallIcon(R.drawable.ic_stat_rupee)
+                .setLargeIcon(getNotificationLargeIcon(context))
+                .setColor(0xFF059669.toInt())
                 .setContentTitle("⚠️ Category Budget Overshot: $category")
                 .setContentText("Spent $currentFmt of $limitFmt limit (+${overBy} over)!")
                 .setStyle(
@@ -134,6 +142,8 @@ object SpendAlertManager {
             val pct = (ratio * 100).toInt()
             val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS)
                 .setSmallIcon(R.drawable.ic_stat_rupee)
+                .setLargeIcon(getNotificationLargeIcon(context))
+                .setColor(0xFF059669.toInt())
                 .setContentTitle("⚡ 80% Budget Alert: $category")
                 .setContentText("You've reached $pct% of your $limitFmt limit ($currentFmt spent).")
                 .setStyle(
@@ -147,6 +157,19 @@ object SpendAlertManager {
 
             manager.notify(notifId, notification)
         }
+    }
+
+    fun getNotificationLargeIcon(context: Context): Bitmap {
+        val drawable = ContextCompat.getDrawable(context, R.drawable.ic_savio_logo)
+        if (drawable != null) {
+            val size = (context.resources.displayMetrics.density * 64).toInt().coerceAtLeast(96)
+            val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            drawable.setBounds(0, 0, canvas.width, canvas.height)
+            drawable.draw(canvas)
+            return bitmap
+        }
+        return BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)
     }
 
     private fun formatCurrency(amount: Double, currency: String): String {

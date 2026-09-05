@@ -13,14 +13,14 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34])
 class ExampleRobolectricTest {
 
   @Test
   fun `read string from context`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val appName = context.getString(R.string.app_name)
-    assertEquals("Spend Tracker", appName)
+    assertEquals("Savio₹", appName)
   }
 
   @Test
@@ -38,5 +38,30 @@ class ExampleRobolectricTest {
     assertEquals(150.00, parsedZelle!!.amount, 0.01)
     assertEquals(ExpenseType.TRANSFER, parsedZelle.type)
   }
-}
 
+  @Test
+  fun `test upi sms parsing and categorization`() {
+    val upiSms = "Debited INR 450.00 via UPI to Sharma General Store on 05-Sep. UPI Ref: 98124901."
+    val parsed = SmsParser.parse(upiSms, "AXIS-UPI")
+    assertNotNull(parsed)
+    assertEquals(450.00, parsed!!.amount, 0.01)
+    assertEquals("₹", parsed.currency)
+    assertEquals("UPI ••4901", parsed.accountInfo)
+    assertEquals("UPI", parsed.category)
+
+    val upiTransferSms = "Sent Rs 1,200.00 to rahul@okaxis via Google Pay UPI (UPI Ref 429104)."
+    val parsedTransfer = SmsParser.parse(upiTransferSms, "GPAY-UPI")
+    assertNotNull(parsedTransfer)
+    assertEquals(1200.00, parsedTransfer!!.amount, 0.01)
+    assertEquals(ExpenseType.TRANSFER, parsedTransfer.type)
+    assertEquals("UPI", parsedTransfer.category)
+  }
+
+  @Test
+  fun `test candidate financial sms filter`() {
+    assertTrue(SmsParser.isCandidateFinancialSms("Debited INR 450.00 via UPI to Sharma", "AXIS-UPI"))
+    assertTrue(SmsParser.isCandidateFinancialSms("Rs 1,450.00 debited from A/c **4821", "HDFC-BANK"))
+    // OTP should NOT be candidate
+    org.junit.Assert.assertFalse(SmsParser.isCandidateFinancialSms("Your OTP is 123456 to login", "HDFC-BANK"))
+  }
+}

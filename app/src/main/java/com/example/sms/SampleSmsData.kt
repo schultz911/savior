@@ -48,6 +48,18 @@ object SampleSmsData {
             body = "Paid Rs 350.00 to Blue Tokai Coffee using Paytm UPI on 04-Sep. Ref #99218.",
             description = "Paytm Coffee Spend (₹350)",
             expectedType = ExpenseType.SPEND
+        ),
+        SampleSms(
+            sender = "AXIS-UPI",
+            body = "Debited INR 450.00 via UPI to Sharma General Store on 05-Sep. UPI Ref: 98124901.",
+            description = "Axis UPI Store Spend (₹450)",
+            expectedType = ExpenseType.SPEND
+        ),
+        SampleSms(
+            sender = "GPAY-UPI",
+            body = "Sent Rs 1,200.00 to rahul@okaxis via Google Pay UPI (UPI Ref 429104).",
+            description = "GPay UPI Transfer (₹1,200)",
+            expectedType = ExpenseType.TRANSFER
         )
     )
 
@@ -70,6 +82,19 @@ object SampleSmsData {
                 rawBody = "Rs 1,450.00 debited from A/c **4821 on 04-Sep at SWIGGY. Avl Bal: Rs 48,250.00.",
                 sender = "HDFC-BANK",
                 timestamp = now - (2 * 60 * 60 * 1000L)
+            )
+        )
+        list.add(
+            ExpenseEntity(
+                amount = 450.00,
+                currency = currency,
+                type = ExpenseType.SPEND,
+                merchantOrRecipient = "Sharma Store",
+                accountInfo = "UPI ••4901",
+                category = "UPI",
+                rawBody = "Debited INR 450.00 via UPI to Sharma General Store on 05-Sep. UPI Ref: 98124901.",
+                sender = "AXIS-UPI",
+                timestamp = now - (5 * 60 * 60 * 1000L)
             )
         )
         list.add(

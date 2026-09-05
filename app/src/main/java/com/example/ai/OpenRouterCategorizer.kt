@@ -33,6 +33,7 @@ object OpenRouterCategorizer {
 
     // Standard SAVIO spend categories
     val KNOWN_CATEGORIES = listOf(
+        "UPI",
         "Groceries",
         "Food & Dining",
         "Shopping",
@@ -47,9 +48,9 @@ object OpenRouterCategorizer {
     )
 
     /**
-     * Parses an SMS message using OpenRouter (gemini-3.5-flash-lite).
-     * Determines whether message is credit, debit/spend, transfer, intimation, ad, OTP, etc.
-     * Extracts merchant, amount, type, and category.
+     * Parses and validates an SMS message using OpenRouter (gemini-3.5-flash-lite).
+     * Rigorously confirms whether message is an actual SPEND or TRANSFER vs CREDIT/INTIMATION/AD/OTP.
+     * Intelligently cleans and enhances merchant name, amount, account reference, and category.
      */
     suspend fun parseSmsTransaction(
         rawText: String,
@@ -65,31 +66,37 @@ object OpenRouterCategorizer {
         val bearer = if (cleanKey.startsWith("Bearer ")) cleanKey else "Bearer $cleanKey"
 
         val systemPrompt = """
-You are a financial transaction and SMS classification engine for Savio₹ personal expense tracker.
-Analyze the provided SMS message and extract structured financial information in strict JSON.
+You are an expert financial transaction intelligence and validation engine for Savio₹ personal expense tracker.
+Your mission: Analyze the incoming SMS message, validate whether it represents an ACTUAL OUTGOING EXPENDITURE (SPEND or TRANSFER), and intelligently enhance the transaction details into clean, structured JSON.
 
-Classification rules:
-1. "SPEND": Outgoing payment or purchase made to a merchant, company, utility, shop, or online service.
-2. "TRANSFER": Money sent/transferred to another person or individual (e.g. UPI transfer, P2P, friend/family, rent).
-3. "CREDIT": Incoming funds deposited, salary credited, refund received, cashback.
-4. "INTIMATION": Non-transactional bank alert, account balance notice, statement generated, credit limit alert, bill due reminder.
-5. "AD": Promotional advertising, loan offer, credit card sale, pre-approved offer, discount coupon.
-6. "OTP": One-time password, verification code, authorization PIN, security code.
-7. "OTHER": Spam or unidentifiable message.
+VALIDATION & CLASSIFICATION CRITERIA:
+1. "SPEND": An actual outgoing payment, debit, or purchase made to a merchant, store, service, utility, online platform, restaurant, groceries, or subscription (e.g. Swiggy, Amazon, Uber, POS swipe, merchant UPI).
+2. "TRANSFER": Outgoing money transferred to another person, friend, family member, landlord, P2P UPI transfer, NEFT, IMPS, or wire.
+3. "CREDIT": Incoming money credited, deposited, salary received, refund, cashback, or loan disbursement -> (isExpense: FALSE).
+4. "INTIMATION": Non-transactional bank notification, available balance update, credit limit alert, statement generated, bill due reminder -> (isExpense: FALSE).
+5. "AD": Promotional advertisement, credit card offer, loan pre-approval, cashback scheme, marketing -> (isExpense: FALSE).
+6. "OTP": One-time password, verification PIN, security code -> (isExpense: FALSE).
+7. "OTHER": Irrelevant spam, personal message, or unidentifiable message -> (isExpense: FALSE).
 
-Categories (choose most accurate for SPEND/TRANSFER):
-Groceries, Food & Dining, Shopping, Bills & Utilities, Travel & Commute, Transfers, Entertainment, Health & Wellness, Investments, Education, Personal Care, or UNKNOWN.
+ENHANCEMENT RULES:
+- Amount: Extract the exact numerical value of the transaction. Never truncate or misread digits (e.g., Rs.50000.00 is 50000.00, Rs.500.00 is 500.00). Do not confuse with available balance!
+- Currency: Detect currency symbol ("₹", "$", "€", "£", etc.). Default to "₹" for Indian banking SMS.
+- Merchant: Clean up the merchant or recipient into a polished, human-friendly title. Remove raw VPA suffixes (e.g. 'swiggy@icici' -> 'Swiggy', 'zomato@hdfc' -> 'Zomato', 'xyz@okaxis' -> 'XYZ'), clean up bank prefixes ('POS WDL', 'TXN AT', 'IN FAVOR OF'), and strip transaction reference numbers.
+- AccountInfo: Detect card or account info (e.g. 'Card ••1234', 'A/c ••5678', 'UPI ••9012').
+- Category: Assign the most accurate category from:
+  ["UPI", "Groceries", "Food & Dining", "Shopping", "Bills & Utilities", "Travel & Commute", "Transfers", "Entertainment", "Health & Wellness", "Investments", "Education", "Personal Care"].
+  * If the payment is a generic UPI transaction without an identifiable merchant type, categorize as "UPI".
+  * If the merchant is known (e.g. Blinkit -> Groceries, Swiggy -> Food & Dining, Uber -> Travel & Commute, Amazon -> Shopping, Netflix -> Bills & Utilities), assign that specific category even if paid via UPI.
 
-Output format (MUST BE RAW VALID JSON ONLY, no backticks, no markdown):
+OUTPUT FORMAT (Output STRICT RAW JSON ONLY, no markdown fences, no code blocks):
 {
   "classification": "SPEND" | "TRANSFER" | "CREDIT" | "INTIMATION" | "AD" | "OTP" | "OTHER",
-  "amount": 50000.00,
+  "amount": 1250.00,
   "currency": "₹",
-  "merchant": "Exact Merchant or Recipient Name",
-  "accountInfo": "Card ••1234 or A/c ••5678",
+  "merchant": "Clean Merchant or Recipient Name",
+  "accountInfo": "Card ••1234 or A/c ••5678 or UPI ••9012",
   "category": "Category Name"
 }
-If amount cannot be identified, set amount to 0.0.
 """.trimIndent()
 
         val userPrompt = """
@@ -183,6 +190,7 @@ SMS Body: "$rawText"
 You are a precise financial transaction categorizer for the Savio₹ personal expense tracking application.
 Analyze the bank SMS and extract the exact spend category.
 Permitted categories:
+- UPI
 - Groceries
 - Food & Dining
 - Shopping

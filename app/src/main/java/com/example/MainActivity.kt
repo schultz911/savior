@@ -294,48 +294,56 @@ fun SpendTrackerScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             CenterAlignedTopAppBar(
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable {
-                            if (currentTab == SavioScreenTab.SETTINGS) {
-                                viewModel.setTab(SavioScreenTab.DASHBOARD)
-                            }
-                        }
+                navigationIcon = {
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 14.dp)
+                            .size(38.dp)
+                            .clickable {
+                                if (currentTab == SavioScreenTab.SETTINGS) {
+                                    viewModel.setTab(SavioScreenTab.DASHBOARD)
+                                }
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
-                        // Actual App Icon: Emerald green rupee symbol with lighter green circle around it
                         Image(
                             painter = painterResource(id = R.drawable.ic_savio_logo),
                             contentDescription = "Savio Logo",
                             modifier = Modifier.size(36.dp)
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        // Savior Wordmark: One cohesive word with rupee symbol forming the 'r'
-                        Text(
-                            text = buildAnnotatedString {
-                                withStyle(
-                                    SpanStyle(
-                                        color = SavioSlateDark,
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 22.sp,
-                                        letterSpacing = (-0.4).sp
-                                    )
-                                ) {
-                                    append("Savio")
-                                }
-                                withStyle(
-                                    SpanStyle(
-                                        color = SavioEmerald,
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 22.sp,
-                                        letterSpacing = (-0.4).sp
-                                    )
-                                ) {
-                                    append("₹")
-                                }
-                            }
-                        )
                     }
+                },
+                title = {
+                    // Savior Wordmark: One cohesive word centered with rupee symbol forming the 'r'
+                    Text(
+                        text = buildAnnotatedString {
+                            withStyle(
+                                SpanStyle(
+                                    color = SavioSlateDark,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 23.sp,
+                                    letterSpacing = (-0.4).sp
+                                )
+                            ) {
+                                append("Savio")
+                            }
+                            withStyle(
+                                SpanStyle(
+                                    color = SavioEmerald,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 23.sp,
+                                    letterSpacing = (-0.4).sp
+                                )
+                            ) {
+                                append("₹")
+                            }
+                        },
+                        modifier = Modifier.clickable {
+                            if (currentTab == SavioScreenTab.SETTINGS) {
+                                viewModel.setTab(SavioScreenTab.DASHBOARD)
+                            }
+                        }
+                    )
                 },
                 actions = {
                     // Test SMS simulator button

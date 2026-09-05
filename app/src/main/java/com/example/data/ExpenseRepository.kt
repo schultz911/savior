@@ -60,19 +60,26 @@ class ExpenseRepository(
             inserted != null
         }
 
-    suspend fun syncInbox(): Int = withContext(Dispatchers.IO) {
+    suspend fun syncInbox(onProgress: ((current: Int, total: Int) -> Unit)? = null): Int = withContext(Dispatchers.IO) {
         if (!SmsReader.hasReadSmsPermission(context)) {
             return@withContext 0
         }
 
         val lastSync = preferences.lastSyncTimestamp
-        val fetchedExpenses = SmsReader.readExpensesFromInbox(context, lastSync)
+        val candidateMessages = SmsReader.readCandidateSmsMessages(context, lastSync, limit = 50)
         var insertedCount = 0
 
-        for (exp in fetchedExpenses) {
-            val exists = expenseDao.existsByContent(exp.sender, exp.timestamp, exp.amount)
-            if (!exists) {
-                expenseDao.insertExpense(exp)
+        for ((index, msg) in candidateMessages.withIndex()) {
+            onProgress?.invoke(index + 1, candidateMessages.size)
+
+            // Validate with AI (gemini-3.5-flash-lite) to confirm if actually spend/transfer and intelligently enhance
+            val inserted = com.example.service.ExpenseProcessingHelper.processRawSms(
+                context = context,
+                rawText = msg.body,
+                sender = msg.sender,
+                timestamp = msg.timestamp
+            )
+            if (inserted != null) {
                 insertedCount++
             }
         }

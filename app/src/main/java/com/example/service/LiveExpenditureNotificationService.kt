@@ -179,6 +179,8 @@ class LiveExpenditureNotificationService : Service() {
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_rupee)
+            .setLargeIcon(SpendAlertManager.getNotificationLargeIcon(this))
+            .setColor(0xFF059669.toInt())
             .setContentTitle(monthTitle)
             .setContentText(totalSpendText)
             .setSubText("Live Spend")
