@@ -76,6 +76,14 @@ class ExpenseRepository(
         }
     }
 
+    suspend fun deleteExpensesForMonth(monthKey: String): Int = withContext(Dispatchers.IO) {
+        val deletedCount = expenseDao.deleteExpensesForMonth(monthKey)
+        if (preferences.isPersistentNotificationEnabled) {
+            LiveExpenditureNotificationService.updateLiveExpenditure(context)
+        }
+        deletedCount
+    }
+
     suspend fun clearAll() = withContext(Dispatchers.IO) {
         expenseDao.clearAll()
         if (preferences.isPersistentNotificationEnabled) {

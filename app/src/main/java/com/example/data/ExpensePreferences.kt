@@ -158,6 +158,30 @@ class ExpensePreferences(context: Context) {
         return merchant.trim().lowercase()
     }
 
+    // ==========================================
+    // Ignored Recurring Radar Merchants
+    // ==========================================
+    fun getIgnoredRecurringMerchants(): Set<String> {
+        return prefs.getStringSet(KEY_IGNORED_RECURRING_MERCHANTS, emptySet()) ?: emptySet()
+    }
+
+    fun addIgnoredRecurringMerchant(merchant: String) {
+        val norm = merchant.trim()
+        if (norm.isBlank()) return
+        val current = getIgnoredRecurringMerchants().toMutableSet()
+        current.add(norm)
+        prefs.edit().putStringSet(KEY_IGNORED_RECURRING_MERCHANTS, current).apply()
+    }
+
+    fun removeIgnoredRecurringMerchant(merchant: String) {
+        val norm = merchant.trim()
+        val current = getIgnoredRecurringMerchants().toMutableSet()
+        val removed = current.removeIf { it.equals(norm, ignoreCase = true) }
+        if (removed) {
+            prefs.edit().putStringSet(KEY_IGNORED_RECURRING_MERCHANTS, current).apply()
+        }
+    }
+
     companion object {
         private const val KEY_CURRENCY = "key_currency"
         private const val KEY_MONTHLY_SALARY = "key_monthly_salary"
@@ -171,6 +195,7 @@ class ExpensePreferences(context: Context) {
         private const val KEY_CATEGORY_LIMIT_PREFIX = "cat_limit_"
         private const val KEY_MERCHANT_CAT_PREFIX = "merchant_cat_"
         private const val KEY_BLACKLISTED_MERCHANTS = "key_blacklisted_merchants"
+        private const val KEY_IGNORED_RECURRING_MERCHANTS = "key_ignored_recurring_merchants"
         private const val KEY_BIOMETRIC_LOCK = "key_biometric_lock"
         private const val KEY_PRIVACY_SHIELD = "key_privacy_shield"
         private const val KEY_LOCK_TIMEOUT = "key_lock_timeout"

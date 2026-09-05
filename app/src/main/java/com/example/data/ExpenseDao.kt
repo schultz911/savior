@@ -93,6 +93,9 @@ interface ExpenseDao {
     @Query("DELETE FROM expenses WHERE id = :id")
     suspend fun deleteExpenseById(id: Long)
 
+    @Query("DELETE FROM expenses WHERE monthKey = :monthKey")
+    suspend fun deleteExpensesForMonth(monthKey: String): Int
+
     @Query("DELETE FROM expenses")
     suspend fun clearAll()
 }

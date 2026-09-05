@@ -45,8 +45,7 @@ class LiveExpenditureNotificationService : Service() {
             monthTitle = "Spend Tracker",
             contentText = "Monitoring SMS for debits, transfers & spends",
             pacingStatus = PacingStatus.ON_TRACK,
-            progress = 0,
-            showProgress = false
+            progress = 0
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -129,7 +128,7 @@ class LiveExpenditureNotificationService : Service() {
                 }
 
                 val totalFormatted = formatCurrency(totalSpend, currency)
-                val title = "$monthDisplay Spends:  $totalFormatted"
+                val title = "$monthDisplay:  $totalFormatted"
 
                 val cal = java.util.Calendar.getInstance()
                 val daysInMonth = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
@@ -137,7 +136,8 @@ class LiveExpenditureNotificationService : Service() {
                 val daysRemaining = (daysInMonth - currentDay + 1).coerceAtLeast(1)
 
                 val allExpensesSync = dao.getAllExpensesSync()
-                val recurringCommitments = RecurringDetectionEngine.detectRecurringBills(allExpensesSync, currentMonthKey)
+                val ignoredMerchants = prefs.getIgnoredRecurringMerchants()
+                val recurringCommitments = RecurringDetectionEngine.detectRecurringBills(allExpensesSync, currentMonthKey, ignoredMerchants)
                 val upcomingRecurring = recurringCommitments.filter { !it.isPaidThisMonth }.sumOf { it.expectedAmount }
                 val remainingDiscretionary = (budget - totalSpend - upcomingRecurring).coerceAtLeast(0.0)
                 val safeDaily = if (budget > 0) remainingDiscretionary / daysRemaining else 0.0
@@ -156,25 +156,12 @@ class LiveExpenditureNotificationService : Service() {
                     else -> PacingStatus.ON_TRACK
                 }
 
-                val pacingText = when (pacingStatus) {
-                    PacingStatus.OVER_PACED -> {
-                        val overAmount = formatCurrency(totalSpend - budget, currency)
-                        "Over-Paced by $overAmount"
-                    }
-                    PacingStatus.CAUTION -> {
-                        val safeDailyFormatted = formatCurrency(safeDaily, currency)
-                        "Caution: $safeDailyFormatted/d ($daysRemaining d left)"
-                    }
-                    PacingStatus.ON_TRACK -> {
-                        val safeDailyFormatted = formatCurrency(safeDaily, currency)
-                        "Safe: $safeDailyFormatted/d ($daysRemaining d left)"
-                    }
-                }
-
+                val safeDailyFormatted = formatCurrency(safeDaily, currency)
                 val contentText = if (budget > 0) {
-                    "$progress% of budget • $pacingText"
+                    val budgetFormatted = formatCurrency(budget, currency)
+                    "$progress% of $budgetFormatted • Safe spending pace: $safeDailyFormatted/day"
                 } else {
-                    "100% of budget • Tracking live (${currentMonthExpenses.size} txns)"
+                    "No budget set • Safe spending pace: $safeDailyFormatted/day"
                 }
 
                 val notification = buildNotification(
@@ -182,7 +169,7 @@ class LiveExpenditureNotificationService : Service() {
                     contentText = contentText,
                     pacingStatus = pacingStatus,
                     progress = progress,
-                    showProgress = budget > 0
+                    currency = currency
                 )
 
                 val notificationManager =
@@ -199,7 +186,7 @@ class LiveExpenditureNotificationService : Service() {
         contentText: String,
         pacingStatus: PacingStatus,
         progress: Int,
-        showProgress: Boolean
+        currency: String = "₹"
     ): Notification {
         val openAppIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -222,7 +209,7 @@ class LiveExpenditureNotificationService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val pacedLargeIcon = getPacedNotificationLargeIcon(this, pacingStatus)
+        val pacedLargeIcon = getPacedNotificationLargeIcon(this, pacingStatus, currency)
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_rupee)
@@ -241,6 +228,7 @@ class LiveExpenditureNotificationService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setContentIntent(pendingOpenIntent)
+            .setProgress(100, progress, false)
             .addAction(
                 android.R.drawable.ic_input_add,
                 "Add Spend",
@@ -252,22 +240,18 @@ class LiveExpenditureNotificationService : Service() {
                 pendingOpenIntent
             )
 
-        if (showProgress) {
-            builder.setProgress(100, progress, false)
-        }
-
         return builder.build()
     }
 
-    private fun getPacedNotificationLargeIcon(context: Context, status: PacingStatus): Bitmap {
+    private fun getPacedNotificationLargeIcon(context: Context, status: PacingStatus, currency: String = "₹"): Bitmap {
         val size = (context.resources.displayMetrics.density * 64).toInt().coerceAtLeast(96)
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
         val (bgColor, ringColor, accentColor) = when (status) {
             PacingStatus.ON_TRACK -> Triple(0xFFECFDF5.toInt(), 0xFF10B981.toInt(), 0xFF059669.toInt()) // Emerald Green Safe
-            PacingStatus.CAUTION -> Triple(0xFFFFFBEB.toInt(), 0xFFF59E0B.toInt(), 0xFFD97706.toInt()) // Amber Caution
-            PacingStatus.OVER_PACED -> Triple(0xFFFFF1F2.toInt(), 0xFFF43F5E.toInt(), 0xFFE11D48.toInt()) // Rose / Red Over
+            PacingStatus.CAUTION -> Triple(0xFFFFFBEB.toInt(), 0xFFF59E0B.toInt(), 0xFFD97706.toInt()) // Amber Caution / Over-Paced
+            PacingStatus.OVER_PACED -> Triple(0xFFFFF1F2.toInt(), 0xFFF43F5E.toInt(), 0xFFE11D48.toInt()) // Rose Exceeded Budget
         }
 
         val radius = size / 2f
@@ -291,7 +275,8 @@ class LiveExpenditureNotificationService : Service() {
             textAlign = Paint.Align.CENTER
         }
         val yPos = radius - ((textPaint.descent() + textPaint.ascent()) / 2)
-        canvas.drawText("₹", radius, yPos, textPaint)
+        val symbol = if (currency.isNotBlank()) currency else "₹"
+        canvas.drawText(symbol, radius, yPos, textPaint)
 
         return bitmap
     }
@@ -310,7 +295,7 @@ class LiveExpenditureNotificationService : Service() {
     }
 
     companion object {
-        const val CHANNEL_ID = "live_expenditure_channel_v3"
+        const val CHANNEL_ID = "live_expenditure_channel_v4"
         const val NOTIFICATION_ID = 1001
         const val ACTION_START = "com.example.action.START_TRACKER"
         const val ACTION_SYNC = "com.example.action.SYNC_EXPENDITURE"
@@ -324,6 +309,7 @@ class LiveExpenditureNotificationService : Service() {
                 try {
                     notificationManager.deleteNotificationChannel("live_expenditure_channel")
                     notificationManager.deleteNotificationChannel("live_expenditure_channel_v2")
+                    notificationManager.deleteNotificationChannel("live_expenditure_channel_v3")
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }

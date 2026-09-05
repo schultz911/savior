@@ -27,16 +27,22 @@ object RecurringDetectionEngine {
 
     fun detectRecurringBills(
         allExpenses: List<ExpenseEntity>,
-        currentMonthKey: String = ExpenseEntity.formatMonthKey(System.currentTimeMillis())
+        currentMonthKey: String = ExpenseEntity.formatMonthKey(System.currentTimeMillis()),
+        ignoredMerchants: Set<String> = emptySet()
     ): List<PredictedRecurringBill> {
         if (allExpenses.isEmpty()) return emptyList()
 
         val cal = Calendar.getInstance()
         val currentDay = cal.get(Calendar.DAY_OF_MONTH)
 
-        // Group by normalized merchant
+        val normalizedIgnored = ignoredMerchants.map { it.trim().lowercase(Locale.US) }
+
+        // Group by normalized merchant, excluding ignored recurring merchants
         val grouped = allExpenses.groupBy { it.merchantOrRecipient.trim().lowercase(Locale.US) }
-            .filterKeys { it.isNotBlank() && it != "unknown" && it != "merchant / payee" }
+            .filterKeys { key ->
+                key.isNotBlank() && key != "unknown" && key != "merchant / payee" &&
+                    normalizedIgnored.none { key.contains(it) || it.contains(key) }
+            }
 
         val result = mutableListOf<PredictedRecurringBill>()
 
@@ -95,9 +101,10 @@ object RecurringDetectionEngine {
 
     fun getUpcomingCommitmentsTotal(
         allExpenses: List<ExpenseEntity>,
-        currentMonthKey: String = ExpenseEntity.formatMonthKey(System.currentTimeMillis())
+        currentMonthKey: String = ExpenseEntity.formatMonthKey(System.currentTimeMillis()),
+        ignoredMerchants: Set<String> = emptySet()
     ): Double {
-        val bills = detectRecurringBills(allExpenses, currentMonthKey)
+        val bills = detectRecurringBills(allExpenses, currentMonthKey, ignoredMerchants)
         return bills.filter { !it.isPaidThisMonth }.sumOf { it.expectedAmount }
     }
 }

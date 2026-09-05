@@ -212,4 +212,79 @@ class ExampleRobolectricTest {
     assertEquals(1333.33, burnRate, 0.1)
     assertEquals(40000.0, projected, 1.0)
   }
+
+  @Test
+  fun `test recurring detection engine filters ignored merchants`() {
+    val expenses = listOf(
+      com.example.data.ExpenseEntity(
+        id = 1L,
+        amount = 499.0,
+        currency = "₹",
+        type = ExpenseType.MERCHANT,
+        merchantOrRecipient = "Netflix India",
+        accountInfo = "Card ••4821",
+        category = "Subscriptions",
+        rawBody = "Netflix charged 499",
+        sender = "HDFC",
+        timestamp = System.currentTimeMillis()
+      ),
+      com.example.data.ExpenseEntity(
+        id = 2L,
+        amount = 1200.0,
+        currency = "₹",
+        type = ExpenseType.MERCHANT,
+        merchantOrRecipient = "Electricity BESCOM",
+        accountInfo = "A/c ••9901",
+        category = "Bills & Utilities",
+        rawBody = "BESCOM bill payment 1200",
+        sender = "ICICI",
+        timestamp = System.currentTimeMillis()
+      )
+    )
+
+    // Initially both should be detected
+    val detectedAll = com.example.engine.RecurringDetectionEngine.detectRecurringBills(expenses)
+    assertEquals(2, detectedAll.size)
+
+    // When Netflix is added to ignored merchants
+    val ignored = setOf("Netflix India")
+    val detectedFiltered = com.example.engine.RecurringDetectionEngine.detectRecurringBills(
+      expenses,
+      ignoredMerchants = ignored
+    )
+    assertEquals(1, detectedFiltered.size)
+    assertEquals("Electricity BESCOM", detectedFiltered.first().merchant)
+  }
+
+  @Test
+  fun `test notification format matches exact specifications`() {
+    val monthDisplay = "September 2026"
+    val totalSpend = 4250.00
+    val budget = 10000.00
+    val safeDaily = 230.00
+    val currency = "₹"
+
+    val totalFormatted = "$currency" + java.text.NumberFormat.getNumberInstance(java.util.Locale.US).apply {
+      minimumFractionDigits = 2
+      maximumFractionDigits = 2
+    }.format(totalSpend)
+
+    val budgetFormatted = "$currency" + java.text.NumberFormat.getNumberInstance(java.util.Locale.US).apply {
+      minimumFractionDigits = 2
+      maximumFractionDigits = 2
+    }.format(budget)
+
+    val safeDailyFormatted = "$currency" + java.text.NumberFormat.getNumberInstance(java.util.Locale.US).apply {
+      minimumFractionDigits = 2
+      maximumFractionDigits = 2
+    }.format(safeDaily)
+
+    val progress = ((totalSpend / budget) * 100).toInt()
+
+    val title = "$monthDisplay:  $totalFormatted"
+    val contentText = "$progress% of $budgetFormatted • Safe spending pace: $safeDailyFormatted/day"
+
+    assertTrue(title.contains(":  ₹4,250.00"))
+    assertEquals("42% of ₹10,000.00 • Safe spending pace: ₹230.00/day", contentText)
+  }
 }

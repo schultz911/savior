@@ -87,6 +87,15 @@ import com.example.ui.theme.SavioSpendRedBg
 import com.example.ui.theme.SavioSpendRose
 import com.example.ui.theme.SavioSpendRoseBg
 import com.example.ui.models.DailyBurnDownData
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.filled.DeleteOutline
 import com.example.ui.models.InstrumentSpendSummary
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -108,6 +117,7 @@ fun CalendarAnalyticsTab(
     onSelectAccount: (String?) -> Unit = {},
     onSelectMonth: (String) -> Unit,
     onNavigateToDashboard: () -> Unit = {},
+    onDeleteMonth: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val numberFormatter = remember {
@@ -481,6 +491,7 @@ fun CalendarAnalyticsTab(
                         selectedMonthKey = selectedMonthKey,
                         onSelectMonth = onSelectMonth,
                         onBarSelect = { onSelectMonth(it) },
+                        onDeleteMonth = onDeleteMonth,
                         currency = currency
                     )
                 }
@@ -789,6 +800,7 @@ fun CalendarAnalyticsTab(
  * Normalizes all month columns against the maximum monthly spend/salary,
  * ensuring bars dynamically scale across the entire height of the chart!
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TwelveMonthStackedBarGraph(
     months: List<MonthAnalytics>,
@@ -796,9 +808,12 @@ fun TwelveMonthStackedBarGraph(
     onSelectMonth: (String) -> Unit,
     currency: String,
     onBarSelect: (String) -> Unit = {},
+    onDeleteMonth: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
+    val haptic = LocalHapticFeedback.current
+    var monthPendingDeletion by remember { mutableStateOf<MonthAnalytics?>(null) }
 
     // Automatically scroll to the rightmost month (latest month) by default
     LaunchedEffect(months) {
@@ -952,11 +967,17 @@ fun TwelveMonthStackedBarGraph(
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
-                                .clickable {
-                                    inspectedMonth = monthData
-                                    onSelectMonth(monthData.monthKey)
-                                    onBarSelect(monthData.monthKey)
-                                }
+                                .combinedClickable(
+                                    onClick = {
+                                        inspectedMonth = monthData
+                                        onSelectMonth(monthData.monthKey)
+                                        onBarSelect(monthData.monthKey)
+                                    },
+                                    onLongClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        monthPendingDeletion = monthData
+                                    }
+                                )
                                 .testTag("bar_${monthData.monthKey}")
                         ) {
                             val chartHeightDp = 160.dp
@@ -1047,6 +1068,77 @@ fun TwelveMonthStackedBarGraph(
                     }
                 }
             }
+        }
+
+        if (monthPendingDeletion != null) {
+            val targetMonth = monthPendingDeletion!!
+            AlertDialog(
+                onDismissRequest = { monthPendingDeletion = null },
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline,
+                        contentDescription = null,
+                        tint = SavioSpendRose,
+                        modifier = Modifier.size(28.dp)
+                    )
+                },
+                title = {
+                    Text(
+                        text = "Delete Data for ${targetMonth.monthLabel}?",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = SavioSlateDark
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Are you sure you want to permanently delete all recorded expenses and transaction data for ${targetMonth.monthLabel}?",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = SavioSlateBody
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = SavioSpendRoseBg,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    text = "Total Spend: $currency${numberFormat.format(targetMonth.totalSpent)}",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                    color = SavioSpendRose
+                                )
+                                Text(
+                                    text = "This action cannot be undone.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = SavioSpendRose
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val keyToDelete = targetMonth.monthKey
+                            monthPendingDeletion = null
+                            if (inspectedMonth?.monthKey == keyToDelete) {
+                                inspectedMonth = null
+                            }
+                            onDeleteMonth?.invoke(keyToDelete)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SavioSpendRose)
+                    ) {
+                        Text("Delete Month", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { monthPendingDeletion = null }) {
+                        Text("Cancel", color = SavioSlateDark)
+                    }
+                },
+                containerColor = Color.White,
+                shape = RoundedCornerShape(20.dp)
+            )
         }
     }
 }

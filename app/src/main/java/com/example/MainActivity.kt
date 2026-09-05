@@ -763,7 +763,8 @@ fun SpendTrackerScreen(
                         selectedAccount = selectedAccountFilter,
                         onSelectAccount = { viewModel.selectAccountFilter(it) },
                         onSelectMonth = { viewModel.selectMonth(it) },
-                        onNavigateToDashboard = { viewModel.setTab(SavioScreenTab.DASHBOARD) }
+                        onNavigateToDashboard = { viewModel.setTab(SavioScreenTab.DASHBOARD) },
+                        onDeleteMonth = { viewModel.deleteMonthData(it) }
                     )
                 }
             }
@@ -1050,7 +1051,8 @@ fun SpendTrackerScreen(
             bills = predictedRecurringBills,
             currency = currency,
             onDismiss = { showRecurringCommitmentsSheet = false },
-            onToggleRecurring = { m, isRec -> viewModel.toggleRecurringForMerchant(m, isRec) }
+            onToggleRecurring = { m, isRec -> viewModel.toggleRecurringForMerchant(m, isRec) },
+            onRemoveRecurringBill = { viewModel.removeRecurringBill(it) }
         )
     }
 

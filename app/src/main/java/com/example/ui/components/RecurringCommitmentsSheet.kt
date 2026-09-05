@@ -85,6 +85,7 @@ fun RecurringCommitmentsSheet(
     currency: String,
     onDismiss: () -> Unit,
     onToggleRecurring: ((merchant: String, isRecurring: Boolean) -> Unit)? = null,
+    onRemoveRecurringBill: ((merchant: String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -326,7 +327,8 @@ fun RecurringCommitmentsSheet(
                         badgeColor = dueBadgeColor,
                         badgeBg = dueBadgeBg,
                         isPaid = false,
-                        onToggleRecurring = onToggleRecurring
+                        onToggleRecurring = onToggleRecurring,
+                        onRemoveRecurringBill = onRemoveRecurringBill
                     )
                 }
             }
@@ -354,7 +356,8 @@ fun RecurringCommitmentsSheet(
                         badgeColor = SavioSavingsGreen,
                         badgeBg = SavioSavingsGreenBg,
                         isPaid = true,
-                        onToggleRecurring = onToggleRecurring
+                        onToggleRecurring = onToggleRecurring,
+                        onRemoveRecurringBill = onRemoveRecurringBill
                     )
                 }
             }
@@ -371,7 +374,8 @@ private fun RecurringBillItemCard(
     badgeColor: Color,
     badgeBg: Color,
     isPaid: Boolean,
-    onToggleRecurring: ((merchant: String, isRecurring: Boolean) -> Unit)?
+    onToggleRecurring: ((merchant: String, isRecurring: Boolean) -> Unit)?,
+    onRemoveRecurringBill: ((merchant: String) -> Unit)? = null
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -447,21 +451,38 @@ private fun RecurringBillItemCard(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "$currency${numberFormatter.format(bill.expectedAmount)}",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Black,
-                        color = if (isPaid) SavioSavingsGreen else SavioSlateDark
-                    )
-                )
-
-                if (onToggleRecurring != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = if (bill.isManuallyMarked) "Tracked (Custom)" else "Auto-detected",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                        color = SavioSlateMuted
+                        text = "$currency${numberFormatter.format(bill.expectedAmount)}",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Black,
+                            color = if (isPaid) SavioSavingsGreen else SavioSlateDark
+                        )
                     )
+
+                    if (onToggleRecurring != null) {
+                        Text(
+                            text = if (bill.isManuallyMarked) "Tracked (Custom)" else "Auto-detected",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            color = SavioSlateMuted
+                        )
+                    }
+                }
+
+                if (onRemoveRecurringBill != null) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    IconButton(
+                        onClick = { onRemoveRecurringBill(bill.merchant) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Remove non-recurring bill",
+                            tint = SavioSlateMuted,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
         }

@@ -156,6 +156,10 @@ class ExpenseViewModel(
     private val _blacklistedMerchants = MutableStateFlow(preferences.getBlacklistedMerchants())
     val blacklistedMerchants: StateFlow<Set<String>> = _blacklistedMerchants.asStateFlow()
 
+    // Ignored recurring radar merchants set
+    private val _ignoredRecurringMerchants = MutableStateFlow(preferences.getIgnoredRecurringMerchants())
+    val ignoredRecurringMerchants: StateFlow<Set<String>> = _ignoredRecurringMerchants.asStateFlow()
+
     private val _isBiometricLockEnabled = MutableStateFlow(preferences.isBiometricLockEnabled)
     val isBiometricLockEnabled: StateFlow<Boolean> = _isBiometricLockEnabled.asStateFlow()
 
@@ -255,9 +259,10 @@ class ExpenseViewModel(
     // Predicted Recurring Commitments & Subscriptions Flow
     val predictedRecurringBills: StateFlow<List<PredictedRecurringBill>> = combine(
         allExpenses,
-        _selectedMonthKey
-    ) { allList, monthKey ->
-        RecurringDetectionEngine.detectRecurringBills(allList, monthKey)
+        _selectedMonthKey,
+        _ignoredRecurringMerchants
+    ) { allList, monthKey, ignored ->
+        RecurringDetectionEngine.detectRecurringBills(allList, monthKey, ignored)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -937,6 +942,36 @@ class ExpenseViewModel(
         viewModelScope.launch {
             repository.updateIsRecurringForMerchant(merchant, isRecurring)
             _syncFeedback.value = if (isRecurring) "Marked all '$merchant' recurring" else "Unmarked all '$merchant' recurring"
+        }
+    }
+
+    fun removeRecurringBill(merchant: String) {
+        viewModelScope.launch {
+            preferences.addIgnoredRecurringMerchant(merchant)
+            _ignoredRecurringMerchants.value = preferences.getIgnoredRecurringMerchants()
+            repository.updateIsRecurringForMerchant(merchant, false)
+            _syncFeedback.value = "Removed '$merchant' from recurring radar"
+            LiveExpenditureNotificationService.updateLiveExpenditure(getApplication())
+        }
+    }
+
+    fun restoreRecurringBill(merchant: String) {
+        viewModelScope.launch {
+            preferences.removeIgnoredRecurringMerchant(merchant)
+            _ignoredRecurringMerchants.value = preferences.getIgnoredRecurringMerchants()
+            _syncFeedback.value = "Restored '$merchant' to recurring radar"
+            LiveExpenditureNotificationService.updateLiveExpenditure(getApplication())
+        }
+    }
+
+    fun deleteMonthData(monthKey: String) {
+        viewModelScope.launch {
+            val count = repository.deleteExpensesForMonth(monthKey)
+            _syncFeedback.value = "Deleted $count transactions for ${ExpenseEntity.formatMonthDisplay(monthKey)}"
+            if (_selectedMonthKey.value == monthKey) {
+                _selectedMonthKey.value = currentDefaultMonth
+            }
+            LiveExpenditureNotificationService.updateLiveExpenditure(getApplication())
         }
     }
 
