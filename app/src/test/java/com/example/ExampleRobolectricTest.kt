@@ -258,11 +258,12 @@ class ExampleRobolectricTest {
 
   @Test
   fun `test notification format matches exact specifications`() {
-    val monthDisplay = "September 2026"
+    val monthName = "September"
     val totalSpend = 4250.00
     val budget = 10000.00
     val safeDaily = 230.00
     val currency = "₹"
+    val burnRateStatus = "Safe"
 
     val totalFormatted = "$currency" + java.text.NumberFormat.getNumberInstance(java.util.Locale.US).apply {
       minimumFractionDigits = 2
@@ -281,10 +282,10 @@ class ExampleRobolectricTest {
 
     val progress = ((totalSpend / budget) * 100).toInt()
 
-    val title = "$monthDisplay:  $totalFormatted"
-    val contentText = "$progress% of $budgetFormatted • Safe spending pace: $safeDailyFormatted/day"
+    val title = "$monthName:  $totalFormatted"
+    val contentText = "$progress% of $budgetFormatted • $burnRateStatus burn rate • Safe daily spend pace: $safeDailyFormatted/day"
 
-    assertTrue(title.contains(":  ₹4,250.00"))
-    assertEquals("42% of ₹10,000.00 • Safe spending pace: ₹230.00/day", contentText)
+    assertEquals("September:  ₹4,250.00", title)
+    assertEquals("42% of ₹10,000.00 • Safe burn rate • Safe daily spend pace: ₹230.00/day", contentText)
   }
 }

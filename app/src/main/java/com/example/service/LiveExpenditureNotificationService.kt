@@ -89,7 +89,14 @@ class LiveExpenditureNotificationService : Service() {
                 }
 
                 val currentMonthKey = ExpenseEntity.formatMonthKey(System.currentTimeMillis())
-                val monthDisplay = ExpenseEntity.formatMonthDisplay(currentMonthKey)
+                val monthName = try {
+                    val parser = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.US)
+                    val formatter = java.text.SimpleDateFormat("MMMM", java.util.Locale.US)
+                    val date = parser.parse(currentMonthKey)
+                    if (date != null) formatter.format(date) else currentMonthKey
+                } catch (e: Exception) {
+                    "Month"
+                }
                 val currentMonthExpenses = dao.getExpensesForMonthSync(currentMonthKey)
 
                 val currency = prefs.currency
@@ -128,7 +135,7 @@ class LiveExpenditureNotificationService : Service() {
                 }
 
                 val totalFormatted = formatCurrency(totalSpend, currency)
-                val title = "$monthDisplay:  $totalFormatted"
+                val title = "$monthName:  $totalFormatted"
 
                 val cal = java.util.Calendar.getInstance()
                 val daysInMonth = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
@@ -156,12 +163,18 @@ class LiveExpenditureNotificationService : Service() {
                     else -> PacingStatus.ON_TRACK
                 }
 
+                val burnRateStatus = when (pacingStatus) {
+                    PacingStatus.ON_TRACK -> "Safe"
+                    PacingStatus.CAUTION -> "Over-paced"
+                    PacingStatus.OVER_PACED -> "Excessive"
+                }
+
                 val safeDailyFormatted = formatCurrency(safeDaily, currency)
                 val contentText = if (budget > 0) {
                     val budgetFormatted = formatCurrency(budget, currency)
-                    "$progress% of $budgetFormatted • Safe spending pace: $safeDailyFormatted/day"
+                    "$progress% of $budgetFormatted • $burnRateStatus burn rate • Safe daily spend pace: $safeDailyFormatted/day"
                 } else {
-                    "No budget set • Safe spending pace: $safeDailyFormatted/day"
+                    "No budget set • $burnRateStatus burn rate • Safe daily spend pace: $safeDailyFormatted/day"
                 }
 
                 val notification = buildNotification(
@@ -295,7 +308,7 @@ class LiveExpenditureNotificationService : Service() {
     }
 
     companion object {
-        const val CHANNEL_ID = "live_expenditure_channel_v4"
+        const val CHANNEL_ID = "live_expenditure_channel_v5"
         const val NOTIFICATION_ID = 1001
         const val ACTION_START = "com.example.action.START_TRACKER"
         const val ACTION_SYNC = "com.example.action.SYNC_EXPENDITURE"
@@ -310,6 +323,7 @@ class LiveExpenditureNotificationService : Service() {
                     notificationManager.deleteNotificationChannel("live_expenditure_channel")
                     notificationManager.deleteNotificationChannel("live_expenditure_channel_v2")
                     notificationManager.deleteNotificationChannel("live_expenditure_channel_v3")
+                    notificationManager.deleteNotificationChannel("live_expenditure_channel_v4")
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
