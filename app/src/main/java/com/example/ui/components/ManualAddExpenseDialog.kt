@@ -75,7 +75,7 @@ fun ManualAddExpenseDialog(
     var amountInput by remember { mutableStateOf("") }
     var merchantInput by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Food & Dining") }
-    var selectedType by remember { mutableStateOf(ExpenseType.SPEND) }
+    var selectedType by remember { mutableStateOf(ExpenseType.MERCHANT) }
     var accountInfoInput by remember { mutableStateOf("Cash / Manual") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -88,150 +88,183 @@ fun ManualAddExpenseDialog(
         containerColor = Color.White,
         modifier = Modifier
             .navigationBarsPadding()
-            .imePadding()
-            .testTag("manual_add_bottom_drawer")
+            .testTag("manual_add_expense_bottom_sheet")
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp)
+                .padding(bottom = 28.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            // Header Row
+            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(SavioEmeraldContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            tint = SavioEmerald,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "Add Transaction",
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp
-                            ),
-                            color = SavioSlateDark
-                        )
-                        Text(
-                            text = "Manual spend or offline transfer",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SavioSlateMuted
-                        )
-                    }
+                Column {
+                    Text(
+                        text = "Add Transaction",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
+                        ),
+                        color = SavioSlateDark
+                    )
+                    Text(
+                        text = "Manual expenditure or payment entry",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SavioSlateMuted
+                    )
                 }
                 IconButton(onClick = onDismiss) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
-                        tint = SavioSlateMuted
-                    )
+                    Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = SavioSlateMuted)
                 }
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Amount Input with Currency
+            // Amount Input (Large, prominent)
+            Text(
+                text = "Amount",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = SavioSlateDark
+            )
+            Spacer(modifier = Modifier.height(6.dp))
             OutlinedTextField(
                 value = amountInput,
                 onValueChange = {
-                    amountInput = it.filter { char -> char.isDigit() || char == '.' }
+                    amountInput = it
                     errorMessage = null
                 },
-                label = { Text("Amount ($currency)") },
-                placeholder = { Text("0.00") },
+                placeholder = { Text("0.00", fontSize = 22.sp, color = SavioSlateMuted) },
                 prefix = {
                     Text(
                         text = "$currency ",
-                        fontWeight = FontWeight.Bold,
-                        color = SavioEmerald,
-                        fontSize = 18.sp
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Black,
+                            color = SavioEmerald,
+                            fontSize = 22.sp
+                        )
                     )
                 },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                shape = RoundedCornerShape(16.dp),
-                singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("manual_amount_input"),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Black,
+                    fontSize = 22.sp,
+                    color = SavioSlateDark
+                ),
+                shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = SavioEmerald,
-                    unfocusedBorderColor = GlassCardBorder,
-                    focusedLabelColor = SavioEmerald
+                    unfocusedBorderColor = GlassCardBorder
                 )
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Merchant / Payee
+            // Merchant / Recipient Input
+            Text(
+                text = "Merchant or Recipient",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = SavioSlateDark
+            )
+            Spacer(modifier = Modifier.height(6.dp))
             OutlinedTextField(
                 value = merchantInput,
                 onValueChange = {
                     merchantInput = it
                     errorMessage = null
                 },
-                label = { Text("Merchant or Payee") },
-                placeholder = { Text("e.g. Swiggy, Local Grocery, Petrol Pump, Ramesh") },
-                shape = RoundedCornerShape(16.dp),
-                singleLine = true,
+                placeholder = { Text("e.g. Swiggy, Amazon, Rahul Sharma...") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("manual_merchant_input"),
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = SavioEmerald,
-                    unfocusedBorderColor = GlassCardBorder,
-                    focusedLabelColor = SavioEmerald
+                    unfocusedBorderColor = GlassCardBorder
                 )
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Transaction Type Selector (Spend vs Transfer)
+            // Transaction Type Selector (4 Types: Merchants, P2P, Self, Credit Cards)
             Text(
                 text = "Transaction Type",
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                 color = SavioSlateDark
             )
             Spacer(modifier = Modifier.height(6.dp))
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                ExpenseType.entries.forEach { type ->
-                    val isSel = selectedType == type
-                    FilterChip(
-                        selected = isSel,
-                        onClick = { selectedType = type },
-                        label = {
-                            Text(
-                                text = type.displayName,
-                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium
-                            )
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = SavioEmerald,
-                            selectedLabelColor = Color.White,
-                            containerColor = GlassBackground,
-                            labelColor = SavioSlateDark
-                        ),
-                        modifier = Modifier.weight(1f)
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(ExpenseType.MERCHANT, ExpenseType.P2P).forEach { type ->
+                        val isSel = selectedType == type
+                        FilterChip(
+                            selected = isSel,
+                            onClick = {
+                                selectedType = type
+                                if (type == ExpenseType.P2P) selectedCategory = "Transfers"
+                            },
+                            label = {
+                                Text(
+                                    text = type.displayName,
+                                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium
+                                )
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = SavioEmerald,
+                                selectedLabelColor = Color.White,
+                                containerColor = GlassBackground,
+                                labelColor = SavioSlateDark
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(ExpenseType.CREDIT_CARD, ExpenseType.SELF).forEach { type ->
+                        val isSel = selectedType == type
+                        FilterChip(
+                            selected = isSel,
+                            onClick = {
+                                selectedType = type
+                                if (type == ExpenseType.CREDIT_CARD) selectedCategory = "Credit Card Bill"
+                                else if (type == ExpenseType.SELF) selectedCategory = "Self"
+                            },
+                            label = {
+                                Text(
+                                    text = type.displayName,
+                                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium
+                                )
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = SavioEmerald,
+                                selectedLabelColor = Color.White,
+                                containerColor = GlassBackground,
+                                labelColor = SavioSlateDark
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
 

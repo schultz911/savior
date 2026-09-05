@@ -21,6 +21,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -192,11 +195,14 @@ fun SpendTrackerScreen(
     val monthlyTotal by viewModel.monthlyTotal.collectAsStateWithLifecycle()
     val transfersTotal by viewModel.transfersTotal.collectAsStateWithLifecycle()
     val spendsTotal by viewModel.spendsTotal.collectAsStateWithLifecycle()
+    val creditCardsTotal by viewModel.creditCardsTotal.collectAsStateWithLifecycle()
+    val selfTotal by viewModel.selfTotal.collectAsStateWithLifecycle()
     val blacklistedMerchants by viewModel.blacklistedMerchants.collectAsStateWithLifecycle()
     val monthlySavings by viewModel.monthlySavings.collectAsStateWithLifecycle()
     val monthlySalary by viewModel.monthlySalary.collectAsStateWithLifecycle()
     val savingsGoal by viewModel.savingsGoal.collectAsStateWithLifecycle()
     val last12MonthsAnalytics by viewModel.last12MonthsAnalytics.collectAsStateWithLifecycle()
+    val allExpenses by viewModel.allExpenses.collectAsStateWithLifecycle()
 
     val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
@@ -393,71 +399,75 @@ fun SpendTrackerScreen(
                     .wrapContentHeight(),
                 contentAlignment = Alignment.BottomCenter
             ) {
-                // Navigation Bar Surface
+                // Navigation Bar Surface: Solid white, seamless, no borders or mid lines
                 Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(68.dp),
-                    color = GlassSurface.copy(alpha = 0.95f),
-                    border = BorderStroke(1.dp, GlassCardBorder),
-                    shadowElevation = 10.dp
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.White,
+                    shadowElevation = 8.dp
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceAround
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .height(64.dp)
                     ) {
-                        // Left Tab: Dashboard
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { viewModel.setTab(SavioScreenTab.DASHBOARD) }
-                                .padding(vertical = 8.dp)
-                                .testTag("tab_dashboard"),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceAround
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Dashboard,
-                                contentDescription = "Dashboard",
-                                tint = if (currentTab == SavioScreenTab.DASHBOARD) SavioEmerald else SavioSlateMuted,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Dashboard",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = if (currentTab == SavioScreenTab.DASHBOARD) FontWeight.Bold else FontWeight.Medium
-                                ),
-                                color = if (currentTab == SavioScreenTab.DASHBOARD) SavioEmerald else SavioSlateMuted
-                            )
-                        }
+                            // Left Tab: Dashboard
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { viewModel.setTab(SavioScreenTab.DASHBOARD) }
+                                    .padding(vertical = 8.dp)
+                                    .testTag("tab_dashboard"),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Dashboard,
+                                    contentDescription = "Dashboard",
+                                    tint = if (currentTab == SavioScreenTab.DASHBOARD) SavioEmerald else SavioSlateMuted,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Dashboard",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = if (currentTab == SavioScreenTab.DASHBOARD) FontWeight.Bold else FontWeight.Medium
+                                    ),
+                                    color = if (currentTab == SavioScreenTab.DASHBOARD) SavioEmerald else SavioSlateMuted
+                                )
+                            }
 
-                        // Central gap for overshooting button
-                        Spacer(modifier = Modifier.width(80.dp))
+                            // Central gap for overshooting button
+                            Spacer(modifier = Modifier.width(80.dp))
 
-                        // Right Tab: Analytics (renamed from Calendar & Graph)
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { viewModel.setTab(SavioScreenTab.ANALYTICS) }
-                                .padding(vertical = 8.dp)
-                                .testTag("tab_analytics"),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Insights,
-                                contentDescription = "Analytics",
-                                tint = if (currentTab == SavioScreenTab.ANALYTICS) SavioEmerald else SavioSlateMuted,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Analytics",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = if (currentTab == SavioScreenTab.ANALYTICS) FontWeight.Bold else FontWeight.Medium
-                                ),
-                                color = if (currentTab == SavioScreenTab.ANALYTICS) SavioEmerald else SavioSlateMuted
-                            )
+                            // Right Tab: Analytics (renamed from Calendar & Graph)
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { viewModel.setTab(SavioScreenTab.ANALYTICS) }
+                                    .padding(vertical = 8.dp)
+                                    .testTag("tab_analytics"),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Insights,
+                                    contentDescription = "Analytics",
+                                    tint = if (currentTab == SavioScreenTab.ANALYTICS) SavioEmerald else SavioSlateMuted,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Analytics",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = if (currentTab == SavioScreenTab.ANALYTICS) FontWeight.Bold else FontWeight.Medium
+                                    ),
+                                    color = if (currentTab == SavioScreenTab.ANALYTICS) SavioEmerald else SavioSlateMuted
+                                )
+                            }
                         }
                     }
                 }
@@ -465,6 +475,7 @@ fun SpendTrackerScreen(
                 // Creative Overshooting Add Transaction Button (Rupee Notes Wad + Plus Badge)
                 Box(
                     modifier = Modifier
+                        .navigationBarsPadding()
                         .offset(y = (-18).dp)
                         .size(68.dp)
                         .clickable { showManualAddDialog = true }
@@ -522,6 +533,7 @@ fun SpendTrackerScreen(
                         selectedMonthKey = selectedMonthKey,
                         last12Months = last12MonthsAnalytics,
                         currentMonthExpenses = currentMonthExpenses,
+                        allExpenses = allExpenses,
                         onSelectMonth = { viewModel.selectMonth(it) },
                         onNavigateToDashboard = { viewModel.setTab(SavioScreenTab.DASHBOARD) }
                     )
@@ -552,6 +564,8 @@ fun SpendTrackerScreen(
                             totalExpenditure = monthlyTotal,
                             transfersTotal = transfersTotal,
                             spendsTotal = spendsTotal,
+                            creditCardsTotal = creditCardsTotal,
+                            selfTotal = selfTotal,
                             currency = currency,
                             monthlySalary = monthlySalary,
                             monthlySavings = monthlySavings,
@@ -634,9 +648,11 @@ fun SpendTrackerScreen(
 
                                 Spacer(modifier = Modifier.height(10.dp))
 
-                                // Filter Chips: All, Spends, Transfers
+                                // Filter Chips: All, Spends, Transfers, Credit Cards, Self
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     ExpenseFilter.entries.forEach { filter ->
@@ -645,6 +661,8 @@ fun SpendTrackerScreen(
                                             ExpenseFilter.ALL -> SavioEmerald
                                             ExpenseFilter.SPENDS -> SavioSpendRose
                                             ExpenseFilter.TRANSFERS -> SavioTransferIndigo
+                                            ExpenseFilter.CREDIT_CARDS -> Color(0xFF7C3AED)
+                                            ExpenseFilter.SELF -> SavioEmerald
                                         }
 
                                         FilterChip(
@@ -656,15 +674,15 @@ fun SpendTrackerScreen(
                                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                                 )
                                             },
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = filterColor.copy(alpha = 0.15f),
-                                            selectedLabelColor = filterColor
-                                        ),
-                                        modifier = Modifier.testTag("filter_${filter.name}")
-                                    )
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = filterColor.copy(alpha = 0.15f),
+                                                selectedLabelColor = filterColor
+                                            ),
+                                            modifier = Modifier.testTag("filter_${filter.name}")
+                                        )
+                                    }
                                 }
-                            }
                         }
                     }
                 }

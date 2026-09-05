@@ -28,9 +28,21 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Fastfood
+import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.data.ExpenseType
+import com.example.ui.ExpenseFilter
+import com.example.ui.theme.SavioTransferIndigo
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -85,8 +97,9 @@ fun CalendarAnalyticsTab(
     selectedMonthKey: String,
     last12Months: List<MonthAnalytics>,
     currentMonthExpenses: List<ExpenseEntity>,
+    allExpenses: List<ExpenseEntity> = emptyList(),
     onSelectMonth: (String) -> Unit,
-    onNavigateToDashboard: () -> Unit,
+    onNavigateToDashboard: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val numberFormatter = remember {
@@ -95,6 +108,9 @@ fun CalendarAnalyticsTab(
             maximumFractionDigits = 0
         }
     }
+
+    var selectedDrilldownMonthKey by remember { mutableStateOf<String?>(null) }
+    var analyticsFilter by remember { mutableStateOf(ExpenseFilter.ALL) }
 
     val currentCal = remember { Calendar.getInstance() }
     val currentYear = currentCal.get(Calendar.YEAR)
@@ -116,6 +132,35 @@ fun CalendarAnalyticsTab(
     val selectedTotalSpend = currentSelectedAnalytics?.totalSpent
         ?: currentMonthExpenses.sumOf { it.amount }
     val selectedSavings = monthlySalary - selectedTotalSpend
+
+    val drilldownExpenses = remember(selectedDrilldownMonthKey, allExpenses, currentMonthExpenses, selectedMonthKey) {
+        val key = selectedDrilldownMonthKey ?: return@remember emptyList<ExpenseEntity>()
+        if (allExpenses.isNotEmpty()) {
+            allExpenses.filter { it.monthKey == key }
+        } else if (key == selectedMonthKey) {
+            currentMonthExpenses
+        } else {
+            emptyList()
+        }
+    }
+
+    val displayedExpenses = remember(currentMonthExpenses, analyticsFilter) {
+        currentMonthExpenses.filter { item ->
+            when (analyticsFilter) {
+                ExpenseFilter.ALL -> true
+                ExpenseFilter.SPENDS -> item.type == ExpenseType.MERCHANT &&
+                        !item.category.equals("Self", ignoreCase = true) &&
+                        !item.category.equals("Credit Card Bill", ignoreCase = true)
+                ExpenseFilter.TRANSFERS -> item.type == ExpenseType.P2P &&
+                        !item.category.equals("Self", ignoreCase = true) &&
+                        !item.category.equals("Credit Card Bill", ignoreCase = true)
+                ExpenseFilter.CREDIT_CARDS -> item.type == ExpenseType.CREDIT_CARD ||
+                        item.category.equals("Credit Card Bill", ignoreCase = true)
+                ExpenseFilter.SELF -> item.type == ExpenseType.SELF ||
+                        item.category.equals("Self", ignoreCase = true)
+            }
+        }
+    }
 
     LazyColumn(
         modifier = modifier
@@ -387,12 +432,16 @@ fun CalendarAnalyticsTab(
                     .testTag("spend_savings_graph_card")
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
+                    val drilldownMonth = selectedDrilldownMonthKey
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = SavioEmeraldContainer,
@@ -411,115 +460,172 @@ fun CalendarAnalyticsTab(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = "12-Month Spend Analytics",
+                                    text = if (drilldownMonth != null) "Category-Wise Spends" else "12-Month Spend Analytics",
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                     color = SavioSlateDark
                                 )
                                 Text(
-                                    text = "Dynamic vertical scale across all 12 months",
+                                    text = if (drilldownMonth != null) "Spending breakdown for ${ExpenseEntity.formatMonthDisplay(drilldownMonth)}" else "Dynamic vertical scale across all 12 months",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = SavioSlateMuted
                                 )
+                            }
+                        }
+
+                        if (drilldownMonth != null) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = SavioEmeraldContainer,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder),
+                                modifier = Modifier
+                                    .clickable { selectedDrilldownMonthKey = null }
+                                    .testTag("month_drilldown_badge")
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = "${ExpenseEntity.formatMonthDisplay(drilldownMonth)} ✕",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = SavioEmerald
+                                    )
+                                }
                             }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Legend
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .clip(CircleShape)
-                                    .background(SavioSpendRose)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Spent (Red)",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = SavioSlateDark
-                            )
+                    if (drilldownMonth == null) {
+                        // Legend
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .clip(CircleShape)
+                                        .background(SavioSpendRose)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Spent (Red)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = SavioSlateDark
+                                )
+                            }
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .clip(CircleShape)
+                                        .background(SavioSavingsGreen)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Saved (Green)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = SavioSlateDark
+                                )
+                            }
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "┄┄",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black),
+                                    color = SavioEmerald
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Salary (Dotted Line)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = SavioEmerald
+                                )
+                            }
                         }
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .clip(CircleShape)
-                                    .background(SavioSavingsGreen)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Saved (Green)",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = SavioSlateDark
-                            )
-                        }
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "┄┄",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black),
-                                color = SavioEmerald
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Salary (Dotted Line)",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = SavioEmerald
-                            )
-                        }
+                        // The 12-Month Vertical Stacked Bar Chart with Full-Height Scaling
+                        TwelveMonthStackedBarGraph(
+                            months = last12Months,
+                            selectedMonthKey = selectedMonthKey,
+                            onSelectMonth = onSelectMonth,
+                            onBarSelect = { barMonthKey ->
+                                selectedDrilldownMonthKey = barMonthKey
+                            },
+                            currency = currency
+                        )
+                    } else {
+                        // Drilldown: Category-wise Bar Graph for selected month
+                        CategoryWiseBarGraph(
+                            monthKey = drilldownMonth,
+                            expenses = drilldownExpenses,
+                            currency = currency
+                        )
                     }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // The 12-Month Vertical Stacked Bar Chart with Full-Height Scaling
-                    TwelveMonthStackedBarGraph(
-                        months = last12Months,
-                        selectedMonthKey = selectedMonthKey,
-                        onSelectMonth = onSelectMonth,
-                        currency = currency
-                    )
                 }
             }
         }
 
-        // 4. Permanent Transactions in Selected Month Header
+        // 4. Transactions List Header with Filter Chips (Replaces Open Live Dashboard link)
         item {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 4.dp)
             ) {
                 Text(
-                    text = "Transactions in ${ExpenseEntity.formatMonthDisplay(selectedMonthKey)} (${currentMonthExpenses.size})",
+                    text = "Transactions in ${ExpenseEntity.formatMonthDisplay(selectedMonthKey)} (${displayedExpenses.size})",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = SavioSlateDark
                 )
 
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = SavioEmeraldContainer,
-                    modifier = Modifier.clickable { onNavigateToDashboard() }
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Filters below header: All, Spends, Transfers, Credit Cards, Self
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "Open Live Dashboard →",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = SavioEmerald,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                    ExpenseFilter.entries.forEach { filter ->
+                        val isSelected = analyticsFilter == filter
+                        val filterColor = when (filter) {
+                            ExpenseFilter.ALL -> SavioEmerald
+                            ExpenseFilter.SPENDS -> SavioSpendRose
+                            ExpenseFilter.TRANSFERS -> SavioTransferIndigo
+                            ExpenseFilter.CREDIT_CARDS -> Color(0xFF7C3AED)
+                            ExpenseFilter.SELF -> SavioEmerald
+                        }
+
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { analyticsFilter = filter },
+                            label = {
+                                Text(
+                                    text = filter.label,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = filterColor.copy(alpha = 0.15f),
+                                selectedLabelColor = filterColor
+                            ),
+                            modifier = Modifier.testTag("analytics_filter_${filter.name}")
+                        )
+                    }
                 }
             }
         }
 
-        if (currentMonthExpenses.isEmpty()) {
+        if (displayedExpenses.isEmpty()) {
             item {
                 Card(
                     modifier = Modifier
@@ -534,7 +640,7 @@ fun CalendarAnalyticsTab(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No expenditures recorded for ${ExpenseEntity.formatMonthDisplay(selectedMonthKey)}. Incoming SMS will be auto-saved here permanently.",
+                            text = "No expenditures found for ${analyticsFilter.label} in ${ExpenseEntity.formatMonthDisplay(selectedMonthKey)}.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = SavioSlateMuted,
                             textAlign = TextAlign.Center
@@ -544,7 +650,7 @@ fun CalendarAnalyticsTab(
             }
         } else {
             items(
-                items = currentMonthExpenses,
+                items = displayedExpenses,
                 key = { it.id }
             ) { expense ->
                 TransactionItemCard(
@@ -568,6 +674,7 @@ fun TwelveMonthStackedBarGraph(
     selectedMonthKey: String,
     onSelectMonth: (String) -> Unit,
     currency: String,
+    onBarSelect: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -688,6 +795,7 @@ fun TwelveMonthStackedBarGraph(
                         .clickable {
                             inspectedMonth = monthData
                             onSelectMonth(monthData.monthKey)
+                            onBarSelect(monthData.monthKey)
                         }
                         .testTag("bar_${monthData.monthKey}")
                 ) {
@@ -780,3 +888,174 @@ fun TwelveMonthStackedBarGraph(
         }
     }
 }
+
+data class CategorySpendBarItem(
+    val category: String,
+    val amount: Double,
+    val count: Int
+)
+
+@Composable
+fun CategoryWiseBarGraph(
+    monthKey: String,
+    expenses: List<ExpenseEntity>,
+    currency: String,
+    modifier: Modifier = Modifier
+) {
+    val numberFormatter = remember {
+        NumberFormat.getNumberInstance(Locale.US).apply {
+            maximumFractionDigits = 0
+            minimumFractionDigits = 0
+        }
+    }
+
+    val categoryList = remember(expenses) {
+        val nonExcluded = expenses.filter {
+            !it.category.equals("Self", ignoreCase = true) &&
+            !it.category.equals("Credit Card Bill", ignoreCase = true)
+        }
+        val targetList = if (nonExcluded.isNotEmpty()) nonExcluded else expenses
+        targetList.groupBy { it.category.ifBlank { "General Spend" } }
+            .map { (cat, list) ->
+                CategorySpendBarItem(
+                    category = cat,
+                    amount = list.sumOf { it.amount },
+                    count = list.size
+                )
+            }
+            .sortedByDescending { it.amount }
+    }
+
+    val totalMonthSpend = remember(categoryList) {
+        categoryList.sumOf { it.amount }
+    }
+
+    val maxCategoryAmount = remember(categoryList) {
+        categoryList.maxOfOrNull { it.amount } ?: 1.0
+    }
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        if (categoryList.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 28.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No category spends recorded for ${ExpenseEntity.formatMonthDisplay(monthKey)}.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = SavioSlateMuted,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            categoryList.forEach { item ->
+                val fraction = if (maxCategoryAmount > 0) {
+                    (item.amount / maxCategoryAmount).toFloat().coerceIn(0.06f, 1.0f)
+                } else 0.06f
+                val pct = if (totalMonthSpend > 0) {
+                    ((item.amount / totalMonthSpend) * 100).toInt()
+                } else 0
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = SavioEmeraldContainer,
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = getAnalyticsCategoryIcon(item.category),
+                                        contentDescription = item.category,
+                                        tint = SavioEmerald,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = item.category,
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = SavioSlateDark
+                                )
+                                Text(
+                                    text = "${item.count} ${if (item.count == 1) "txn" else "txns"}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = SavioSlateMuted
+                                )
+                            }
+                        }
+
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "$currency${numberFormatter.format(item.amount)}",
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                color = SavioSpendRose
+                            )
+                            Text(
+                                text = "$pct% of month",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SavioSlateMuted
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Horizontal bar graph
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(10.dp)
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(GlassBackground)
+                            .border(0.5.dp, GlassCardBorder, RoundedCornerShape(5.dp))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(fraction)
+                                .clip(RoundedCornerShape(5.dp))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(SavioEmerald, SavioEmerald.copy(alpha = 0.75f))
+                                    )
+                                )
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun getAnalyticsCategoryIcon(category: String): ImageVector {
+    val lower = category.lowercase()
+    return when {
+        lower.contains("food") || lower.contains("dining") || lower.contains("restaurant") -> Icons.Default.Fastfood
+        lower.contains("grocer") -> Icons.Default.ShoppingCart
+        lower.contains("shop") || lower.contains("ecommerce") -> Icons.Default.ShoppingBag
+        lower.contains("travel") || lower.contains("flight") || lower.contains("commute") -> Icons.Default.Flight
+        lower.contains("bill") || lower.contains("utility") -> Icons.Default.Receipt
+        lower.contains("transfer") -> Icons.Default.SwapHoriz
+        lower.contains("credit card") -> Icons.Default.CreditCard
+        lower.contains("self") || lower.contains("invest") || lower.contains("bank") -> Icons.Default.AccountBalance
+        else -> Icons.Default.Insights
+    }
+}
+

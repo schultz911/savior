@@ -3,10 +3,16 @@ package com.example.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import com.example.R
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -582,7 +588,7 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    OpenRouterCategorizer.KNOWN_CATEGORIES.take(6).forEach { category ->
+                    OpenRouterCategorizer.KNOWN_CATEGORIES.forEach { category ->
                         val currentVal = localCategoryLimits[category] ?: ""
                         Row(
                             modifier = Modifier
@@ -810,8 +816,74 @@ fun SettingsScreen(
             }
         }
 
+        // 8. Savior Branding Footer
         item {
-            Spacer(modifier = Modifier.height(40.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, bottom = 48.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_savio_logo),
+                    contentDescription = "Savior Logo",
+                    modifier = Modifier.size(54.dp)
+                )
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = buildAnnotatedString {
+                        withStyle(
+                            SpanStyle(
+                                color = SavioSlateDark,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 18.sp,
+                                letterSpacing = (-0.3).sp
+                            )
+                        ) {
+                            append("Savio")
+                        }
+                        withStyle(
+                            SpanStyle(
+                                color = SavioEmerald,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 18.sp,
+                                letterSpacing = (-0.3).sp
+                            )
+                        ) {
+                            append("₹")
+                        }
+                        withStyle(
+                            SpanStyle(
+                                color = SavioSlateMuted,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp
+                            )
+                        ) {
+                            append(" v1.0.0")
+                        }
+                    }
+                )
+
+                Text(
+                    text = "\"Money management made easy.\"",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    color = SavioEmerald
+                )
+
+                Text(
+                    text = "Developed by Kiran Saldanha",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.Medium
+                    ),
+                    color = SavioSlateMuted
+                )
+            }
         }
     }
 

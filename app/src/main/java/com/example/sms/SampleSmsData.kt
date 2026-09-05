@@ -17,49 +17,49 @@ object SampleSmsData {
             sender = "HDFC-BANK",
             body = "Rs 1,450.00 debited from A/c **4821 on 04-Sep at SWIGGY BANGALORE. UPI Ref: 489218291. Avl Bal: Rs 48,250.00.",
             description = "HDFC Swiggy Spend (₹1,450)",
-            expectedType = ExpenseType.SPEND
+            expectedType = ExpenseType.MERCHANT
         ),
         SampleSms(
             sender = "SBI-UPI",
             body = "Dear SBI User, your A/c XX3391 debited by Rs 5,000.00 on 03-Sep towards Transfer to Ramesh Kumar. UPI Ref 382910.",
             description = "SBI UPI Transfer (₹5,000)",
-            expectedType = ExpenseType.TRANSFER
+            expectedType = ExpenseType.P2P
         ),
         SampleSms(
             sender = "ICICI-ALERT",
             body = "Debit alert: Your A/c XX8921 was debited by INR 3,250.00 towards Electricity Bill BESCOM on 02-Sep.",
             description = "ICICI Electricity Bill (₹3,250)",
-            expectedType = ExpenseType.SPEND
+            expectedType = ExpenseType.MERCHANT
         ),
         SampleSms(
             sender = "AXIS-BANK",
             body = "Spent INR 6,890.00 on Axis Card ending 1004 at AMAZON INDIA on 01-Sep. Avl Limit: Rs 1,85,000.00.",
             description = "Axis Card Amazon Spend (₹6,890)",
-            expectedType = ExpenseType.SPEND
+            expectedType = ExpenseType.MERCHANT
         ),
         SampleSms(
             sender = "KOTAK-BANK",
             body = "Kotak Bank: Rs 10,000.00 withdrawn from ATM #4012 on 01-Sep from A/c ending 6620.",
             description = "Kotak ATM Withdrawal (₹10,000)",
-            expectedType = ExpenseType.SPEND
+            expectedType = ExpenseType.MERCHANT
         ),
         SampleSms(
             sender = "PAYTM-UPI",
             body = "Paid Rs 350.00 to Blue Tokai Coffee using Paytm UPI on 04-Sep. Ref #99218.",
             description = "Paytm Coffee Spend (₹350)",
-            expectedType = ExpenseType.SPEND
+            expectedType = ExpenseType.MERCHANT
         ),
         SampleSms(
             sender = "AXIS-UPI",
             body = "Debited INR 450.00 via UPI to Sharma General Store on 05-Sep. UPI Ref: 98124901.",
             description = "Axis UPI Store Spend (₹450)",
-            expectedType = ExpenseType.SPEND
+            expectedType = ExpenseType.MERCHANT
         ),
         SampleSms(
             sender = "GPAY-UPI",
             body = "Sent Rs 1,200.00 to rahul@okaxis via Google Pay UPI (UPI Ref 429104).",
             description = "GPay UPI Transfer (₹1,200)",
-            expectedType = ExpenseType.TRANSFER
+            expectedType = ExpenseType.P2P
         )
     )
 
@@ -75,7 +75,7 @@ object SampleSmsData {
             ExpenseEntity(
                 amount = 1450.00,
                 currency = currency,
-                type = ExpenseType.SPEND,
+                type = ExpenseType.MERCHANT,
                 merchantOrRecipient = "Swiggy",
                 accountInfo = "A/c ••4821",
                 category = "Food & Dining",
@@ -88,10 +88,10 @@ object SampleSmsData {
             ExpenseEntity(
                 amount = 450.00,
                 currency = currency,
-                type = ExpenseType.SPEND,
+                type = ExpenseType.MERCHANT,
                 merchantOrRecipient = "Sharma Store",
                 accountInfo = "UPI ••4901",
-                category = "UPI",
+                category = "Groceries",
                 rawBody = "Debited INR 450.00 via UPI to Sharma General Store on 05-Sep. UPI Ref: 98124901.",
                 sender = "AXIS-UPI",
                 timestamp = now - (5 * 60 * 60 * 1000L)
@@ -101,7 +101,7 @@ object SampleSmsData {
             ExpenseEntity(
                 amount = 5000.00,
                 currency = currency,
-                type = ExpenseType.TRANSFER,
+                type = ExpenseType.P2P,
                 merchantOrRecipient = "Ramesh Kumar",
                 accountInfo = "A/c ••3391",
                 category = "Transfers",
@@ -112,41 +112,54 @@ object SampleSmsData {
         )
         list.add(
             ExpenseEntity(
+                amount = 8500.00,
+                currency = currency,
+                type = ExpenseType.CREDIT_CARD,
+                merchantOrRecipient = "HDFC Credit Card Bill",
+                accountInfo = "Card ••4821",
+                category = "Credit Card Bill",
+                rawBody = "Payment received of INR 8,500.00 towards your HDFC Bank Credit Card ending 4821.",
+                sender = "HDFC-CARD",
+                timestamp = now - (2 * oneDay)
+            )
+        )
+        list.add(
+            ExpenseEntity(
+                amount = 15000.00,
+                currency = currency,
+                type = ExpenseType.SELF,
+                merchantOrRecipient = "Self Transfer to Savings",
+                accountInfo = "A/c ••9901",
+                category = "Self",
+                rawBody = "Transfer of INR 15,000.00 to your linked Savings A/c **9901 is successful.",
+                sender = "ICICI-ALERT",
+                timestamp = now - (3 * oneDay)
+            )
+        )
+        list.add(
+            ExpenseEntity(
                 amount = 3250.00,
                 currency = currency,
-                type = ExpenseType.SPEND,
+                type = ExpenseType.MERCHANT,
                 merchantOrRecipient = "Electricity Bill",
                 accountInfo = "A/c ••8921",
                 category = "Bills & Utilities",
                 rawBody = "Debit alert: Your A/c XX8921 was debited by INR 3,250.00 towards BESCOM.",
                 sender = "ICICI-ALERT",
-                timestamp = now - (2 * oneDay)
+                timestamp = now - (4 * oneDay)
             )
         )
         list.add(
             ExpenseEntity(
                 amount = 6890.00,
                 currency = currency,
-                type = ExpenseType.SPEND,
+                type = ExpenseType.MERCHANT,
                 merchantOrRecipient = "Amazon India",
                 accountInfo = "Card ••1004",
                 category = "Shopping",
                 rawBody = "Spent INR 6,890.00 on Axis Card ending 1004 at AMAZON INDIA.",
                 sender = "AXIS-BANK",
-                timestamp = now - (3 * oneDay)
-            )
-        )
-        list.add(
-            ExpenseEntity(
-                amount = 10000.00,
-                currency = currency,
-                type = ExpenseType.SPEND,
-                merchantOrRecipient = "ATM Cash Withdrawal",
-                accountInfo = "A/c ••6620",
-                category = "General",
-                rawBody = "Kotak Bank: Rs 10,000.00 withdrawn from ATM #4012.",
-                sender = "KOTAK-BANK",
-                timestamp = now - (4 * oneDay)
+                timestamp = now - (5 * oneDay)
             )
         )
 
@@ -172,10 +185,10 @@ object SampleSmsData {
                     ExpenseEntity(
                         amount = amt,
                         currency = currency,
-                        type = if (title.contains("Rent")) ExpenseType.TRANSFER else ExpenseType.SPEND,
+                        type = if (title.contains("Rent")) ExpenseType.P2P else ExpenseType.MERCHANT,
                         merchantOrRecipient = title,
                         accountInfo = "A/c ••4821",
-                        category = if (title.contains("Rent") || title.contains("Transfer")) "Transfers" else "General",
+                        category = if (title.contains("Rent") || title.contains("Transfer")) "Transfers" else "General Spend",
                         rawBody = "Auto-tracked SMS record for $title ($currency$amt).",
                         sender = "BANK-ALERT",
                         timestamp = pastTime

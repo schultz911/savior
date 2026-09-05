@@ -22,10 +22,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -71,6 +73,8 @@ fun ExpenditureHeroCard(
     totalExpenditure: Double,
     transfersTotal: Double,
     spendsTotal: Double,
+    creditCardsTotal: Double = 0.0,
+    selfTotal: Double = 0.0,
     currency: String,
     monthlySalary: Double = 0.0,
     monthlySavings: Double = 0.0,
@@ -92,6 +96,8 @@ fun ExpenditureHeroCard(
     val totalFormatted = "$currency${numberFormatter.format(totalExpenditure)}"
     val transfersFormatted = "$currency${numberFormatter.format(transfersTotal)}"
     val spendsFormatted = "$currency${numberFormatter.format(spendsTotal)}"
+    val creditCardsFormatted = "$currency${numberFormatter.format(creditCardsTotal)}"
+    val selfFormatted = "$currency${numberFormatter.format(selfTotal)}"
     val salaryFormatted = "$currency${numberFormatter.format(monthlySalary)}"
     val savingsFormatted = if (monthlySavings >= 0) {
         "+$currency${numberFormatter.format(monthlySavings)}"
@@ -331,28 +337,56 @@ fun ExpenditureHeroCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Breakdown Tiles: Only Two Types (Spends & Transfers)
-            Row(
+            // Breakdown Tiles: 4 Types (Merchants, P2P Transfers, Credit Cards, Self)
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                SpendCategoryPill(
-                    label = "Spends (Merchants)",
-                    amount = spendsFormatted,
-                    icon = Icons.Default.CreditCard,
-                    accentColor = SavioSpendRose,
-                    backgroundColor = SavioSpendRoseBg,
-                    modifier = Modifier.weight(1f)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    SpendCategoryPill(
+                        label = "Spends (Merchants)",
+                        amount = spendsFormatted,
+                        icon = Icons.Default.Storefront,
+                        accentColor = SavioSpendRose,
+                        backgroundColor = SavioSpendRoseBg,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                SpendCategoryPill(
-                    label = "Transfers (People)",
-                    amount = transfersFormatted,
-                    icon = Icons.Default.SwapHoriz,
-                    accentColor = SavioTransferIndigo,
-                    backgroundColor = SavioTransferIndigoBg,
-                    modifier = Modifier.weight(1f)
-                )
+                    SpendCategoryPill(
+                        label = "Transfers (P2P)",
+                        amount = transfersFormatted,
+                        icon = Icons.Default.SwapHoriz,
+                        accentColor = SavioTransferIndigo,
+                        backgroundColor = SavioTransferIndigoBg,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    SpendCategoryPill(
+                        label = "Credit Cards",
+                        amount = creditCardsFormatted,
+                        icon = Icons.Default.CreditCard,
+                        accentColor = Color(0xFF7C3AED),
+                        backgroundColor = Color(0xFFF5F3FF),
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    SpendCategoryPill(
+                        label = "Self Transfers",
+                        amount = selfFormatted,
+                        icon = Icons.Default.AccountBalance,
+                        accentColor = SavioEmerald,
+                        backgroundColor = SavioEmeraldContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
     }

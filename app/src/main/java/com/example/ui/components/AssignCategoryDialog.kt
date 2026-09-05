@@ -70,7 +70,7 @@ fun AssignCategoryDialog(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var selectedCategory by remember { mutableStateOf(expense.category.ifBlank { "UPI" }) }
+    var selectedCategory by remember { mutableStateOf(expense.category.ifBlank { "Transfers" }) }
     var customCategory by remember { mutableStateOf("") }
     var isCustom by remember { mutableStateOf(false) }
 

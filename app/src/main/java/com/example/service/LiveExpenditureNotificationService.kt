@@ -93,16 +93,28 @@ class LiveExpenditureNotificationService : Service() {
                 var totalSpend = 0.0
                 var transfersSum = 0.0
                 var spendsSum = 0.0
+                var creditCardsSum = 0.0
+                var selfSum = 0.0
 
                 for (exp in currentMonthExpenses) {
                     val normMerchant = exp.merchantOrRecipient.trim().lowercase()
                     if (blacklisted.any { normMerchant.contains(it.lowercase()) || it.lowercase().contains(normMerchant) }) {
                         continue // Blacklisted merchants are simply ignored and not considered
                     }
-                    totalSpend += exp.amount
-                    when (exp.type) {
-                        ExpenseType.TRANSFER -> transfersSum += exp.amount
-                        else -> spendsSum += exp.amount
+
+                    val isSelf = exp.type == ExpenseType.SELF || exp.category.equals("Self", ignoreCase = true)
+                    val isCreditCard = exp.type == ExpenseType.CREDIT_CARD || exp.category.equals("Credit Card Bill", ignoreCase = true)
+
+                    if (isSelf) {
+                        selfSum += exp.amount
+                    } else if (isCreditCard) {
+                        creditCardsSum += exp.amount
+                    } else if (exp.type == ExpenseType.P2P) {
+                        transfersSum += exp.amount
+                        totalSpend += exp.amount
+                    } else {
+                        spendsSum += exp.amount
+                        totalSpend += exp.amount
                     }
                 }
 

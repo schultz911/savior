@@ -56,10 +56,13 @@ object SmsParser {
 
     // Regex for merchant / recipient
     private val MERCHANT_PATTERNS = listOf(
-        Pattern.compile("""(?i)(?:via\s+upi\s+to|by\s+upi\s+to|upi\s+to|transfer\s+to|paid\s+to|to\s+vpa|towards|in\s+favor\s+of)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:on|via|using|upi\s+ref|ref\s+no|ref|avl|bal|\.|,|$))"""),
+        Pattern.compile("""(?i)(?:towards\s+transfer\s+to|transfer(?:red)?\s+to|sent\s+to|paid\s+to|via\s+upi\s+to|by\s+upi\s+to|upi\s+to|to\s+vpa|towards|in\s+favor\s+of)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|upi\s+ref\b|ref\s+no\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
+        Pattern.compile("""(?i)(?:sent|paid|transferred)\s+.{0,45}?\bto\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|upi\s+ref\b|ref\s+no\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
+        Pattern.compile("""(?i)(?:with|via)\s+(?:zelle|upi|venmo)\s+to\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|ref\b)|[.!,;]|$)"""),
         Pattern.compile("""(?i)(?:upi/(?:p2m|p2a)/[0-9]+/)([A-Za-z0-9&.\-_/ ]{2,30})"""),
-        Pattern.compile("""(?i)(?:at|to)\s+([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s+(?:on|via|using|ref|avl|bal|dated|\.|,|$))"""),
-        Pattern.compile("""(?i)(?:approved at)\s+([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s+(?:on|for|using|\.|,|$))""")
+        Pattern.compile("""(?i)(?:spent\s+at|purchase\s+at|charged\s+at|swiped\s+at|approved\s+at|at)\s+([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s*(?:on\b|via\b|for\b|using\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
+        Pattern.compile("""(?i)(?:debited\s+.{0,40}\s+to)\s+([A-Za-z0-9&.\-_/@ ]{2,30}?)(?:\s*(?:on\b|via\b|using\b|ref\b)|[.!,;]|$)"""),
+        Pattern.compile("""(?i)(?:info[:\s]+)([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s*(?:on\b|ref\b|avl\b)|[.!,;]|$)""")
     )
 
     fun parse(smsBody: String, sender: String = ""): ParsedSms? {
@@ -96,11 +99,8 @@ object SmsParser {
             }
         }
 
-        // Only two types of transactions: SPEND (paying merchants) and TRANSFER (money sent to people)
-        val expenseType = when {
-            isTransfer -> ExpenseType.TRANSFER
-            else -> ExpenseType.SPEND
-        }
+        val isCreditCardBill = lower.contains("credit card") && (lower.contains("bill") || lower.contains("payment") || lower.contains("due") || lower.contains("repayment"))
+        val isSelfTransfer = lower.contains("self") || lower.contains("own account") || lower.contains("to own")
 
         // Extract Amount and Currency
         val (amount, currency) = extractAmountAndCurrency(cleanBody) ?: return null
@@ -110,8 +110,24 @@ object SmsParser {
         // Extract Account Info
         val accountInfo = extractAccountInfo(cleanBody)
 
-        // Extract Merchant / Recipient
-        val merchant = extractMerchant(cleanBody, sender)
+        // Extract Merchant / Recipient (Never use bank name or SMS sender)
+        val merchant = extractMerchant(cleanBody, isTransfer || isSelfTransfer)
+
+        val lowerMerchant = merchant.lowercase(Locale.US)
+        val isStoreOrMerchant = listOf(
+            "store", "shop", "mart", "swiggy", "zomato", "amazon", "flipkart",
+            "uber", "ola", "cafe", "coffee", "restaurant", "hotel", "supermarket",
+            "general", "bills", "bescom", "electricity", "retail", "foods", "whole foods"
+        ).any { lowerMerchant.contains(it) } || cleanBody.contains(" at ", ignoreCase = true)
+
+        // 4 Types: Merchants, P2P, Self, Credit Cards
+        val expenseType = when {
+            isCreditCardBill -> ExpenseType.CREDIT_CARD
+            isSelfTransfer -> ExpenseType.SELF
+            isStoreOrMerchant -> ExpenseType.MERCHANT
+            isTransfer -> ExpenseType.P2P
+            else -> ExpenseType.MERCHANT
+        }
 
         // Categorize
         val category = categorize(cleanBody, merchant, expenseType)
@@ -209,59 +225,61 @@ object SmsParser {
         return ""
     }
 
-    private fun extractMerchant(text: String, sender: String): String {
+    private fun extractMerchant(text: String, isTransfer: Boolean): String {
         for (pattern in MERCHANT_PATTERNS) {
             val matcher = pattern.matcher(text)
-            if (matcher.find()) {
+            while (matcher.find()) {
                 val match = matcher.group(1)?.trim() ?: ""
                 val clean = cleanMerchantName(match)
-                if (clean.length in 2..35) {
+                if (clean.length in 2..35 && !isBankName(clean)) {
                     return clean
                 }
             }
         }
 
-        // Fallback: If sender has identifiable name (e.g., "CHASE", "AMEX", "BOA", "VENMO")
-        val cleanSender = cleanSenderName(sender)
-        if (cleanSender.isNotEmpty()) {
-            return cleanSender
-        }
+        // Never fall back to bank name or SMS sender!
+        return if (isTransfer) "Transfer Recipient" else "Merchant / Payee"
+    }
 
-        return "UPI / Payment"
+    private fun isBankName(name: String): Boolean {
+        val lower = name.lowercase(Locale.US).trim()
+        val bankKeywords = listOf(
+            "hdfc", "icici", "sbi", "axis", "kotak", "pnb", "bob", "boi",
+            "canara", "idfc", "indus", "yes bank", "rbl", "chase", "citi",
+            "amex", "wells fargo", "bank of america", "bank", "federal bank",
+            "central bank", "union bank", "card ending", "account ending"
+        )
+        return bankKeywords.any { lower == it || lower == "$it bank" || lower.startsWith("$it ") }
     }
 
     private fun cleanMerchantName(name: String): String {
-        var raw = name
+        var raw = name.trim().trimEnd('.', ',', ';', ':', '-', ' ')
         // If it's a VPA handle like swiggy@icici or 9876543210@paytm
         if (raw.contains("@")) {
             val prefix = raw.substringBefore("@").trim()
             if (prefix.all { it.isDigit() }) {
                 return "UPI (${prefix.takeLast(4)})"
-            } else if (prefix.isNotBlank()) {
-                raw = prefix
             }
+            return raw.trimEnd('.', ',')
         }
 
         var clean = raw.replace(Regex("(?i)^(the|a|an)\\s+"), "")
+            .replace(Regex("(?i)^transfer(?:red)?\\s+to\\s+"), "")
             .replace(Regex("(?i)\\s+(ltd|inc|corp|co|llc|pvt|services|vpa)$"), "")
             .replace(Regex("[*#_/]"), " ")
             .trim()
+            .trimEnd('.', ',', ';', ':', '-', ' ')
 
         // Capitalize words nicely
         val words = clean.split(" ")
             .filter { it.isNotBlank() }
             .joinToString(" ") { word ->
-                if (word.length <= 3 && word.all { it.isLetter() }) word.uppercase(Locale.US)
-                else word.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+                val cleanWord = word.trimEnd('.', ',')
+                if (cleanWord.length <= 3 && cleanWord.all { it.isLetter() }) cleanWord.uppercase(Locale.US)
+                else cleanWord.lowercase(Locale.US).replaceFirstChar { it.titlecase(Locale.US) }
             }
 
-        return words.ifEmpty { "Payment" }
-    }
-
-    private fun cleanSenderName(sender: String): String {
-        val s = sender.trim().replace(Regex("[^A-Za-z0-9]"), " ")
-        val parts = s.split(" ").filter { it.isNotBlank() && it.length > 2 }
-        return parts.firstOrNull()?.uppercase(Locale.US) ?: ""
+        return words.ifEmpty { "Merchant / Payee" }
     }
 
     fun isBankSender(sender: String): Boolean {
@@ -278,20 +296,20 @@ object SmsParser {
     }
 
     /**
-     * Categorizes spend, explicitly identifying UPI transactions alongside specific merchants.
+     * Categorizes spend into standard SAVIO categories (no UPI category).
      */
     private fun categorize(text: String, merchant: String, type: ExpenseType): String {
         val combined = "$text $merchant".lowercase(Locale.US)
 
         return when {
-            combined.contains("whole foods") || combined.contains("trader joe") || combined.contains("walmart") || combined.contains("costco") || combined.contains("kroger") || combined.contains("target") || combined.contains("supermarket") || combined.contains("blinkit") || combined.contains("instamart") || combined.contains("zepto") || combined.contains("bigbasket") -> "Groceries"
+            type == ExpenseType.CREDIT_CARD || combined.contains("credit card bill") || combined.contains("card payment") -> "Credit Card Bill"
+            type == ExpenseType.SELF || combined.contains("self transfer") || combined.contains("own account") -> "Self"
+            combined.contains("whole foods") || combined.contains("trader joe") || combined.contains("walmart") || combined.contains("costco") || combined.contains("kroger") || combined.contains("target") || combined.contains("supermarket") || combined.contains("blinkit") || combined.contains("instamart") || combined.contains("zepto") || combined.contains("bigbasket") || combined.contains("general store") || combined.contains("kirana") -> "Groceries"
             combined.contains("starbucks") || combined.contains("mcdonald") || combined.contains("chipotle") || combined.contains("restaurant") || combined.contains("cafe") || combined.contains("pizza") || combined.contains("burger") || combined.contains("dining") || combined.contains("coffee") || combined.contains("swiggy") || combined.contains("zomato") -> "Food & Dining"
             combined.contains("uber") || combined.contains("lyft") || combined.contains("taxi") || combined.contains("gas") || combined.contains("shell") || combined.contains("chevron") || combined.contains("metro") || combined.contains("flight") || combined.contains("ola") || combined.contains("rapido") || combined.contains("irctc") || combined.contains("fuel") -> "Travel & Commute"
             combined.contains("netflix") || combined.contains("spotify") || combined.contains("electric") || combined.contains("utility") || combined.contains("water") || combined.contains("bill") || combined.contains("recharge") || combined.contains("internet") || combined.contains("att") || combined.contains("verizon") || combined.contains("bescom") || combined.contains("airtel") || combined.contains("jio") -> "Bills & Utilities"
-            combined.contains("amazon") || combined.contains("apple") || combined.contains("ebay") || combined.contains("best buy") || combined.contains("nike") || combined.contains("zara") || combined.contains("flipkart") || combined.contains("myntra") -> "Shopping"
-            combined.contains("upi") || combined.contains("vpa") || combined.contains("gpay") || combined.contains("phonepe") || combined.contains("paytm") || combined.contains("bhim") || combined.contains("cred") -> "UPI"
-            type == ExpenseType.TRANSFER || combined.contains("zelle") || combined.contains("venmo") || combined.contains("transfer") || combined.contains("imps") || combined.contains("neft") -> "Transfers"
-            combined.contains("store") || combined.contains("mall") || combined.contains("shop") -> "Shopping"
+            combined.contains("amazon") || combined.contains("apple") || combined.contains("ebay") || combined.contains("best buy") || combined.contains("nike") || combined.contains("zara") || combined.contains("flipkart") || combined.contains("myntra") || combined.contains("store") || combined.contains("mall") || combined.contains("shop") -> "Shopping"
+            type == ExpenseType.P2P || combined.contains("zelle") || combined.contains("venmo") || combined.contains("transfer") || combined.contains("imps") || combined.contains("neft") -> "Transfers"
             combined.contains("food") -> "Food & Dining"
             combined.contains("grocery") -> "Groceries"
             else -> "General Spend"

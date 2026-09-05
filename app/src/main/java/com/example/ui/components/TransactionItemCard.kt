@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
@@ -112,8 +113,10 @@ fun TransactionItemCard(
     val formattedDate = dateFormatter.format(Date(expense.timestamp))
 
     val (typeColor, typeBg, _) = when (expense.type) {
-        ExpenseType.TRANSFER -> Triple(SavioTransferIndigo, SavioTransferIndigoBg, Icons.Default.SwapHoriz)
-        ExpenseType.SPEND -> Triple(SavioSpendRose, SavioSpendRoseBg, Icons.Default.CreditCard)
+        ExpenseType.P2P -> Triple(SavioTransferIndigo, SavioTransferIndigoBg, Icons.Default.SwapHoriz)
+        ExpenseType.SELF -> Triple(SavioEmerald, SavioEmeraldContainer, Icons.Default.AccountBalance)
+        ExpenseType.CREDIT_CARD -> Triple(Color(0xFF7C3AED), Color(0xFFF5F3FF), Icons.Default.CreditCard)
+        ExpenseType.MERCHANT -> Triple(SavioSpendRose, SavioSpendRoseBg, Icons.Default.CreditCard)
     }
 
     val categoryIcon = getCategoryIcon(expense.category)
@@ -636,13 +639,14 @@ private fun ModernDetailRow(label: String, value: String) {
 
 private fun getCategoryIcon(category: String): ImageVector {
     return when (category) {
-        "UPI" -> Icons.Default.SwapHoriz
+        "Transfers" -> Icons.Default.SwapHoriz
+        "Credit Card Bill" -> Icons.Default.CreditCard
+        "Self" -> Icons.Default.AccountBalance
         "Groceries" -> Icons.Default.ShoppingCart
         "Shopping" -> Icons.Default.ShoppingBag
         "Food & Dining" -> Icons.Default.Fastfood
         "Bills & Utilities" -> Icons.Default.Receipt
         "Travel & Commute" -> Icons.Default.Flight
-        "Transfers" -> Icons.Default.SwapHoriz
         else -> Icons.Default.CreditCard
     }
 }

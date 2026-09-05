@@ -28,9 +28,11 @@ import java.util.Calendar
 import java.util.Locale
 
 enum class ExpenseFilter(val label: String) {
-    ALL("All Txns"),
+    ALL("All"),
     SPENDS("Spends"),
-    TRANSFERS("Transfers")
+    TRANSFERS("Transfers"),
+    CREDIT_CARDS("Credit Cards"),
+    SELF("Self")
 }
 
 enum class SavioScreenTab {
@@ -97,6 +99,18 @@ class ExpenseViewModel(
     private val _blacklistedMerchants = MutableStateFlow(preferences.getBlacklistedMerchants())
     val blacklistedMerchants: StateFlow<Set<String>> = _blacklistedMerchants.asStateFlow()
 
+    fun isSelf(item: ExpenseEntity): Boolean =
+        item.type == ExpenseType.SELF || item.category.equals("Self", ignoreCase = true)
+
+    fun isCreditCard(item: ExpenseEntity): Boolean =
+        item.type == ExpenseType.CREDIT_CARD || item.category.equals("Credit Card Bill", ignoreCase = true)
+
+    fun isTransfer(item: ExpenseEntity): Boolean =
+        item.type == ExpenseType.P2P && !isSelf(item) && !isCreditCard(item)
+
+    fun isMerchantSpend(item: ExpenseEntity): Boolean =
+        !isTransfer(item) && !isSelf(item) && !isCreditCard(item)
+
     val allMonthKeys: StateFlow<List<String>> = repository.allMonthKeys
         .map { keys ->
             if (!keys.contains(currentDefaultMonth)) {
@@ -109,6 +123,13 @@ class ExpenseViewModel(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = listOf(currentDefaultMonth)
+        )
+
+    val allExpenses: StateFlow<List<ExpenseEntity>> = repository.allExpenses
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
         )
 
     val currentMonthExpenses: StateFlow<List<ExpenseEntity>> = _selectedMonthKey
@@ -129,8 +150,10 @@ class ExpenseViewModel(
         expenses.filter { item ->
             val matchesFilter = when (filter) {
                 ExpenseFilter.ALL -> true
-                ExpenseFilter.SPENDS -> item.type == ExpenseType.SPEND
-                ExpenseFilter.TRANSFERS -> item.type == ExpenseType.TRANSFER
+                ExpenseFilter.SPENDS -> isMerchantSpend(item)
+                ExpenseFilter.TRANSFERS -> isTransfer(item)
+                ExpenseFilter.CREDIT_CARDS -> isCreditCard(item)
+                ExpenseFilter.SELF -> isSelf(item)
             }
             val matchesQuery = if (query.isBlank()) true else {
                 item.merchantOrRecipient.contains(query, ignoreCase = true) ||
@@ -150,12 +173,16 @@ class ExpenseViewModel(
     // Blacklisted merchants are completely ignored and not considered in spend totals
     val blacklistedDeductions: StateFlow<Double> = MutableStateFlow(0.0).asStateFlow()
 
-    // Monthly Total = all valid transactions from non-blacklisted merchants
+    // Monthly Total = all valid transactions from non-blacklisted merchants, excluding Self and Credit Card Bill
     val monthlyTotal: StateFlow<Double> = combine(
         currentMonthExpenses,
         _blacklistedMerchants
     ) { list, blacklisted ->
-        val validList = list.filterNot { isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
+        val validList = list.filter {
+            !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) &&
+            !isSelf(it) &&
+            !isCreditCard(it)
+        }
         validList.sumOf { it.amount }
     }.stateIn(
         scope = viewModelScope,
@@ -169,7 +196,7 @@ class ExpenseViewModel(
         currentMonthExpenses,
         _blacklistedMerchants
     ) { list, blacklisted ->
-        list.filter { it.type == ExpenseType.TRANSFER && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
+        list.filter { isTransfer(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
             .sumOf { it.amount }
     }.stateIn(
         scope = viewModelScope,
@@ -181,7 +208,31 @@ class ExpenseViewModel(
         currentMonthExpenses,
         _blacklistedMerchants
     ) { list, blacklisted ->
-        list.filter { it.type == ExpenseType.SPEND && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
+        list.filter { isMerchantSpend(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
+            .sumOf { it.amount }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0.0
+    )
+
+    val creditCardsTotal: StateFlow<Double> = combine(
+        currentMonthExpenses,
+        _blacklistedMerchants
+    ) { list, blacklisted ->
+        list.filter { isCreditCard(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
+            .sumOf { it.amount }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0.0
+    )
+
+    val selfTotal: StateFlow<Double> = combine(
+        currentMonthExpenses,
+        _blacklistedMerchants
+    ) { list, blacklisted ->
+        list.filter { isSelf(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
             .sumOf { it.amount }
     }.stateIn(
         scope = viewModelScope,
@@ -201,7 +252,7 @@ class ExpenseViewModel(
         initialValue = 0.0
     )
 
-    // 12-Month Historical Analytics Flow for the Spend vs Savings Graph (deducting blacklisted merchants)
+    // 12-Month Historical Analytics Flow for the Spend vs Savings Graph (deducting blacklisted merchants, self, and credit cards)
     val last12MonthsAnalytics: StateFlow<List<MonthAnalytics>> = combine(
         repository.allExpenses,
         _monthlySalary,
@@ -238,7 +289,10 @@ class ExpenseViewModel(
             val monthNum = cal.get(Calendar.MONTH) + 1
 
             val totalSpent = expenses.filter {
-                it.monthKey == monthKey && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted)
+                it.monthKey == monthKey &&
+                !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) &&
+                !isSelf(it) &&
+                !isCreditCard(it)
             }.sumOf { it.amount }
             val savedAmount = salary - totalSpent
             val isOverspent = totalSpent > salary
@@ -423,12 +477,20 @@ class ExpenseViewModel(
             val app = getApplication<Application>() as SpendTrackerApplication
             val dao = app.database.expenseDao()
             val target = dao.getExpenseById(expenseId)
-            dao.updateCategory(expenseId, category)
+
+            val newType = when {
+                category.equals("Self", ignoreCase = true) -> ExpenseType.SELF
+                category.equals("Credit Card Bill", ignoreCase = true) -> ExpenseType.CREDIT_CARD
+                category.equals("Transfers", ignoreCase = true) -> ExpenseType.P2P
+                else -> ExpenseType.MERCHANT
+            }
+
+            dao.updateCategoryAndType(expenseId, category, newType)
 
             if (target != null && target.merchantOrRecipient.isNotBlank()) {
                 val merchant = target.merchantOrRecipient.trim()
                 preferences.saveMerchantCategory(merchant, category)
-                dao.updateCategoryForMerchant(merchant, category)
+                dao.updateCategoryAndTypeForMerchant(merchant, category, newType)
                 _syncFeedback.value = "Category '$category' saved for '$merchant' going forward"
             } else {
                 _syncFeedback.value = "Category assigned: $category"

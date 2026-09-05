@@ -24,7 +24,7 @@ data class ExpenseEntity(
     val smsId: Long = 0L,
     val amount: Double,
     val currency: String = "₹",
-    val type: ExpenseType = ExpenseType.SPEND,
+    val type: ExpenseType = ExpenseType.MERCHANT,
     val merchantOrRecipient: String = "Unknown",
     val accountInfo: String = "",
     val category: String = "General",
