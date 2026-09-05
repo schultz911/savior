@@ -12,6 +12,9 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses ORDER BY timestamp DESC")
     fun getAllExpenses(): Flow<List<ExpenseEntity>>
 
+    @Query("SELECT * FROM expenses ORDER BY timestamp DESC")
+    suspend fun getAllExpensesSync(): List<ExpenseEntity>
+
     @Query("SELECT * FROM expenses WHERE monthKey = :monthKey ORDER BY timestamp DESC")
     fun getExpensesForMonth(monthKey: String): Flow<List<ExpenseEntity>>
 
@@ -59,6 +62,24 @@ interface ExpenseDao {
 
     @Query("SELECT COUNT(*) FROM expenses WHERE monthKey = :monthKey AND (type = 'CREDIT_CARD' OR LOWER(category) = 'credit card bill') AND ABS(amount - :amount) < 0.01")
     suspend fun countCreditCardPaymentsInMonth(monthKey: String, amount: Double): Int
+
+    @Query("UPDATE expenses SET isRecurring = :isRecurring WHERE id = :id")
+    suspend fun updateIsRecurring(id: Long, isRecurring: Boolean)
+
+    @Query("UPDATE expenses SET isRecurring = :isRecurring WHERE LOWER(TRIM(merchantOrRecipient)) = LOWER(TRIM(:merchant))")
+    suspend fun updateIsRecurringForMerchant(merchant: String, isRecurring: Boolean)
+
+    @Query("SELECT * FROM expenses WHERE isRecurring = 1 ORDER BY timestamp DESC")
+    fun getRecurringExpenses(): Flow<List<ExpenseEntity>>
+
+    @Query("SELECT * FROM expenses WHERE isRecurring = 1 ORDER BY timestamp DESC")
+    suspend fun getRecurringExpensesSync(): List<ExpenseEntity>
+
+    @Query("SELECT * FROM expenses WHERE LOWER(TRIM(merchantOrRecipient)) = LOWER(TRIM(:merchant)) ORDER BY timestamp DESC")
+    fun getExpensesForMerchant(merchant: String): Flow<List<ExpenseEntity>>
+
+    @Query("SELECT * FROM expenses WHERE LOWER(TRIM(merchantOrRecipient)) = LOWER(TRIM(:merchant)) ORDER BY timestamp DESC")
+    suspend fun getExpensesForMerchantSync(merchant: String): List<ExpenseEntity>
 
     @Query("DELETE FROM expenses WHERE id = :id")
     suspend fun deleteExpenseById(id: Long)

@@ -135,6 +135,18 @@ class ExpensePreferences(context: Context) {
         }
     }
 
+    var isBiometricLockEnabled: Boolean
+        get() = prefs.getBoolean(KEY_BIOMETRIC_LOCK, false)
+        set(value) = prefs.edit().putBoolean(KEY_BIOMETRIC_LOCK, value).apply()
+
+    var isPrivacyShieldEnabled: Boolean
+        get() = prefs.getBoolean(KEY_PRIVACY_SHIELD, false)
+        set(value) = prefs.edit().putBoolean(KEY_PRIVACY_SHIELD, value).apply()
+
+    var lockTimeoutSeconds: Int
+        get() = prefs.getInt(KEY_LOCK_TIMEOUT, 0)
+        set(value) = prefs.edit().putInt(KEY_LOCK_TIMEOUT, value).apply()
+
     fun isMerchantBlacklisted(merchant: String): Boolean {
         val norm = merchant.trim()
         if (norm.isBlank()) return false
@@ -159,5 +171,8 @@ class ExpensePreferences(context: Context) {
         private const val KEY_CATEGORY_LIMIT_PREFIX = "cat_limit_"
         private const val KEY_MERCHANT_CAT_PREFIX = "merchant_cat_"
         private const val KEY_BLACKLISTED_MERCHANTS = "key_blacklisted_merchants"
+        private const val KEY_BIOMETRIC_LOCK = "key_biometric_lock"
+        private const val KEY_PRIVACY_SHIELD = "key_privacy_shield"
+        private const val KEY_LOCK_TIMEOUT = "key_lock_timeout"
     }
 }

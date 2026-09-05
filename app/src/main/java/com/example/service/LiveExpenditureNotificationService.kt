@@ -125,13 +125,25 @@ class LiveExpenditureNotificationService : Service() {
                 val title = "$monthDisplay Spend: $totalFormatted"
                 val breakdown = "Spends: $spendsFormatted • Transfers: $transfersFormatted"
 
+                val cal = java.util.Calendar.getInstance()
+                val daysInMonth = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+                val currentDay = cal.get(java.util.Calendar.DAY_OF_MONTH)
+                val daysRemaining = (daysInMonth - currentDay + 1).coerceAtLeast(1)
+
+                val allExpensesSync = dao.getAllExpensesSync()
+                val recurringCommitments = com.example.engine.RecurringDetectionEngine.detectRecurringBills(allExpensesSync, currentMonthKey)
+                val upcomingRecurring = recurringCommitments.filter { !it.isPaidThisMonth }.sumOf { it.expectedAmount }
+                val remainingDiscretionary = (budget - totalSpend - upcomingRecurring).coerceAtLeast(0.0)
+                val safeDaily = if (budget > 0) remainingDiscretionary / daysRemaining else 0.0
+
                 val progress = if (budget > 0) {
                     ((totalSpend / budget) * 100).toInt().coerceIn(0, 100)
                 } else 0
 
                 val budgetSubtext = if (budget > 0) {
                     val budgetFormatted = formatCurrency(budget, currency)
-                    "$progress% of $budgetFormatted budget"
+                    val safeDailyFormatted = formatCurrency(safeDaily, currency)
+                    "$progress% of $budgetFormatted • Safe: $safeDailyFormatted/d ($daysRemaining d left)"
                 } else null
 
                 val notification = buildNotification(

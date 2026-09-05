@@ -27,11 +27,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -96,6 +98,8 @@ fun TransactionItemCard(
     onDelete: (Long) -> Unit,
     onAssignCategory: ((ExpenseEntity) -> Unit)? = null,
     onToggleBlacklist: ((String) -> Unit)? = null,
+    onToggleRecurring: ((Long, Boolean) -> Unit)? = null,
+    onOpenMerchantSheet: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var showDetailSheet by remember { mutableStateOf(false) }
@@ -245,32 +249,58 @@ fun TransactionItemCard(
 
                 Spacer(modifier = Modifier.height(2.dp))
 
-                // Interactive Category Tag for EVERY spend (per user request)
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = if (expense.category.equals("Uncategorized", ignoreCase = true)) {
-                        SavioSpendRoseBg
-                    } else {
-                        SavioEmeraldContainer
-                    },
-                    modifier = Modifier.clickable {
-                        onAssignCategory?.invoke(expense)
-                    }
+                // Interactive Category & Recurring Tags
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = "${expense.category} ✎",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp
-                        ),
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
                         color = if (expense.category.equals("Uncategorized", ignoreCase = true)) {
-                            SavioSpendRose
+                            SavioSpendRoseBg
                         } else {
-                            SavioEmerald
+                            SavioEmeraldContainer
                         },
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        maxLines = 1
-                    )
+                        modifier = Modifier.clickable {
+                            onAssignCategory?.invoke(expense)
+                        }
+                    ) {
+                        Text(
+                            text = "${expense.category} ✎",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp
+                            ),
+                            color = if (expense.category.equals("Uncategorized", ignoreCase = true)) {
+                                SavioSpendRose
+                            } else {
+                                SavioEmerald
+                            },
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            maxLines = 1
+                        )
+                    }
+
+                    if (expense.isRecurring) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFEFF6FF),
+                            modifier = Modifier.clickable {
+                                onToggleRecurring?.invoke(expense.id, !expense.isRecurring)
+                            }
+                        ) {
+                            Text(
+                                text = "🔁 Bill",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp
+                                ),
+                                color = Color(0xFF2563EB),
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                maxLines = 1
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -294,6 +324,13 @@ fun TransactionItemCard(
                 onToggleBlacklist?.invoke(expense.merchantOrRecipient)
                 showDetailSheet = false
             },
+            onToggleRecurring = {
+                onToggleRecurring?.invoke(expense.id, !expense.isRecurring)
+            },
+            onOpenMerchantSheet = {
+                showDetailSheet = false
+                onOpenMerchantSheet?.invoke(expense.merchantOrRecipient)
+            },
             onDelete = {
                 onDelete(expense.id)
                 showDetailSheet = false
@@ -315,6 +352,8 @@ private fun TransactionDetailBottomSheet(
     onDismiss: () -> Unit,
     onChangeCategory: () -> Unit,
     onToggleBlacklist: () -> Unit,
+    onToggleRecurring: (() -> Unit)? = null,
+    onOpenMerchantSheet: (() -> Unit)? = null,
     onDelete: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -545,7 +584,67 @@ private fun TransactionDetailBottomSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Merchant Intelligence & Recurring Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { onOpenMerchantSheet?.invoke() },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Storefront,
+                        contentDescription = null,
+                        tint = SavioSlateDark,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "Vendor Analytics",
+                        color = SavioSlateDark,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = { onToggleRecurring?.invoke() },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (expense.isRecurring) Color(0xFF93C5FD) else GlassCardBorder
+                    ),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (expense.isRecurring) Color(0xFFEFF6FF) else Color.Transparent
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.EventRepeat,
+                        contentDescription = null,
+                        tint = if (expense.isRecurring) Color(0xFF2563EB) else SavioSlateMuted,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (expense.isRecurring) "Recurring" else "Mark Recurring",
+                        color = if (expense.isRecurring) Color(0xFF2563EB) else SavioSlateDark,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Action Buttons Row
             Row(

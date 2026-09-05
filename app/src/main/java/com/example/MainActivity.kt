@@ -121,7 +121,17 @@ import com.example.ui.theme.SavioSlateMuted
 import com.example.ui.theme.SavioSpendRose
 import com.example.ui.theme.SavioTransferIndigo
 
-class MainActivity : ComponentActivity() {
+import android.view.WindowManager
+import androidx.fragment.app.FragmentActivity
+import kotlinx.coroutines.launch
+import com.example.security.AppSecurityManager
+import com.example.util.DatabaseBackupHelper
+import com.example.ui.components.BiometricLockOverlay
+import com.example.ui.components.MerchantDetailSheet
+import com.example.ui.components.SearchFilterBar
+import com.example.ai.OpenRouterCategorizer
+
+class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -153,6 +163,25 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val app = application as SpendTrackerApplication
+        if (app.preferences.isPrivacyShieldEnabled) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        AppSecurityManager.onAppForegrounded(
+            app.preferences.isBiometricLockEnabled,
+            app.preferences.lockTimeoutSeconds
+        )
+    }
+
+    override fun onPause() {
+        super.onPause()
+        AppSecurityManager.onAppBackgrounded()
     }
 
     private var initialShowManualAdd: Boolean = false
@@ -214,6 +243,107 @@ fun SpendTrackerScreen(
 
     val openRouterApiKey by viewModel.openRouterApiKey.collectAsStateWithLifecycle()
     val categoryLimits by viewModel.categoryLimits.collectAsStateWithLifecycle()
+
+    val isBiometricLockEnabled by viewModel.isBiometricLockEnabled.collectAsStateWithLifecycle()
+    val isPrivacyShieldEnabled by viewModel.isPrivacyShieldEnabled.collectAsStateWithLifecycle()
+    val lockTimeoutSeconds by viewModel.lockTimeoutSeconds.collectAsStateWithLifecycle()
+    val isAppLocked by AppSecurityManager.isLocked.collectAsStateWithLifecycle()
+    var biometricErrorMessage by remember { mutableStateOf<String?>(null) }
+
+    val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsStateWithLifecycle()
+    val selectedAmountRange by viewModel.selectedAmountRange.collectAsStateWithLifecycle()
+    val onlyRecurringFilter by viewModel.onlyRecurringFilter.collectAsStateWithLifecycle()
+    val isSearchExpanded by viewModel.isSearchExpanded.collectAsStateWithLifecycle()
+    val predictedRecurringBills by viewModel.predictedRecurringBills.collectAsStateWithLifecycle()
+    val safeSpendPacing by viewModel.safeSpendPacing.collectAsStateWithLifecycle()
+
+    var selectedMerchantForSheet by remember { mutableStateOf<String?>(null) }
+
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    var pendingBackupPassphrase by remember { mutableStateOf("") }
+    var pendingRestorePassphrase by remember { mutableStateOf("") }
+
+    val exportBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        if (uri != null && pendingBackupPassphrase.isNotEmpty()) {
+            coroutineScope.launch {
+                try {
+                    val outputStream = context.contentResolver.openOutputStream(uri)
+                    if (outputStream != null) {
+                        val app = context.applicationContext as SpendTrackerApplication
+                        val res = DatabaseBackupHelper.createEncryptedBackup(
+                            dao = app.database.expenseDao(),
+                            preferences = app.preferences,
+                            passphrase = pendingBackupPassphrase,
+                            outputStream = outputStream
+                        )
+                        if (res.isSuccess) {
+                            snackbarHostState.showSnackbar("Vault backup saved! (${res.getOrNull()} transactions encrypted)")
+                        } else {
+                            snackbarHostState.showSnackbar("Backup failed: ${res.exceptionOrNull()?.message}")
+                        }
+                    }
+                } catch (e: Exception) {
+                    snackbarHostState.showSnackbar("Error exporting backup: ${e.localizedMessage}")
+                } finally {
+                    pendingBackupPassphrase = ""
+                }
+            }
+        }
+    }
+
+    val restoreBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null && pendingRestorePassphrase.isNotEmpty()) {
+            coroutineScope.launch {
+                try {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    if (inputStream != null) {
+                        val app = context.applicationContext as SpendTrackerApplication
+                        val res = DatabaseBackupHelper.restoreEncryptedBackup(
+                            inputStream = inputStream,
+                            passphrase = pendingRestorePassphrase,
+                            dao = app.database.expenseDao(),
+                            preferences = app.preferences
+                        )
+                        if (res.isSuccess) {
+                            snackbarHostState.showSnackbar("Successfully restored ${res.getOrNull()} expenditures!")
+                        } else {
+                            snackbarHostState.showSnackbar("Restore failed: ${res.exceptionOrNull()?.message}")
+                        }
+                    }
+                } catch (e: Exception) {
+                    snackbarHostState.showSnackbar("Error reading file: ${e.localizedMessage}")
+                } finally {
+                    pendingRestorePassphrase = ""
+                }
+            }
+        }
+    }
+
+    val activity = context as? androidx.fragment.app.FragmentActivity
+
+    LaunchedEffect(isAppLocked, isBiometricLockEnabled) {
+        if (isAppLocked && isBiometricLockEnabled && activity != null) {
+            AppSecurityManager.promptBiometric(
+                activity = activity,
+                onSuccess = { biometricErrorMessage = null },
+                onError = { biometricErrorMessage = it }
+            )
+        }
+    }
+
+    LaunchedEffect(isPrivacyShieldEnabled) {
+        if (activity != null) {
+            if (isPrivacyShieldEnabled) {
+                activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            } else {
+                activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
+        }
+    }
 
     var showTestSmsSheet by remember { mutableStateOf(false) }
     var showManualAddDialog by remember { mutableStateOf(initialShowManualAdd) }
@@ -515,7 +645,21 @@ fun SpendTrackerScreen(
                         onToggleNotification = { viewModel.togglePersistentNotification(it) },
                         onClearAll = { viewModel.clearAll() },
                         onNavigateBack = { viewModel.setTab(SavioScreenTab.DASHBOARD) },
-                        allExpenses = allExpenses
+                        allExpenses = allExpenses,
+                        isBiometricLockEnabled = isBiometricLockEnabled,
+                        onToggleBiometricLock = { viewModel.setBiometricLockEnabled(it) },
+                        isPrivacyShieldEnabled = isPrivacyShieldEnabled,
+                        onTogglePrivacyShield = { viewModel.setPrivacyShieldEnabled(it) },
+                        lockTimeoutSeconds = lockTimeoutSeconds,
+                        onUpdateLockTimeout = { viewModel.setLockTimeoutSeconds(it) },
+                        onTriggerBackupExport = { passphrase ->
+                            pendingBackupPassphrase = passphrase
+                            exportBackupLauncher.launch(DatabaseBackupHelper.generateDefaultFileName())
+                        },
+                        onTriggerBackupRestore = { passphrase ->
+                            pendingRestorePassphrase = passphrase
+                            restoreBackupLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+                        }
                     )
                 }
             }
@@ -573,7 +717,9 @@ fun SpendTrackerScreen(
                             savingsGoal = savingsGoal,
                             monthlyBudget = monthlyBudget,
                             isNotificationActive = isNotificationActive,
-                            onToggleNotification = { viewModel.togglePersistentNotification(it) }
+                            onToggleNotification = { viewModel.togglePersistentNotification(it) },
+                            safeSpendPacing = safeSpendPacing,
+                            upcomingCommitmentsCount = predictedRecurringBills.count { !it.isPaidThisMonth }
                         )
                     }
 
@@ -601,92 +747,62 @@ fun SpendTrackerScreen(
                         )
                     }
 
-                    // Search & Transaction Type Filters
+                    // In-Memory Search & Multi-Parametric Filter Bar
                     item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(containerColor = GlassCardBg),
-                            border = BorderStroke(1.dp, GlassCardBorder)
+                        SearchFilterBar(
+                            searchQuery = searchQuery,
+                            onSearchQueryChange = { viewModel.setSearchQuery(it) },
+                            isSearchExpanded = isSearchExpanded,
+                            onToggleSearchExpanded = { viewModel.setSearchExpanded(it) },
+                            selectedCategory = selectedCategoryFilter,
+                            onSelectCategory = { viewModel.setCategoryFilter(it) },
+                            availableCategories = OpenRouterCategorizer.KNOWN_CATEGORIES,
+                            selectedAmountRange = selectedAmountRange,
+                            onSelectAmountRange = { viewModel.setAmountRange(it) },
+                            onlyRecurring = onlyRecurringFilter,
+                            onToggleOnlyRecurring = { viewModel.setOnlyRecurringFilter(it) },
+                            onClearAllFilters = { viewModel.clearAllFilters() },
+                            currency = currency
+                        )
+                    }
+
+                    // Transaction Type Filters (All, Spends, Transfers, Credit Cards, Self)
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                OutlinedTextField(
-                                    value = searchQuery,
-                                    onValueChange = { viewModel.setSearchQuery(it) },
-                                    placeholder = { Text("Search merchant, card, category...") },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.Search,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = SavioSlateMuted
-                                        )
-                                    },
-                                    trailingIcon = {
-                                        if (searchQuery.isNotEmpty()) {
-                                            IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Clear,
-                                                    contentDescription = "Clear Search",
-                                                    modifier = Modifier.size(16.dp),
-                                                    tint = SavioSlateMuted
-                                                )
-                                            }
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(14.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("search_field"),
-                                    singleLine = true,
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedContainerColor = GlassSurface,
-                                        unfocusedContainerColor = GlassSurface,
-                                        focusedBorderColor = SavioEmerald,
-                                        unfocusedBorderColor = GlassCardBorder
-                                    )
-                                )
-
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                // Filter Chips: All, Spends, Transfers, Credit Cards, Self
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .horizontalScroll(rememberScrollState()),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    ExpenseFilter.entries.forEach { filter ->
-                                        val isSelected = selectedFilter == filter
-                                        val filterColor = when (filter) {
-                                            ExpenseFilter.ALL -> SavioEmerald
-                                            ExpenseFilter.SPENDS -> SavioSpendRose
-                                            ExpenseFilter.TRANSFERS -> SavioTransferIndigo
-                                            ExpenseFilter.CREDIT_CARDS -> Color(0xFF7C3AED)
-                                            ExpenseFilter.SELF -> SavioEmerald
-                                        }
-
-                                        FilterChip(
-                                            selected = isSelected,
-                                            onClick = { viewModel.setFilter(filter) },
-                                            label = {
-                                                Text(
-                                                    text = filter.label,
-                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                                )
-                                            },
-                                            shape = RoundedCornerShape(12.dp),
-                                            colors = FilterChipDefaults.filterChipColors(
-                                                selectedContainerColor = filterColor.copy(alpha = 0.15f),
-                                                selectedLabelColor = filterColor
-                                            ),
-                                            modifier = Modifier.testTag("filter_${filter.name}")
-                                        )
-                                    }
+                            ExpenseFilter.entries.forEach { filter ->
+                                val isSelected = selectedFilter == filter
+                                val filterColor = when (filter) {
+                                    ExpenseFilter.ALL -> SavioEmerald
+                                    ExpenseFilter.SPENDS -> SavioSpendRose
+                                    ExpenseFilter.TRANSFERS -> SavioTransferIndigo
+                                    ExpenseFilter.CREDIT_CARDS -> Color(0xFF7C3AED)
+                                    ExpenseFilter.SELF -> SavioEmerald
                                 }
+
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { viewModel.setFilter(filter) },
+                                    label = {
+                                        Text(
+                                            text = filter.label,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = filterColor.copy(alpha = 0.15f),
+                                        selectedLabelColor = filterColor
+                                    ),
+                                    modifier = Modifier.testTag("filter_${filter.name}")
+                                )
+                            }
                         }
                     }
-                }
 
                     // Transaction List Header
                     item {
@@ -764,6 +880,12 @@ fun SpendTrackerScreen(
                                 },
                                 onToggleBlacklist = { merchant ->
                                     viewModel.toggleBlacklistMerchant(merchant)
+                                },
+                                onToggleRecurring = { id, isRec ->
+                                    viewModel.toggleRecurring(id, isRec)
+                                },
+                                onOpenMerchantSheet = { merchant ->
+                                    selectedMerchantForSheet = merchant
                                 }
                             )
                         }
@@ -821,6 +943,37 @@ fun SpendTrackerScreen(
             onDismiss = { assignCategoryTargetExpense = null }
         )
     }
+
+    // Native Merchant Intelligence & Drilldown Sheet
+    selectedMerchantForSheet?.let { merchant ->
+        val merchantExpenses = remember(merchant, allExpenses) {
+            allExpenses.filter { it.merchantOrRecipient.equals(merchant, ignoreCase = true) }
+        }
+        MerchantDetailSheet(
+            merchantName = merchant,
+            currency = currency,
+            isBlacklisted = viewModel.isBlacklistedMerchant(merchant, blacklistedMerchants),
+            expenses = merchantExpenses,
+            onDismiss = { selectedMerchantForSheet = null },
+            onToggleBlacklist = { viewModel.toggleBlacklistMerchant(it) },
+            onToggleRecurring = { m, isRec -> viewModel.toggleRecurringForMerchant(m, isRec) }
+        )
+    }
+
+    // Biometric App Lock Overlay
+    BiometricLockOverlay(
+        isLocked = isAppLocked && isBiometricLockEnabled,
+        errorMessage = biometricErrorMessage,
+        onAuthenticateClick = {
+            if (activity != null) {
+                AppSecurityManager.promptBiometric(
+                    activity = activity,
+                    onSuccess = { biometricErrorMessage = null },
+                    onError = { biometricErrorMessage = it }
+                )
+            }
+        }
+    )
 }
 
 /**

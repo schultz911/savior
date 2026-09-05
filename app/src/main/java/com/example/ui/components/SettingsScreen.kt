@@ -39,11 +39,16 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Savings
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.ui.platform.LocalContext
 import com.example.data.ExpenseEntity
 import com.example.util.ExcelExportHelper
@@ -120,10 +125,25 @@ fun SettingsScreen(
     onClearAll: () -> Unit,
     onNavigateBack: () -> Unit,
     allExpenses: List<ExpenseEntity> = emptyList(),
+    isBiometricLockEnabled: Boolean = false,
+    onToggleBiometricLock: (Boolean) -> Unit = {},
+    isPrivacyShieldEnabled: Boolean = false,
+    onTogglePrivacyShield: (Boolean) -> Unit = {},
+    lockTimeoutSeconds: Int = 0,
+    onUpdateLockTimeout: (Int) -> Unit = {},
+    onTriggerBackupExport: (passphrase: String) -> Unit = {},
+    onTriggerBackupRestore: (passphrase: String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var isCategoryLimitsExpanded by remember { mutableStateOf(false) }
+
+    var showBackupExportDialog by remember { mutableStateOf(false) }
+    var showBackupRestoreDialog by remember { mutableStateOf(false) }
+    var backupPassphraseInput by remember { mutableStateOf("") }
+    var restorePassphraseInput by remember { mutableStateOf("") }
+    var showBackupPassphraseText by remember { mutableStateOf(false) }
+    var showRestorePassphraseText by remember { mutableStateOf(false) }
 
     var salaryInput by remember(currentSalary) {
         mutableStateOf(if (currentSalary > 0) currentSalary.toInt().toString() else "")
@@ -817,7 +837,133 @@ fun SettingsScreen(
             }
         }
 
-        // 7. Data Management Card
+        // 7. Security & Privacy Card
+        item {
+            Card(
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = GlassCardBg),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, GlassCardBorder, RoundedCornerShape(22.dp))
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = "Security",
+                            tint = SavioEmerald,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Security & Privacy",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = SavioSlateDark
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Biometric Lock Switch
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Biometric App Lock",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = SavioSlateDark
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Require fingerprint or screen lock to open Savio₹.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SavioSlateMuted
+                            )
+                        }
+
+                        Switch(
+                            checked = isBiometricLockEnabled,
+                            onCheckedChange = { onToggleBiometricLock(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = SavioEmerald
+                            )
+                        )
+                    }
+
+                    if (isBiometricLockEnabled) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Lock Timeout",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = SavioSlateMuted
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(
+                                0 to "Immediately",
+                                30 to "30s",
+                                60 to "1m",
+                                300 to "5m"
+                            ).forEach { (seconds, label) ->
+                                FilterChip(
+                                    selected = lockTimeoutSeconds == seconds,
+                                    onClick = { onUpdateLockTimeout(seconds) },
+                                    label = { Text(label, fontSize = 12.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = SavioEmeraldContainer,
+                                        selectedLabelColor = SavioEmerald
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = GlassCardBorder)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Privacy Shield Switch
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Recents Privacy Shield",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = SavioSlateDark
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Hide app preview in Android recent apps switcher.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SavioSlateMuted
+                            )
+                        }
+
+                        Switch(
+                            checked = isPrivacyShieldEnabled,
+                            onCheckedChange = { onTogglePrivacyShield(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = SavioEmerald
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        // 8. Data Management Card
         item {
             Card(
                 shape = RoundedCornerShape(22.dp),
@@ -874,6 +1020,64 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Clear All")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = GlassCardBorder)
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "Encrypted Vault Backup",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = SavioSlateDark
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Create an AES-256-GCM encrypted .savior container to back up your expenses, settings, and merchant metadata securely.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SavioSlateMuted
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                backupPassphraseInput = ""
+                                showBackupExportDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = SavioSlateDark),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = "Backup Vault",
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Backup Vault", fontSize = 12.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                restorePassphraseInput = ""
+                                showBackupRestoreDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = SavioSlateDark),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.UploadFile,
+                                contentDescription = "Restore Vault",
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Restore Vault", fontSize = 12.sp)
                         }
                     }
                 }
@@ -940,7 +1144,7 @@ fun SettingsScreen(
                 )
 
                 Text(
-                    text = "v1.0.0",
+                    text = "v1.1.0",
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Normal,
                         fontSize = 12.sp
@@ -949,6 +1153,134 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+
+    if (showBackupExportDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackupExportDialog = false },
+            title = {
+                Text(
+                    text = "Export Encrypted Backup",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = SavioSlateDark
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter a strong passphrase to encrypt your backup container (AES-256-GCM). You will need this passphrase to restore your data.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SavioSlateBody
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    OutlinedTextField(
+                        value = backupPassphraseInput,
+                        onValueChange = { backupPassphraseInput = it },
+                        label = { Text("Backup Passphrase") },
+                        singleLine = true,
+                        visualTransformation = if (showBackupPassphraseText) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showBackupPassphraseText = !showBackupPassphraseText }) {
+                                Icon(
+                                    imageVector = if (showBackupPassphraseText) Icons.Default.Close else Icons.Default.Lock,
+                                    contentDescription = null
+                                )
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = SavioEmerald,
+                            focusedLabelColor = SavioEmerald
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val pass = backupPassphraseInput.trim()
+                        if (pass.isNotEmpty()) {
+                            showBackupExportDialog = false
+                            onTriggerBackupExport(pass)
+                        }
+                    },
+                    enabled = backupPassphraseInput.trim().isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Export Container")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBackupExportDialog = false }) {
+                    Text("Cancel", color = SavioSlateDark)
+                }
+            }
+        )
+    }
+
+    if (showBackupRestoreDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackupRestoreDialog = false },
+            title = {
+                Text(
+                    text = "Restore Encrypted Backup",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = SavioSlateDark
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter the passphrase used when creating the .savior backup file.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SavioSlateBody
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    OutlinedTextField(
+                        value = restorePassphraseInput,
+                        onValueChange = { restorePassphraseInput = it },
+                        label = { Text("Decryption Passphrase") },
+                        singleLine = true,
+                        visualTransformation = if (showRestorePassphraseText) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showRestorePassphraseText = !showRestorePassphraseText }) {
+                                Icon(
+                                    imageVector = if (showRestorePassphraseText) Icons.Default.Close else Icons.Default.Lock,
+                                    contentDescription = null
+                                )
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = SavioEmerald,
+                            focusedLabelColor = SavioEmerald
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val pass = restorePassphraseInput.trim()
+                        if (pass.isNotEmpty()) {
+                            showBackupRestoreDialog = false
+                            onTriggerBackupRestore(pass)
+                        }
+                    },
+                    enabled = restorePassphraseInput.trim().isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(containerColor = SavioSlateDark),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Select & Restore")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBackupRestoreDialog = false }) {
+                    Text("Cancel", color = SavioSlateDark)
+                }
+            }
+        )
     }
 
     if (showConfirmClear) {

@@ -17,6 +17,18 @@ class ExpenseRepository(
 
     val allExpenses: Flow<List<ExpenseEntity>> = expenseDao.getAllExpenses()
     val allMonthKeys: Flow<List<String>> = expenseDao.getAllMonthKeys()
+    val recurringExpenses: Flow<List<ExpenseEntity>> = expenseDao.getRecurringExpenses()
+
+    fun getExpensesForMerchant(merchant: String): Flow<List<ExpenseEntity>> =
+        expenseDao.getExpensesForMerchant(merchant)
+
+    suspend fun updateIsRecurring(id: Long, isRecurring: Boolean) = withContext(Dispatchers.IO) {
+        expenseDao.updateIsRecurring(id, isRecurring)
+    }
+
+    suspend fun updateIsRecurringForMerchant(merchant: String, isRecurring: Boolean) = withContext(Dispatchers.IO) {
+        expenseDao.updateIsRecurringForMerchant(merchant, isRecurring)
+    }
 
     fun getExpensesForMonth(monthKey: String): Flow<List<ExpenseEntity>> =
         expenseDao.getExpensesForMonth(monthKey)

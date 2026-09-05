@@ -14,6 +14,7 @@ import com.example.service.LiveExpenditureNotificationService
 import com.example.sms.SampleSmsData
 import com.example.ui.models.MonthAnalytics
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +28,9 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
+import com.example.engine.PredictedRecurringBill
+import com.example.engine.RecurringDetectionEngine
+
 enum class ExpenseFilter(val label: String) {
     ALL("All"),
     SPENDS("Spends"),
@@ -34,6 +38,38 @@ enum class ExpenseFilter(val label: String) {
     CREDIT_CARDS("Credit Cards"),
     SELF("Self")
 }
+
+enum class AmountRange(val label: String) {
+    ALL("All"),
+    UNDER_500("< ₹500"),
+    MID_500_2000("₹500 - ₹2K"),
+    OVER_2000("> ₹2K")
+}
+
+enum class PacingStatus(val label: String) {
+    ON_TRACK("On Track"),
+    CAUTION("Caution"),
+    OVER_PACED("Over-Paced")
+}
+
+data class SafeSpendPacing(
+    val safeDailySpend: Double = 0.0,
+    val todaySpent: Double = 0.0,
+    val daysRemaining: Int = 1,
+    val daysInMonth: Int = 30,
+    val currentDay: Int = 1,
+    val status: PacingStatus = PacingStatus.ON_TRACK,
+    val remainingDiscretionary: Double = 0.0,
+    val upcomingRecurringTotal: Double = 0.0
+)
+
+data class FilterCriteria(
+    val filter: ExpenseFilter = ExpenseFilter.ALL,
+    val query: String = "",
+    val categoryFilter: String? = null,
+    val amountRange: AmountRange = AmountRange.ALL,
+    val onlyRecurring: Boolean = false
+)
 
 enum class SavioScreenTab {
     DASHBOARD,
@@ -61,6 +97,18 @@ class ExpenseViewModel(
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    private val _selectedCategoryFilter = MutableStateFlow<String?>(null)
+    val selectedCategoryFilter: StateFlow<String?> = _selectedCategoryFilter.asStateFlow()
+
+    private val _selectedAmountRange = MutableStateFlow(AmountRange.ALL)
+    val selectedAmountRange: StateFlow<AmountRange> = _selectedAmountRange.asStateFlow()
+
+    private val _onlyRecurringFilter = MutableStateFlow(false)
+    val onlyRecurringFilter: StateFlow<Boolean> = _onlyRecurringFilter.asStateFlow()
+
+    private val _isSearchExpanded = MutableStateFlow(false)
+    val isSearchExpanded: StateFlow<Boolean> = _isSearchExpanded.asStateFlow()
 
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
@@ -98,6 +146,15 @@ class ExpenseViewModel(
     // Blacklisted merchants set
     private val _blacklistedMerchants = MutableStateFlow(preferences.getBlacklistedMerchants())
     val blacklistedMerchants: StateFlow<Set<String>> = _blacklistedMerchants.asStateFlow()
+
+    private val _isBiometricLockEnabled = MutableStateFlow(preferences.isBiometricLockEnabled)
+    val isBiometricLockEnabled: StateFlow<Boolean> = _isBiometricLockEnabled.asStateFlow()
+
+    private val _isPrivacyShieldEnabled = MutableStateFlow(preferences.isPrivacyShieldEnabled)
+    val isPrivacyShieldEnabled: StateFlow<Boolean> = _isPrivacyShieldEnabled.asStateFlow()
+
+    private val _lockTimeoutSeconds = MutableStateFlow(preferences.lockTimeoutSeconds)
+    val lockTimeoutSeconds: StateFlow<Int> = _lockTimeoutSeconds.asStateFlow()
 
     fun isSelf(item: ExpenseEntity): Boolean =
         item.type == ExpenseType.SELF || item.category.equals("Self", ignoreCase = true)
@@ -142,32 +199,123 @@ class ExpenseViewModel(
             initialValue = emptyList()
         )
 
+    private val filterCriteria = combine(
+        _selectedFilter,
+        _searchQuery,
+        _selectedCategoryFilter,
+        _selectedAmountRange,
+        _onlyRecurringFilter
+    ) { filter, query, categoryFilter, amountRange, onlyRecurring ->
+        FilterCriteria(filter, query, categoryFilter, amountRange, onlyRecurring)
+    }
+
     val filteredExpenses: StateFlow<List<ExpenseEntity>> = combine(
         currentMonthExpenses,
-        _selectedFilter,
-        _searchQuery
-    ) { expenses, filter, query ->
+        filterCriteria
+    ) { expenses, criteria ->
         expenses.filter { item ->
-            val matchesFilter = when (filter) {
+            val matchesFilter = when (criteria.filter) {
                 ExpenseFilter.ALL -> true
                 ExpenseFilter.SPENDS -> isMerchantSpend(item)
                 ExpenseFilter.TRANSFERS -> isTransfer(item)
                 ExpenseFilter.CREDIT_CARDS -> isCreditCard(item)
                 ExpenseFilter.SELF -> isSelf(item)
             }
-            val matchesQuery = if (query.isBlank()) true else {
-                item.merchantOrRecipient.contains(query, ignoreCase = true) ||
-                        item.accountInfo.contains(query, ignoreCase = true) ||
-                        item.category.contains(query, ignoreCase = true) ||
-                        item.rawBody.contains(query, ignoreCase = true) ||
-                        item.amount.toString().contains(query)
+            val matchesQuery = if (criteria.query.isBlank()) true else {
+                item.merchantOrRecipient.contains(criteria.query, ignoreCase = true) ||
+                        item.accountInfo.contains(criteria.query, ignoreCase = true) ||
+                        item.category.contains(criteria.query, ignoreCase = true) ||
+                        item.rawBody.contains(criteria.query, ignoreCase = true) ||
+                        item.amount.toString().contains(criteria.query)
             }
-            matchesFilter && matchesQuery
+            val matchesCategory = criteria.categoryFilter == null || item.category.equals(criteria.categoryFilter, ignoreCase = true)
+            val matchesAmount = when (criteria.amountRange) {
+                AmountRange.ALL -> true
+                AmountRange.UNDER_500 -> item.amount < 500.0
+                AmountRange.MID_500_2000 -> item.amount in 500.0..2000.0
+                AmountRange.OVER_2000 -> item.amount > 2000.0
+            }
+            val matchesRecurring = !criteria.onlyRecurring || item.isRecurring
+
+            matchesFilter && matchesQuery && matchesCategory && matchesAmount && matchesRecurring
         }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
+    )
+
+    // Predicted Recurring Commitments & Subscriptions Flow
+    val predictedRecurringBills: StateFlow<List<PredictedRecurringBill>> = combine(
+        allExpenses,
+        _selectedMonthKey
+    ) { allList, monthKey ->
+        RecurringDetectionEngine.detectRecurringBills(allList, monthKey)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    // Adaptive Burn Rate & Safe Daily Spend Dynamic Pacing
+    val safeSpendPacing: StateFlow<SafeSpendPacing> = combine(
+        currentMonthExpenses,
+        _monthlyBudget,
+        predictedRecurringBills,
+        _blacklistedMerchants
+    ) { expenses, budget, recurring, blacklisted ->
+        val cal = Calendar.getInstance()
+        val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+        val currentDay = cal.get(Calendar.DAY_OF_MONTH)
+        val daysRemaining = (daysInMonth - currentDay + 1).coerceAtLeast(1)
+
+        val startOfToday = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        var currentSpent = 0.0
+        var todaySpent = 0.0
+
+        for (exp in expenses) {
+            val norm = exp.merchantOrRecipient.trim().lowercase(Locale.US)
+            if (blacklisted.any { norm.contains(it.lowercase(Locale.US)) }) continue
+            if (isSelf(exp) || isCreditCard(exp)) continue
+
+            currentSpent += exp.amount
+            if (exp.timestamp >= startOfToday) {
+                todaySpent += exp.amount
+            }
+        }
+
+        val upcomingRecurring = recurring.filter { !it.isPaidThisMonth }.sumOf { it.expectedAmount }
+        val remainingDiscretionary = (budget - currentSpent - upcomingRecurring).coerceAtLeast(0.0)
+
+        val safeDaily = if (budget > 0) remainingDiscretionary / daysRemaining else 0.0
+
+        val status = when {
+            safeDaily <= 0.0 -> if (todaySpent > 0) PacingStatus.OVER_PACED else PacingStatus.ON_TRACK
+            todaySpent <= safeDaily -> PacingStatus.ON_TRACK
+            todaySpent <= safeDaily * 1.25 -> PacingStatus.CAUTION
+            else -> PacingStatus.OVER_PACED
+        }
+
+        SafeSpendPacing(
+            safeDailySpend = safeDaily,
+            todaySpent = todaySpent,
+            daysRemaining = daysRemaining,
+            daysInMonth = daysInMonth,
+            currentDay = currentDay,
+            status = status,
+            remainingDiscretionary = remainingDiscretionary,
+            upcomingRecurringTotal = upcomingRecurring
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = SafeSpendPacing()
     )
 
     // Blacklisted merchants are completely ignored and not considered in spend totals
@@ -563,6 +711,76 @@ class ExpenseViewModel(
             repository.clearAll()
             _syncFeedback.value = "All expenses cleared"
         }
+    }
+
+    fun setBiometricLockEnabled(enabled: Boolean) {
+        preferences.isBiometricLockEnabled = enabled
+        _isBiometricLockEnabled.value = enabled
+        _syncFeedback.value = if (enabled) "Biometric Lock enabled" else "Biometric Lock disabled"
+    }
+
+    fun setPrivacyShieldEnabled(enabled: Boolean) {
+        preferences.isPrivacyShieldEnabled = enabled
+        _isPrivacyShieldEnabled.value = enabled
+        _syncFeedback.value = if (enabled) "Privacy Shield enabled" else "Privacy Shield disabled"
+    }
+
+    fun setLockTimeoutSeconds(seconds: Int) {
+        preferences.lockTimeoutSeconds = seconds
+        _lockTimeoutSeconds.value = seconds
+        val desc = when (seconds) {
+            0 -> "Immediately"
+            30 -> "After 30s"
+            60 -> "After 1m"
+            300 -> "After 5m"
+            else -> "$seconds seconds"
+        }
+        _syncFeedback.value = "Lock timeout: $desc"
+    }
+
+    fun setCategoryFilter(category: String?) {
+        _selectedCategoryFilter.value = category
+    }
+
+    fun setAmountRange(range: AmountRange) {
+        _selectedAmountRange.value = range
+    }
+
+    fun setOnlyRecurringFilter(only: Boolean) {
+        _onlyRecurringFilter.value = only
+    }
+
+    fun setSearchExpanded(expanded: Boolean) {
+        _isSearchExpanded.value = expanded
+        if (!expanded) {
+            _searchQuery.value = ""
+        }
+    }
+
+    fun clearAllFilters() {
+        _searchQuery.value = ""
+        _selectedFilter.value = ExpenseFilter.ALL
+        _selectedCategoryFilter.value = null
+        _selectedAmountRange.value = AmountRange.ALL
+        _onlyRecurringFilter.value = false
+    }
+
+    fun toggleRecurring(expenseId: Long, isRecurring: Boolean) {
+        viewModelScope.launch {
+            repository.updateIsRecurring(expenseId, isRecurring)
+            _syncFeedback.value = if (isRecurring) "Marked as recurring commitment" else "Removed recurring mark"
+        }
+    }
+
+    fun toggleRecurringForMerchant(merchant: String, isRecurring: Boolean) {
+        viewModelScope.launch {
+            repository.updateIsRecurringForMerchant(merchant, isRecurring)
+            _syncFeedback.value = if (isRecurring) "Marked all '$merchant' recurring" else "Unmarked all '$merchant' recurring"
+        }
+    }
+
+    fun getExpensesForMerchant(merchant: String): Flow<List<ExpenseEntity>> {
+        return repository.getExpensesForMerchant(merchant)
     }
 
     class Factory(

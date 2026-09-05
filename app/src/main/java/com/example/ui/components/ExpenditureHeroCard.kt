@@ -84,6 +84,8 @@ fun ExpenditureHeroCard(
     blacklistedDeductions: Double = 0.0,
     isNotificationActive: Boolean,
     onToggleNotification: (Boolean) -> Unit,
+    safeSpendPacing: com.example.ui.SafeSpendPacing? = null,
+    upcomingCommitmentsCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val numberFormatter = remember {
@@ -332,6 +334,97 @@ fun ExpenditureHeroCard(
                         color = if (totalExpenditure > monthlyBudget) SavioSpendRose else SavioEmerald,
                         trackColor = SavioEmeraldContainer
                     )
+                }
+            }
+
+            if (safeSpendPacing != null && monthlyBudget > 0) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                val (badgeBg, badgeTextColor, badgeLabel) = when (safeSpendPacing.status) {
+                    com.example.ui.PacingStatus.ON_TRACK -> Triple(SavioEmeraldContainer, SavioEmerald, "On Track")
+                    com.example.ui.PacingStatus.CAUTION -> Triple(Color(0xFFFEF3C7), Color(0xFFD97706), "Caution")
+                    com.example.ui.PacingStatus.OVER_PACED -> Triple(SavioSpendRoseBg, SavioSpendRose, "Over Pacing")
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White.copy(alpha = 0.75f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(badgeTextColor)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Safe Daily Spend Pacing",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = SavioSlateDark
+                                )
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = badgeBg
+                            ) {
+                                Text(
+                                    text = badgeLabel,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp
+                                    ),
+                                    color = badgeTextColor
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            Text(
+                                text = "$currency${numberFormatter.format(safeSpendPacing.safeDailySpend)}/day",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 17.sp
+                                ),
+                                color = SavioSlateDark
+                            )
+
+                            Text(
+                                text = "Today: $currency${numberFormatter.format(safeSpendPacing.todaySpent)} • ${safeSpendPacing.daysRemaining}d left",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SavioSlateMuted
+                            )
+                        }
+
+                        if (safeSpendPacing.upcomingRecurringTotal > 0) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "$currency${numberFormatter.format(safeSpendPacing.upcomingRecurringTotal)} reserved for $upcomingCommitmentsCount upcoming bill(s)",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                color = Color(0xFF6B7280)
+                            )
+                        }
+                    }
                 }
             }
 

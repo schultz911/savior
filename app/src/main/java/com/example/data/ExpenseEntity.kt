@@ -1,5 +1,6 @@
 package com.example.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -31,7 +32,9 @@ data class ExpenseEntity(
     val rawBody: String = "",
     val sender: String = "",
     val timestamp: Long = System.currentTimeMillis(),
-    val monthKey: String = formatMonthKey(timestamp)
+    val monthKey: String = formatMonthKey(timestamp),
+    @ColumnInfo(name = "isRecurring", defaultValue = "0")
+    val isRecurring: Boolean = false
 ) {
     companion object {
         fun formatMonthKey(epochMillis: Long): String {
