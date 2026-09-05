@@ -53,6 +53,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -678,6 +679,13 @@ fun TwelveMonthStackedBarGraph(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
+
+    // Automatically scroll to the rightmost month (latest month) by default
+    LaunchedEffect(months) {
+        if (months.isNotEmpty()) {
+            scrollState.scrollTo(scrollState.maxValue)
+        }
+    }
 
     // Find the true maximum value across all 12 months to scale the chart height dynamically
     val maxChartVal = remember(months) {

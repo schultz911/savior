@@ -99,4 +99,20 @@ class ExampleRobolectricTest {
     // OTP should NOT be candidate
     org.junit.Assert.assertFalse(SmsParser.isCandidateFinancialSms("Your OTP is 123456 to login", "HDFC-BANK"))
   }
+
+  @Test
+  fun `test credit card payment deduplication logic`() {
+    val sms1 = "Payment received of INR 8,500.00 towards your HDFC Credit Card ending 4821."
+    val parsed1 = SmsParser.parse(sms1, "HDFC-CARD")
+    assertNotNull(parsed1)
+    assertEquals(ExpenseType.CREDIT_CARD, parsed1!!.type)
+    assertEquals("Credit Card Bill", parsed1.category)
+
+    val sms2 = "Rs 8,500.00 debited from A/c **4821 towards HDFC Credit Card payment on 04-Sep."
+    val parsed2 = SmsParser.parse(sms2, "HDFC-BANK")
+    assertNotNull(parsed2)
+    assertEquals(ExpenseType.CREDIT_CARD, parsed2!!.type)
+    assertEquals("Credit Card Bill", parsed2.category)
+    assertEquals(parsed1.amount, parsed2.amount, 0.01)
+  }
 }

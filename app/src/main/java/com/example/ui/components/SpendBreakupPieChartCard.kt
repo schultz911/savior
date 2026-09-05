@@ -92,11 +92,14 @@ fun SpendBreakupPieChartCard(
     onCategoryClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    // Exclude blacklisted merchants from spend breakup
+    // Exclude blacklisted merchants, self transfers, and credit card bills from spend breakup
     val validExpenses = remember(expenses, blacklistedMerchants) {
         expenses.filterNot { exp ->
             val norm = exp.merchantOrRecipient.trim()
-            norm.isNotBlank() && blacklistedMerchants.any { norm.contains(it, ignoreCase = true) || it.contains(norm, ignoreCase = true) }
+            val isBlacklisted = norm.isNotBlank() && blacklistedMerchants.any { norm.contains(it, ignoreCase = true) || it.contains(norm, ignoreCase = true) }
+            val isSelf = exp.type == com.example.data.ExpenseType.SELF || exp.category.equals("Self", ignoreCase = true)
+            val isCreditCard = exp.type == com.example.data.ExpenseType.CREDIT_CARD || exp.category.equals("Credit Card Bill", ignoreCase = true)
+            isBlacklisted || isSelf || isCreditCard
         }
     }
 

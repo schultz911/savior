@@ -313,7 +313,10 @@ class ExpenseViewModel(
                 )
             )
         }
-        return months
+        val monthsWithData = months.filter { m ->
+            m.totalSpent > 0.0 || expenses.any { it.monthKey == m.monthKey }
+        }
+        return if (monthsWithData.isNotEmpty()) monthsWithData else months.takeLast(1)
     }
 
     init {

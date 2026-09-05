@@ -243,7 +243,7 @@ class LiveExpenditureNotificationService : Service() {
     }
 
     companion object {
-        const val CHANNEL_ID = "live_expenditure_channel"
+        const val CHANNEL_ID = "live_expenditure_channel_v3"
         const val NOTIFICATION_ID = 1001
         const val ACTION_START = "com.example.action.START_TRACKER"
         const val ACTION_SYNC = "com.example.action.SYNC_EXPENDITURE"
@@ -251,6 +251,16 @@ class LiveExpenditureNotificationService : Service() {
 
         fun createNotificationChannel(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val notificationManager =
+                    context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                // Delete older channels to flush icon and notification cache
+                try {
+                    notificationManager.deleteNotificationChannel("live_expenditure_channel")
+                    notificationManager.deleteNotificationChannel("live_expenditure_channel_v2")
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
                 val name = "Live Monthly Expenditure"
                 val descriptionText = "Persistent status bar tracker for debits, transfers, and spends"
                 val importance = NotificationManager.IMPORTANCE_LOW
@@ -258,8 +268,6 @@ class LiveExpenditureNotificationService : Service() {
                     description = descriptionText
                     setShowBadge(false)
                 }
-                val notificationManager =
-                    context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 notificationManager.createNotificationChannel(channel)
             }
         }

@@ -38,9 +38,15 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.ui.platform.LocalContext
+import com.example.data.ExpenseEntity
+import com.example.util.ExcelExportHelper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -113,8 +119,12 @@ fun SettingsScreen(
     onToggleNotification: (Boolean) -> Unit,
     onClearAll: () -> Unit,
     onNavigateBack: () -> Unit,
+    allExpenses: List<ExpenseEntity> = emptyList(),
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    var isCategoryLimitsExpanded by remember { mutableStateOf(false) }
+
     var salaryInput by remember(currentSalary) {
         mutableStateOf(if (currentSalary > 0) currentSalary.toInt().toString() else "")
     }
@@ -566,78 +576,104 @@ fun SettingsScreen(
                     .border(1.dp, GlassCardBorder, RoundedCornerShape(22.dp))
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Tune,
-                            contentDescription = null,
-                            tint = SavioEmerald,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Per-Category Spend Limits",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = SavioSlateDark
-                        )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isCategoryLimitsExpanded = !isCategoryLimitsExpanded },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Tune,
+                                contentDescription = null,
+                                tint = SavioEmerald,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Per-Category Spend Limits",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = SavioSlateDark
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { isCategoryLimitsExpanded = !isCategoryLimitsExpanded },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isCategoryLimitsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (isCategoryLimitsExpanded) "Collapse" else "Expand",
+                                tint = SavioEmerald
+                            )
+                        }
                     }
+
                     Text(
                         text = "Alerts triggered at 80% usage and when overshooting the limit.",
                         style = MaterialTheme.typography.bodySmall,
                         color = SavioSlateMuted
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    AnimatedVisibility(visible = isCategoryLimitsExpanded) {
+                        Column {
+                            Spacer(modifier = Modifier.height(12.dp))
 
-                    OpenRouterCategorizer.KNOWN_CATEGORIES.forEach { category ->
-                        val currentVal = localCategoryLimits[category] ?: ""
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = category,
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                                color = SavioSlateDark,
-                                modifier = Modifier.weight(1f)
-                            )
-                            OutlinedTextField(
-                                value = currentVal,
-                                onValueChange = { newVal ->
-                                    val filtered = newVal.filter { it.isDigit() }
-                                    localCategoryLimits[category] = filtered
-                                },
-                                placeholder = { Text("0") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                prefix = { Text(selectedCurrency) },
-                                modifier = Modifier.width(130.dp),
-                                shape = RoundedCornerShape(10.dp),
-                                singleLine = true,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = SavioEmerald,
-                                    unfocusedBorderColor = GlassCardBorder
-                                )
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Button(
-                        onClick = {
-                            val map = mutableMapOf<String, Double>()
-                            for ((cat, str) in localCategoryLimits) {
-                                val v = str.toDoubleOrNull() ?: 0.0
-                                if (v > 0) map[cat] = v
+                            OpenRouterCategorizer.KNOWN_CATEGORIES.filterNot {
+                                it.equals("Self", ignoreCase = true) || it.equals("Credit Card Bill", ignoreCase = true)
+                            }.forEach { category ->
+                                val currentVal = localCategoryLimits[category] ?: ""
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = category,
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                        color = SavioSlateDark,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    OutlinedTextField(
+                                        value = currentVal,
+                                        onValueChange = { newVal ->
+                                            val filtered = newVal.filter { it.isDigit() }
+                                            localCategoryLimits[category] = filtered
+                                        },
+                                        placeholder = { Text("0") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        prefix = { Text(selectedCurrency) },
+                                        modifier = Modifier.width(130.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        singleLine = true,
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = SavioEmerald,
+                                            unfocusedBorderColor = GlassCardBorder
+                                        )
+                                    )
+                                }
                             }
-                            onUpdateCategoryLimits(map)
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald)
-                    ) {
-                        Text("Update Category Limits")
+
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = {
+                                    val map = mutableMapOf<String, Double>()
+                                    for ((cat, str) in localCategoryLimits) {
+                                        val v = str.toDoubleOrNull() ?: 0.0
+                                        if (v > 0) map[cat] = v
+                                    }
+                                    onUpdateCategoryLimits(map)
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald)
+                            ) {
+                                Text("Update Category Limits")
+                            }
+                        }
                     }
                 }
             }
@@ -781,7 +817,7 @@ fun SettingsScreen(
             }
         }
 
-        // 7. Reset / Danger Zone Card
+        // 7. Data Management Card
         item {
             Card(
                 shape = RoundedCornerShape(22.dp),
@@ -798,19 +834,47 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Reset all locally tracked transactions and simulated data.",
+                        text = "Export your transaction history to Excel or reset local data.",
                         style = MaterialTheme.typography.bodySmall,
                         color = SavioSlateMuted
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Button(
-                        onClick = { showConfirmClear = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = SavioSpendRose),
-                        shape = RoundedCornerShape(12.dp)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(imageVector = Icons.Default.DeleteForever, contentDescription = null)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Clear All Transactions")
+                        Button(
+                            onClick = {
+                                ExcelExportHelper.exportExpensesToExcel(context, allExpenses)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FileDownload,
+                                contentDescription = "Export Excel",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Export (.XLS)")
+                        }
+
+                        Button(
+                            onClick = { showConfirmClear = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = SavioSpendRose),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteForever,
+                                contentDescription = "Clear All",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Clear All")
+                        }
                     }
                 }
             }
@@ -855,20 +919,11 @@ fun SettingsScreen(
                         ) {
                             append("₹")
                         }
-                        withStyle(
-                            SpanStyle(
-                                color = SavioSlateMuted,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp
-                            )
-                        ) {
-                            append(" v1.0.0")
-                        }
                     }
                 )
 
                 Text(
-                    text = "\"Money management made easy.\"",
+                    text = "\"Be the savior your money needs.\"",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                         fontWeight = FontWeight.Medium
@@ -882,6 +937,15 @@ fun SettingsScreen(
                         fontWeight = FontWeight.Medium
                     ),
                     color = SavioSlateMuted
+                )
+
+                Text(
+                    text = "v1.0.0",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 12.sp
+                    ),
+                    color = Color(0xFF94A3B8)
                 )
             }
         }

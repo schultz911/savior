@@ -57,6 +57,9 @@ interface ExpenseDao {
     @Query("SELECT COUNT(*) > 0 FROM expenses WHERE sender = :sender AND timestamp = :timestamp AND amount = :amount")
     suspend fun existsByContent(sender: String, timestamp: Long, amount: Double): Boolean
 
+    @Query("SELECT COUNT(*) FROM expenses WHERE monthKey = :monthKey AND (type = 'CREDIT_CARD' OR LOWER(category) = 'credit card bill') AND ABS(amount - :amount) < 0.01")
+    suspend fun countCreditCardPaymentsInMonth(monthKey: String, amount: Double): Int
+
     @Query("DELETE FROM expenses WHERE id = :id")
     suspend fun deleteExpenseById(id: Long)
 

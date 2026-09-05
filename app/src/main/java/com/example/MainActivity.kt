@@ -514,7 +514,8 @@ fun SpendTrackerScreen(
                         onRemoveBlacklistedMerchant = { viewModel.unblacklistMerchant(it) },
                         onToggleNotification = { viewModel.togglePersistentNotification(it) },
                         onClearAll = { viewModel.clearAll() },
-                        onNavigateBack = { viewModel.setTab(SavioScreenTab.DASHBOARD) }
+                        onNavigateBack = { viewModel.setTab(SavioScreenTab.DASHBOARD) },
+                        allExpenses = allExpenses
                     )
                 }
             }

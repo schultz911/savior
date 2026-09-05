@@ -118,6 +118,20 @@ object ExpenseProcessingHelper {
             }
         }
 
+        // Deduplicate credit card payment SMSs in the same month based on the amount
+        val isCreditCardPayment = parsed.type == com.example.data.ExpenseType.CREDIT_CARD ||
+                finalCategory.equals("Credit Card Bill", ignoreCase = true) ||
+                parsed.category.equals("Credit Card Bill", ignoreCase = true)
+
+        if (isCreditCardPayment) {
+            val monthKey = ExpenseEntity.formatMonthKey(timestamp)
+            val duplicateCount = dao.countCreditCardPaymentsInMonth(monthKey, parsed.amount)
+            if (duplicateCount > 0) {
+                Log.d(TAG, "Deduplicating credit card payment of amount ${parsed.amount} in month $monthKey")
+                return@withContext null
+            }
+        }
+
         val entity = ExpenseEntity(
             amount = parsed.amount,
             currency = preferredCurrency,

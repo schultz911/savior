@@ -17,13 +17,20 @@ import java.text.NumberFormat
 import java.util.Locale
 
 object SpendAlertManager {
-    const val CHANNEL_ALERTS = "savio_alerts_channel"
+    const val CHANNEL_ALERTS = "savior_budget_alerts_v3"
     private const val NOTIF_ID_UNRECOGNIZED_BASE = 2000
     private const val NOTIF_ID_CATEGORY_LIMIT_BASE = 3000
 
     fun createNotificationChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            try {
+                manager.deleteNotificationChannel("savio_alerts_channel")
+                manager.deleteNotificationChannel("spend_alerts_channel")
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
             val channel = NotificationChannel(
                 CHANNEL_ALERTS,
                 "SAVIO Budget & Category Alerts",
