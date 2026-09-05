@@ -12,12 +12,34 @@ import kotlinx.coroutines.withContext
 class ExpenseRepository(
     private val context: Context,
     private val expenseDao: ExpenseDao,
-    private val preferences: ExpensePreferences
+    private val preferences: ExpensePreferences,
+    private val merchantRuleDao: MerchantRuleDao? = null
 ) {
 
     val allExpenses: Flow<List<ExpenseEntity>> = expenseDao.getAllExpenses()
     val allMonthKeys: Flow<List<String>> = expenseDao.getAllMonthKeys()
     val recurringExpenses: Flow<List<ExpenseEntity>> = expenseDao.getRecurringExpenses()
+    val allMerchantRules: Flow<List<MerchantRuleEntity>> =
+        merchantRuleDao?.getAllRules() ?: kotlinx.coroutines.flow.flowOf(emptyList())
+
+    suspend fun insertMerchantRule(rule: MerchantRuleEntity): Long = withContext(Dispatchers.IO) {
+        merchantRuleDao?.insertRule(rule) ?: -1L
+    }
+
+    suspend fun deleteMerchantRule(id: Long) = withContext(Dispatchers.IO) {
+        merchantRuleDao?.deleteRule(id)
+    }
+
+    suspend fun getAllMerchantRulesSync(): List<MerchantRuleEntity> = withContext(Dispatchers.IO) {
+        merchantRuleDao?.getAllRulesSync() ?: emptyList()
+    }
+
+    suspend fun applyRefund(id: Long, refundAmount: Double) = withContext(Dispatchers.IO) {
+        expenseDao.applyRefund(id, refundAmount)
+        if (preferences.isPersistentNotificationEnabled) {
+            LiveExpenditureNotificationService.updateLiveExpenditure(context)
+        }
+    }
 
     fun getExpensesForMerchant(merchant: String): Flow<List<ExpenseEntity>> =
         expenseDao.getExpensesForMerchant(merchant)

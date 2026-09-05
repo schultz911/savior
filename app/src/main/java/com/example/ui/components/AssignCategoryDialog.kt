@@ -66,13 +66,15 @@ import java.util.Locale
 fun AssignCategoryDialog(
     expense: ExpenseEntity,
     currency: String,
-    onAssign: (Long, String) -> Unit,
+    onAssign: (Long, String, String?, Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedCategory by remember { mutableStateOf(expense.category.ifBlank { "Transfers" }) }
     var customCategory by remember { mutableStateOf("") }
     var isCustom by remember { mutableStateOf(false) }
+    var aliasInput by remember { mutableStateOf(expense.merchantOrRecipient) }
+    var saveAsRule by remember { mutableStateOf(true) }
 
     val numberFormatter = remember {
         NumberFormat.getNumberInstance(Locale.US).apply {
@@ -168,7 +170,7 @@ fun AssignCategoryDialog(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Savio will remember '${expense.merchantOrRecipient}' and automatically tag all future transactions with your chosen category.",
+                        text = "Savio will remember '${expense.merchantOrRecipient}' and automatically tag future transactions with deterministic accuracy.",
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontSize = 12.sp,
                             lineHeight = 16.sp
@@ -257,7 +259,51 @@ fun AssignCategoryDialog(
                 )
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Normalized Merchant Alias Input
+            OutlinedTextField(
+                value = aliasInput,
+                onValueChange = { aliasInput = it },
+                label = { Text("Normalized Merchant Alias (Optional)") },
+                placeholder = { Text("e.g. Swiggy, Uber, Amazon") },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = SavioEmerald,
+                    unfocusedBorderColor = GlassCardBorder,
+                    focusedLabelColor = SavioEmerald
+                )
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Save as deterministic auto-rule toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { saveAsRule = !saveAsRule }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                androidx.compose.material3.Checkbox(
+                    checked = saveAsRule,
+                    onCheckedChange = { saveAsRule = it },
+                    colors = androidx.compose.material3.CheckboxDefaults.colors(
+                        checkedColor = SavioEmerald
+                    )
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Save as auto-rule for all future '${expense.merchantOrRecipient}' transactions",
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                    color = SavioSlateDark
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Save & Tag Button
             Button(
@@ -267,7 +313,7 @@ fun AssignCategoryDialog(
                     } else {
                         selectedCategory
                     }
-                    onAssign(expense.id, finalCategory)
+                    onAssign(expense.id, finalCategory, aliasInput.ifBlank { null }, saveAsRule)
                     onDismiss()
                 },
                 shape = RoundedCornerShape(14.dp),

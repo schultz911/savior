@@ -10,5 +10,6 @@ data class ParsedSms(
     val accountInfo: String,
     val category: String,
     val isExpense: Boolean,
-    val rawText: String
+    val rawText: String,
+    val isRefund: Boolean = false
 )

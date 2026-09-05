@@ -86,6 +86,8 @@ import com.example.ui.theme.SavioSpendRed
 import com.example.ui.theme.SavioSpendRedBg
 import com.example.ui.theme.SavioSpendRose
 import com.example.ui.theme.SavioSpendRoseBg
+import com.example.ui.models.DailyBurnDownData
+import com.example.ui.models.InstrumentSpendSummary
 import java.text.NumberFormat
 import java.util.Calendar
 import java.util.Locale
@@ -99,6 +101,10 @@ fun CalendarAnalyticsTab(
     last12Months: List<MonthAnalytics>,
     currentMonthExpenses: List<ExpenseEntity>,
     allExpenses: List<ExpenseEntity> = emptyList(),
+    burnDownData: DailyBurnDownData? = null,
+    instruments: List<InstrumentSpendSummary> = emptyList(),
+    selectedAccount: String? = null,
+    onSelectAccount: (String?) -> Unit = {},
     onSelectMonth: (String) -> Unit,
     onNavigateToDashboard: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -145,9 +151,9 @@ fun CalendarAnalyticsTab(
         }
     }
 
-    val displayedExpenses = remember(currentMonthExpenses, analyticsFilter) {
+    val displayedExpenses = remember(currentMonthExpenses, analyticsFilter, selectedAccount) {
         currentMonthExpenses.filter { item ->
-            when (analyticsFilter) {
+            val matchesFilter = when (analyticsFilter) {
                 ExpenseFilter.ALL -> true
                 ExpenseFilter.SPENDS -> item.type == ExpenseType.MERCHANT &&
                         !item.category.equals("Self", ignoreCase = true) &&
@@ -160,6 +166,8 @@ fun CalendarAnalyticsTab(
                 ExpenseFilter.SELF -> item.type == ExpenseType.SELF ||
                         item.category.equals("Self", ignoreCase = true)
             }
+            val matchesAccount = selectedAccount == null || item.accountInfo.contains(selectedAccount, ignoreCase = true)
+            matchesFilter && matchesAccount
         }
     }
 
@@ -419,6 +427,28 @@ fun CalendarAnalyticsTab(
                         )
                     }
                 }
+            }
+        }
+
+        // Intra-Month Daily Spending Velocity & Burn-Down Curve
+        if (burnDownData != null) {
+            item {
+                DailyBurnDownChart(
+                    burnDownData = burnDownData,
+                    currency = currency
+                )
+            }
+        }
+
+        // Multi-Account & Instrument Liquidity Intelligence
+        if (instruments.isNotEmpty()) {
+            item {
+                InstrumentLiquidityCard(
+                    instruments = instruments,
+                    selectedAccount = selectedAccount,
+                    onSelectAccount = onSelectAccount,
+                    currency = currency
+                )
             }
         }
 

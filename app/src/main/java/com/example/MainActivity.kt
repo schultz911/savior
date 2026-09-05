@@ -99,7 +99,9 @@ import com.example.ui.ExpenseViewModel
 import com.example.ui.SavioScreenTab
 import com.example.ui.components.AssignCategoryDialog
 import com.example.ui.components.CalendarAnalyticsTab
+import com.example.ui.components.DailyBurnDownChart
 import com.example.ui.components.ExpenditureHeroCard
+import com.example.ui.components.InstrumentLiquidityCard
 import com.example.ui.components.ManualAddExpenseDialog
 import com.example.ui.components.MonthSelector
 import com.example.ui.components.PermissionsBanner
@@ -256,6 +258,11 @@ fun SpendTrackerScreen(
     val isSearchExpanded by viewModel.isSearchExpanded.collectAsStateWithLifecycle()
     val predictedRecurringBills by viewModel.predictedRecurringBills.collectAsStateWithLifecycle()
     val safeSpendPacing by viewModel.safeSpendPacing.collectAsStateWithLifecycle()
+
+    val merchantRules by viewModel.merchantRules.collectAsStateWithLifecycle()
+    val dailyBurnDownData by viewModel.dailyBurnDownData.collectAsStateWithLifecycle()
+    val instrumentSummaries by viewModel.instrumentSummaries.collectAsStateWithLifecycle()
+    val selectedAccountFilter by viewModel.selectedAccountFilter.collectAsStateWithLifecycle()
 
     var selectedMerchantForSheet by remember { mutableStateOf<String?>(null) }
 
@@ -667,6 +674,9 @@ fun SpendTrackerScreen(
                         onTogglePrivacyShield = { viewModel.setPrivacyShieldEnabled(it) },
                         lockTimeoutSeconds = lockTimeoutSeconds,
                         onUpdateLockTimeout = { viewModel.setLockTimeoutSeconds(it) },
+                        merchantRules = merchantRules,
+                        onAddMerchantRule = { pattern, cat, alias -> viewModel.addMerchantRule(pattern, cat, alias) },
+                        onDeleteMerchantRule = { id -> viewModel.deleteMerchantRule(id) },
                         onTriggerBackupExport = { passphrase ->
                             pendingBackupPassphrase = passphrase
                             AppSecurityManager.markAwaitingActivityResult()
@@ -712,6 +722,10 @@ fun SpendTrackerScreen(
                         last12Months = last12MonthsAnalytics,
                         currentMonthExpenses = currentMonthExpenses,
                         allExpenses = allExpenses,
+                        burnDownData = dailyBurnDownData,
+                        instruments = instrumentSummaries,
+                        selectedAccount = selectedAccountFilter,
+                        onSelectAccount = { viewModel.selectAccountFilter(it) },
                         onSelectMonth = { viewModel.selectMonth(it) },
                         onNavigateToDashboard = { viewModel.setTab(SavioScreenTab.DASHBOARD) }
                     )
@@ -753,6 +767,24 @@ fun SpendTrackerScreen(
                             onToggleNotification = { viewModel.togglePersistentNotification(it) },
                             safeSpendPacing = safeSpendPacing,
                             upcomingCommitmentsCount = predictedRecurringBills.count { !it.isPaidThisMonth }
+                        )
+                    }
+
+                    // Intra-Month Daily Spending Velocity & Burn-Down Curve
+                    item {
+                        DailyBurnDownChart(
+                            burnDownData = dailyBurnDownData,
+                            currency = currency
+                        )
+                    }
+
+                    // Multi-Account & Instrument Liquidity Intelligence
+                    item {
+                        InstrumentLiquidityCard(
+                            instruments = instrumentSummaries,
+                            selectedAccount = selectedAccountFilter,
+                            onSelectAccount = { viewModel.selectAccountFilter(it) },
+                            currency = currency
                         )
                     }
 
@@ -969,8 +1001,8 @@ fun SpendTrackerScreen(
         AssignCategoryDialog(
             expense = targetExpense,
             currency = currency,
-            onAssign = { id, newCategory ->
-                viewModel.assignCategory(id, newCategory)
+            onAssign = { id, newCategory, alias, saveAsRule ->
+                viewModel.assignCategory(id, newCategory, alias, saveAsRule)
                 assignCategoryTargetExpense = null
             },
             onDismiss = { assignCategoryTargetExpense = null }

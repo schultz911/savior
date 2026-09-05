@@ -30,6 +30,11 @@ import java.util.Locale
 
 import com.example.engine.PredictedRecurringBill
 import com.example.engine.RecurringDetectionEngine
+import com.example.data.MerchantRuleEntity
+import com.example.ui.models.DailyBurnDownData
+import com.example.ui.models.DaySpendPoint
+import com.example.ui.models.InstrumentSpendSummary
+import com.example.ui.models.InstrumentType
 
 enum class ExpenseFilter(val label: String) {
     ALL("All"),
@@ -68,7 +73,8 @@ data class FilterCriteria(
     val query: String = "",
     val categoryFilter: String? = null,
     val amountRange: AmountRange = AmountRange.ALL,
-    val onlyRecurring: Boolean = false
+    val onlyRecurring: Boolean = false,
+    val accountFilter: String? = null
 )
 
 enum class SavioScreenTab {
@@ -106,6 +112,9 @@ class ExpenseViewModel(
 
     private val _onlyRecurringFilter = MutableStateFlow(false)
     val onlyRecurringFilter: StateFlow<Boolean> = _onlyRecurringFilter.asStateFlow()
+
+    private val _selectedAccountFilter = MutableStateFlow<String?>(null)
+    val selectedAccountFilter: StateFlow<String?> = _selectedAccountFilter.asStateFlow()
 
     private val _isSearchExpanded = MutableStateFlow(false)
     val isSearchExpanded: StateFlow<Boolean> = _isSearchExpanded.asStateFlow()
@@ -200,13 +209,10 @@ class ExpenseViewModel(
         )
 
     private val filterCriteria = combine(
-        _selectedFilter,
-        _searchQuery,
-        _selectedCategoryFilter,
-        _selectedAmountRange,
-        _onlyRecurringFilter
-    ) { filter, query, categoryFilter, amountRange, onlyRecurring ->
-        FilterCriteria(filter, query, categoryFilter, amountRange, onlyRecurring)
+        combine(_selectedFilter, _searchQuery, _selectedCategoryFilter) { f, q, c -> Triple(f, q, c) },
+        combine(_selectedAmountRange, _onlyRecurringFilter, _selectedAccountFilter) { a, r, acc -> Triple(a, r, acc) }
+    ) { (f, q, c), (a, r, acc) ->
+        FilterCriteria(f, q, c, a, r, acc)
     }
 
     val filteredExpenses: StateFlow<List<ExpenseEntity>> = combine(
@@ -236,8 +242,9 @@ class ExpenseViewModel(
                 AmountRange.OVER_2000 -> item.amount > 2000.0
             }
             val matchesRecurring = !criteria.onlyRecurring || item.isRecurring
+            val matchesAccount = criteria.accountFilter == null || item.accountInfo.contains(criteria.accountFilter, ignoreCase = true)
 
-            matchesFilter && matchesQuery && matchesCategory && matchesAmount && matchesRecurring
+            matchesFilter && matchesQuery && matchesCategory && matchesAmount && matchesRecurring && matchesAccount
         }
     }.stateIn(
         scope = viewModelScope,
@@ -284,9 +291,10 @@ class ExpenseViewModel(
             if (blacklisted.any { norm.contains(it.lowercase(Locale.US)) }) continue
             if (isSelf(exp) || isCreditCard(exp)) continue
 
-            currentSpent += exp.amount
+            val net = (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
+            currentSpent += net
             if (exp.timestamp >= startOfToday) {
-                todaySpent += exp.amount
+                todaySpent += net
             }
         }
 
@@ -331,7 +339,7 @@ class ExpenseViewModel(
             !isSelf(it) &&
             !isCreditCard(it)
         }
-        validList.sumOf { it.amount }
+        validList.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -345,7 +353,7 @@ class ExpenseViewModel(
         _blacklistedMerchants
     ) { list, blacklisted ->
         list.filter { isTransfer(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
-            .sumOf { it.amount }
+            .sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -357,7 +365,7 @@ class ExpenseViewModel(
         _blacklistedMerchants
     ) { list, blacklisted ->
         list.filter { isMerchantSpend(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
-            .sumOf { it.amount }
+            .sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -369,7 +377,7 @@ class ExpenseViewModel(
         _blacklistedMerchants
     ) { list, blacklisted ->
         list.filter { isCreditCard(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
-            .sumOf { it.amount }
+            .sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -381,7 +389,7 @@ class ExpenseViewModel(
         _blacklistedMerchants
     ) { list, blacklisted ->
         list.filter { isSelf(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
-            .sumOf { it.amount }
+            .sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -398,6 +406,115 @@ class ExpenseViewModel(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0.0
+    )
+
+    // Feature 2: Deterministic Auto-Rules flow
+    val merchantRules: StateFlow<List<MerchantRuleEntity>> = repository.allMerchantRules
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    // Feature 4: Intra-Month Daily Spending Velocity & Burn-Down Curve
+    val dailyBurnDownData: StateFlow<DailyBurnDownData> = combine(
+        currentMonthExpenses,
+        _monthlyBudget,
+        _blacklistedMerchants,
+        _selectedMonthKey
+    ) { expenses, budget, blacklisted, monthKey ->
+        val cal = Calendar.getInstance()
+        val currentMonthKey = currentDefaultMonth
+        val isCurrentMonth = monthKey == currentMonthKey
+
+        val parts = monthKey.split("-")
+        val year = parts.getOrNull(0)?.toIntOrNull() ?: cal.get(Calendar.YEAR)
+        val month0 = (parts.getOrNull(1)?.toIntOrNull() ?: (cal.get(Calendar.MONTH) + 1)) - 1
+
+        val monthCal = Calendar.getInstance().apply {
+            set(Calendar.YEAR, year)
+            set(Calendar.MONTH, month0)
+            set(Calendar.DAY_OF_MONTH, 1)
+        }
+        val daysInMonth = monthCal.getActualMaximum(Calendar.DAY_OF_MONTH)
+        val currentDay = if (isCurrentMonth) cal.get(Calendar.DAY_OF_MONTH).coerceIn(1, daysInMonth) else daysInMonth
+
+        val daySpendMap = mutableMapOf<Int, Double>()
+        for (exp in expenses) {
+            if (isBlacklistedMerchant(exp.merchantOrRecipient, blacklisted) || isSelf(exp) || isCreditCard(exp)) continue
+            val expCal = Calendar.getInstance().apply { timeInMillis = exp.timestamp }
+            val day = expCal.get(Calendar.DAY_OF_MONTH)
+            val netAmt = (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
+            daySpendMap[day] = (daySpendMap[day] ?: 0.0) + netAmt
+        }
+
+        val points = mutableListOf<DaySpendPoint>()
+        var runningCumulative = 0.0
+        val targetDailySlope = if (budget > 0) budget / daysInMonth else 0.0
+
+        for (d in 1..currentDay) {
+            val spentToday = daySpendMap[d] ?: 0.0
+            runningCumulative += spentToday
+            points.add(
+                DaySpendPoint(
+                    dayOfMonth = d,
+                    daySpent = spentToday,
+                    cumulativeSpend = runningCumulative,
+                    targetPacingSpend = targetDailySlope * d
+                )
+            )
+        }
+
+        val burnRate = if (currentDay > 0) runningCumulative / currentDay else 0.0
+        val projected = burnRate * daysInMonth
+        val overPaced = budget > 0 && runningCumulative > (targetDailySlope * currentDay)
+
+        DailyBurnDownData(
+            points = points,
+            currentDay = currentDay,
+            daysInMonth = daysInMonth,
+            currentCumulativeSpend = runningCumulative,
+            monthlyBudget = budget,
+            projectedMonthEndSpend = projected,
+            isOverPaced = overPaced,
+            currentBurnRatePerDay = burnRate
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = DailyBurnDownData()
+    )
+
+    // Feature 5: Multi-Account & Instrument Liquidity Intelligence
+    val instrumentSummaries: StateFlow<List<InstrumentSpendSummary>> = combine(
+        currentMonthExpenses,
+        _blacklistedMerchants
+    ) { expenses, blacklisted ->
+        val valid = expenses.filter {
+            !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) && !isSelf(it)
+        }
+        val netMonthTotal = valid.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
+        val grouped = valid.groupBy {
+            val acc = it.accountInfo.trim()
+            if (acc.isNotBlank()) acc else "Other / Cash"
+        }
+
+        grouped.map { (account, list) ->
+            val total = list.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
+            val type = InstrumentType.fromAccountInfo(account)
+            val pct = if (netMonthTotal > 0) (total / netMonthTotal) * 100.0 else 0.0
+            InstrumentSpendSummary(
+                accountInfo = account,
+                instrumentType = type,
+                totalSpent = total,
+                transactionCount = list.size,
+                percentageOfTotal = pct
+            )
+        }.sortedByDescending { it.totalSpent }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
     )
 
     // 12-Month Historical Analytics Flow for the Spend vs Savings Graph (deducting blacklisted merchants, self, and credit cards)
@@ -441,7 +558,7 @@ class ExpenseViewModel(
                 !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) &&
                 !isSelf(it) &&
                 !isCreditCard(it)
-            }.sumOf { it.amount }
+            }.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
             val savedAmount = salary - totalSpent
             val isOverspent = totalSpent > salary
             val rate = if (salary > 0) (savedAmount / salary) * 100.0 else 0.0
@@ -623,10 +740,16 @@ class ExpenseViewModel(
         _syncFeedback.value = "Category spend limits updated"
     }
 
-    fun assignCategory(expenseId: Long, category: String) {
+    fun assignCategory(
+        expenseId: Long,
+        category: String,
+        alias: String? = null,
+        saveAsRule: Boolean = true
+    ) {
         viewModelScope.launch {
             val app = getApplication<Application>() as SpendTrackerApplication
             val dao = app.database.expenseDao()
+            val ruleDao = app.database.merchantRuleDao()
             val target = dao.getExpenseById(expenseId)
 
             val newType = when {
@@ -640,9 +763,21 @@ class ExpenseViewModel(
 
             if (target != null && target.merchantOrRecipient.isNotBlank()) {
                 val merchant = target.merchantOrRecipient.trim()
+                val effectiveAlias = if (!alias.isNullOrBlank()) alias.trim() else merchant
                 preferences.saveMerchantCategory(merchant, category)
+                if (saveAsRule) {
+                    ruleDao.insertRule(
+                        MerchantRuleEntity(
+                            merchantPattern = merchant,
+                            assignedCategory = category,
+                            normalizedAlias = effectiveAlias,
+                            isRegex = false,
+                            createdAt = System.currentTimeMillis()
+                        )
+                    )
+                }
                 dao.updateCategoryAndTypeForMerchant(merchant, category, newType)
-                _syncFeedback.value = "Category '$category' saved for '$merchant' going forward"
+                _syncFeedback.value = "Rule saved: '$merchant' categorized as '$category'"
             } else {
                 _syncFeedback.value = "Category assigned: $category"
             }
@@ -652,6 +787,31 @@ class ExpenseViewModel(
                 com.example.service.ExpenseProcessingHelper.checkCategoryLimitAlert(app, updatedExpense)
             }
         }
+    }
+
+    fun addMerchantRule(pattern: String, category: String, alias: String = "", isRegex: Boolean = false) {
+        viewModelScope.launch {
+            val rule = MerchantRuleEntity(
+                merchantPattern = pattern.trim(),
+                assignedCategory = category.trim(),
+                normalizedAlias = alias.trim(),
+                isRegex = isRegex,
+                createdAt = System.currentTimeMillis()
+            )
+            repository.insertMerchantRule(rule)
+            _syncFeedback.value = "Auto-rule added for '$pattern' -> $category"
+        }
+    }
+
+    fun deleteMerchantRule(id: Long) {
+        viewModelScope.launch {
+            repository.deleteMerchantRule(id)
+            _syncFeedback.value = "Rule deleted"
+        }
+    }
+
+    fun selectAccountFilter(account: String?) {
+        _selectedAccountFilter.value = if (_selectedAccountFilter.value == account) null else account
     }
 
     fun addManualExpense(
@@ -763,6 +923,7 @@ class ExpenseViewModel(
         _selectedCategoryFilter.value = null
         _selectedAmountRange.value = AmountRange.ALL
         _onlyRecurringFilter.value = false
+        _selectedAccountFilter.value = null
     }
 
     fun toggleRecurring(expenseId: Long, isRecurring: Boolean) {

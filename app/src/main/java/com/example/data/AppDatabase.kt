@@ -8,11 +8,12 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [ExpenseEntity::class], version = 2, exportSchema = false)
+@Database(entities = [ExpenseEntity::class, MerchantRuleEntity::class], version = 3, exportSchema = false)
 @TypeConverters(ExpenseTypeConverter::class)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun expenseDao(): ExpenseDao
+    abstract fun merchantRuleDao(): MerchantRuleDao
 
     companion object {
         @Volatile
@@ -24,6 +25,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE expenses ADD COLUMN refundedAmount REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE expenses ADD COLUMN isReversal INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS merchant_rules (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        merchantPattern TEXT NOT NULL,
+                        assignedCategory TEXT NOT NULL,
+                        normalizedAlias TEXT NOT NULL,
+                        isRegex INTEGER NOT NULL DEFAULT 0,
+                        createdAt INTEGER NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_merchant_rules_merchantPattern ON merchant_rules(merchantPattern)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -31,7 +50,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "spend_tracker_database"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.ui.platform.LocalContext
 import com.example.data.ExpenseEntity
+import com.example.data.MerchantRuleEntity
 import com.example.util.ExcelExportHelper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -133,10 +134,17 @@ fun SettingsScreen(
     onUpdateLockTimeout: (Int) -> Unit = {},
     onTriggerBackupExport: (passphrase: String) -> Unit = {},
     onTriggerBackupRestore: (passphrase: String) -> Unit = {},
+    merchantRules: List<MerchantRuleEntity> = emptyList(),
+    onAddMerchantRule: (pattern: String, category: String, alias: String) -> Unit = { _, _, _ -> },
+    onDeleteMerchantRule: (Long) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var isCategoryLimitsExpanded by remember { mutableStateOf(false) }
+
+    var newRulePatternInput by remember { mutableStateOf("") }
+    var newRuleCategoryInput by remember { mutableStateOf("Food & Dining") }
+    var newRuleAliasInput by remember { mutableStateOf("") }
 
     var showBackupExportDialog by remember { mutableStateOf(false) }
     var showBackupRestoreDialog by remember { mutableStateOf(false) }
@@ -577,6 +585,230 @@ fun SettingsScreen(
                                                 .size(16.dp)
                                                 .clickable { onRemoveBlacklistedMerchant(merchant) }
                                         )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Auto-Rule & Merchant Alias Engine (Deterministic Local Classifier) Card
+        item {
+            Card(
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = GlassCardBg),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, GlassCardBorder, RoundedCornerShape(22.dp))
+                    .testTag("merchant_rules_card")
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = SavioEmeraldContainer,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = SavioEmerald,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Merchant Rules & Aliases",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = SavioSlateDark
+                            )
+                            Text(
+                                text = "Deterministic local classifier for 100% offline auto-categorization",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SavioSlateMuted
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Input Form for new rule
+                    Text(
+                        text = "Add Merchant Rule",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = SavioSlateDark
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = newRulePatternInput,
+                            onValueChange = { newRulePatternInput = it },
+                            placeholder = { Text("Pattern (e.g. SWIGGY*)") },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = SavioEmerald,
+                                unfocusedBorderColor = GlassCardBorder
+                            )
+                        )
+
+                        OutlinedTextField(
+                            value = newRuleAliasInput,
+                            onValueChange = { newRuleAliasInput = it },
+                            placeholder = { Text("Alias (e.g. Swiggy)") },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = SavioEmerald,
+                                unfocusedBorderColor = GlassCardBorder
+                            )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Quick category selection chips for new rule
+                    Text(
+                        text = "Assigned Category: $newRuleCategoryInput",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = SavioEmerald
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        OpenRouterCategorizer.KNOWN_CATEGORIES.take(6).forEach { cat ->
+                            val isSel = newRuleCategoryInput.equals(cat, ignoreCase = true)
+                            FilterChip(
+                                selected = isSel,
+                                onClick = { newRuleCategoryInput = cat },
+                                label = { Text(cat, fontSize = 11.sp, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal) },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = SavioEmerald,
+                                    selectedLabelColor = Color.White
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Button(
+                        onClick = {
+                            if (newRulePatternInput.isNotBlank()) {
+                                onAddMerchantRule(
+                                    newRulePatternInput.trim(),
+                                    newRuleCategoryInput,
+                                    newRuleAliasInput.trim()
+                                )
+                                newRulePatternInput = ""
+                                newRuleAliasInput = ""
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald)
+                    ) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Add Classification Rule")
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // List of Active Rules
+                    Text(
+                        text = "Active Rules (${merchantRules.size})",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = SavioSlateDark
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (merchantRules.isEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = GlassBackground,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "No auto-rules active. Add a rule above or check 'Save as auto-rule' when categorizing a spend.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SavioSlateMuted,
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            merchantRules.forEach { rule ->
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = rule.merchantPattern,
+                                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                    color = SavioSlateDark
+                                                )
+                                                if (rule.normalizedAlias.isNotBlank() && rule.normalizedAlias != rule.merchantPattern) {
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text(
+                                                        text = "➔ \"${rule.normalizedAlias}\"",
+                                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                                        color = SavioEmerald
+                                                    )
+                                                }
+                                            }
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = SavioEmeraldContainer,
+                                                modifier = Modifier.padding(top = 4.dp)
+                                            ) {
+                                                Text(
+                                                    text = rule.assignedCategory,
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                                                    color = SavioEmerald,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+
+                                        IconButton(
+                                            onClick = { onDeleteMerchantRule(rule.id) },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Delete rule",
+                                                tint = SavioSlateMuted,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }

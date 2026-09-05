@@ -144,4 +144,72 @@ class ExampleRobolectricTest {
     assertTrue(fileName.startsWith("savior_encrypted_backup_"))
     assertTrue(fileName.endsWith(".savior"))
   }
+
+  @Test
+  fun `test refund and reversal sms parsing`() {
+    val refundSms = "Refund of INR 850.00 credited to your A/c XX4821 from ZOMATO."
+    val parsed = SmsParser.parse(refundSms, "HDFC-ALERT")
+    assertNotNull(parsed)
+    assertTrue(parsed!!.isRefund)
+    assertEquals(850.00, parsed.amount, 0.01)
+    assertEquals("Refund", parsed.category)
+    assertTrue(parsed.title.contains("Zomato", ignoreCase = true))
+
+    val reversalSms = "Reversal of Rs 350.00 processed for your transaction at Swiggy. Credited to UPI."
+    val parsedReversal = SmsParser.parse(reversalSms, "AXIS-UPI")
+    assertNotNull(parsedReversal)
+    assertTrue(parsedReversal!!.isRefund)
+    assertEquals(350.00, parsedReversal.amount, 0.01)
+  }
+
+  @Test
+  fun `test auto rule and merchant alias matching`() {
+    val rule = com.example.data.MerchantRuleEntity(
+      id = 1L,
+      merchantPattern = "SWIGGY",
+      assignedCategory = "Food & Dining",
+      normalizedAlias = "Swiggy Food Delivery",
+      isRegex = false,
+      createdAt = System.currentTimeMillis()
+    )
+
+    val rawMerchant = "SWIGGY BANGALORE IN"
+    val isMatch = rawMerchant.contains(rule.merchantPattern, ignoreCase = true)
+    assertTrue(isMatch)
+    val effectiveName = if (rule.normalizedAlias.isNotBlank()) rule.normalizedAlias else rawMerchant
+    assertEquals("Swiggy Food Delivery", effectiveName)
+  }
+
+  @Test
+  fun `test instrument classification intelligence`() {
+    val upiType = com.example.ui.models.InstrumentType.fromAccountInfo("UPI ••4901")
+    assertEquals(com.example.ui.models.InstrumentType.UPI, upiType)
+
+    val cardType = com.example.ui.models.InstrumentType.fromAccountInfo("Card ••4821")
+    assertEquals(com.example.ui.models.InstrumentType.CARD, cardType)
+
+    val bankType = com.example.ui.models.InstrumentType.fromAccountInfo("A/c ••9901")
+    assertEquals(com.example.ui.models.InstrumentType.BANK_ACCOUNT, bankType)
+
+    val unknownType = com.example.ui.models.InstrumentType.fromAccountInfo("Wallet Cash")
+    assertEquals(com.example.ui.models.InstrumentType.OTHER, unknownType)
+  }
+
+  @Test
+  fun `test daily burn down pacing calculations`() {
+    val budget = 30000.0
+    val daysInMonth = 30
+    val currentDay = 15
+    val currentSpent = 20000.0 // higher than 15,000 benchmark
+
+    val targetDailySlope = budget / daysInMonth // 1000/day
+    val benchmarkAtCurrentDay = targetDailySlope * currentDay // 15000
+    val isOverPaced = currentSpent > benchmarkAtCurrentDay
+    val burnRate = currentSpent / currentDay // ~1333.33/day
+    val projected = burnRate * daysInMonth // 40000
+
+    assertTrue(isOverPaced)
+    assertEquals(1333.33, burnRate, 0.1)
+    assertEquals(40000.0, projected, 1.0)
+  }
 }

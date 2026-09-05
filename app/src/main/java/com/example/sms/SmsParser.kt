@@ -7,11 +7,16 @@ import java.util.regex.Pattern
 object SmsParser {
 
     // Negative keywords: Non-expenditures, OTPs, incoming credits, ads, intimations
+    // Negative keywords: Non-expenditures, OTPs, ads, intimations
     private val EXCLUSION_PATTERNS = listOf(
         Pattern.compile("(?i)\\b(otp|one time password|verification code|security code|is your code|secret code)\\b"),
-        Pattern.compile("(?i)\\b(refund(?:ed)?|cashback|salary credited|credited with|deposited|credit alert)\\b"),
         Pattern.compile("(?i)\\b(pre-approved|apply now|congratulations|click here|claim your|loan offer|discount on|cash prize)\\b"),
-        Pattern.compile("(?i)\\b(received (?:rs\\.?|usd|\\$)?\\s*\\d+)\\b")
+        Pattern.compile("(?i)\\b(salary credited|deposited)\\b")
+    )
+
+    // Keywords identifying refunds, reversals, and chargebacks
+    private val REFUND_KEYWORDS = listOf(
+        "refund", "refunded", "reversal", "reversed", "credited back", "returned", "reversed to your"
     )
 
     // Keywords identifying outgoing spend / debit / transfer
@@ -43,7 +48,7 @@ object SmsParser {
         // Number followed by USD / EUR / etc.
         Pattern.compile("""(?i)([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*([$€£¥₹]|USD|EUR|GBP|INR|CAD|AUD)"""),
         // "debited by/for/with 50000.00" or "spent 45.50"
-        Pattern.compile("""(?i)(?:debited|spent|paid|charged|amount of|sum of|txn of|withdrawn)\s*(?:of|by|for|with)?\s*([$€£¥₹]|Rs\.?|INR|USD|EUR|GBP)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)""")
+        Pattern.compile("""(?i)(?:debited|spent|paid|charged|amount of|sum of|txn of|withdrawn|refund of|reversed|refund)\s*(?:of|by|for|with)?\s*([$€£¥₹]|Rs\.?|INR|USD|EUR|GBP)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)""")
     )
 
     // Regex for card / account / UPI references
@@ -56,6 +61,7 @@ object SmsParser {
 
     // Regex for merchant / recipient
     private val MERCHANT_PATTERNS = listOf(
+        Pattern.compile("""(?i)(?:towards\s+refund\s+from|refund\s+from|reversal\s+of\s+(?:txn\s+at\s+)?|returned\s+from\s+|refund\s+for\s+|(?:refund|credited|reversal).{0,50}?\bfrom\s+)([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|upi\s+ref\b|ref\s+no\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
         Pattern.compile("""(?i)(?:towards\s+transfer\s+to|transfer(?:red)?\s+to|sent\s+to|paid\s+to|via\s+upi\s+to|by\s+upi\s+to|upi\s+to|to\s+vpa|towards|in\s+favor\s+of)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|upi\s+ref\b|ref\s+no\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
         Pattern.compile("""(?i)(?:sent|paid|transferred)\s+.{0,45}?\bto\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|upi\s+ref\b|ref\s+no\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
         Pattern.compile("""(?i)(?:with|via)\s+(?:zelle|upi|venmo)\s+to\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|ref\b)|[.!,;]|$)"""),
@@ -69,21 +75,46 @@ object SmsParser {
         val cleanBody = smsBody.trim()
         if (cleanBody.isEmpty()) return null
 
-        // Check for exclusions (OTP, refunds, credits, ads)
+        // Check for exclusions (OTP, loans, pure deposits)
         for (pattern in EXCLUSION_PATTERNS) {
             if (pattern.matcher(cleanBody).find()) {
-                // If it's pure OTP or credited, ignore
-                if (cleanBody.contains("credited", ignoreCase = true) && !cleanBody.contains("debited", ignoreCase = true)) {
-                    return null
-                }
-                if (cleanBody.contains("otp", ignoreCase = true) || cleanBody.contains("verification code", ignoreCase = true)) {
-                    return null
-                }
+                return null
             }
         }
 
-        // Determine if message is an expenditure
         val lower = cleanBody.lowercase(Locale.US)
+
+        // 1. Check for Credit Reversal & Refund
+        val isRefund = REFUND_KEYWORDS.any { lower.contains(it) } &&
+                (lower.contains("credited") || lower.contains("credit") || lower.contains("received") || lower.contains("refund") || lower.contains("reversed"))
+
+        if (isRefund) {
+            val (amount, currency) = extractAmountAndCurrency(cleanBody) ?: return null
+            if (amount <= 0.0) return null
+            val accountInfo = extractAccountInfo(cleanBody)
+            val merchant = extractMerchant(cleanBody, false)
+            return ParsedSms(
+                amount = amount,
+                currency = currency,
+                type = ExpenseType.MERCHANT,
+                title = merchant,
+                accountInfo = accountInfo,
+                category = "Refund",
+                isExpense = false,
+                rawText = cleanBody,
+                isRefund = true
+            )
+        }
+
+        // If it's a general credit alert without debit or refund keywords, ignore
+        if (cleanBody.contains("credited", ignoreCase = true) && !cleanBody.contains("debited", ignoreCase = true)) {
+            return null
+        }
+        if (Pattern.compile("(?i)\\b(received (?:rs\\.?|usd|\\$)?\\s*\\d+)\\b").matcher(cleanBody).find() && !isRefund) {
+            return null
+        }
+
+        // Determine if message is an expenditure
         val isTransfer = TRANSFER_KEYWORDS.any { lower.contains(it) } ||
                 Regex("""(?i)\b(?:sent|transferred|transfer)\b.{1,35}\bto\b""").containsMatchIn(cleanBody) ||
                 Regex("""(?i)\b(?:upi/p2a/|p2p)\b""").containsMatchIn(cleanBody)
@@ -337,10 +368,11 @@ object SmsParser {
         val hasDebit = DEBIT_KEYWORDS.any { lower.contains(it) }
         val hasTransfer = TRANSFER_KEYWORDS.any { lower.contains(it) }
         val hasSpend = SPEND_KEYWORDS.any { lower.contains(it) }
+        val hasRefund = REFUND_KEYWORDS.any { lower.contains(it) }
         val hasUpi = lower.contains("upi") || lower.contains("vpa")
         val looksBank = isBankSender(sender)
         val hasAmount = AMOUNT_PATTERNS.any { it.matcher(clean).find() }
 
-        return (hasDebit || hasTransfer || hasSpend || hasUpi || (looksBank && hasAmount)) && hasAmount
+        return (hasDebit || hasTransfer || hasSpend || hasRefund || hasUpi || (looksBank && hasAmount)) && hasAmount
     }
 }

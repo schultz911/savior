@@ -45,6 +45,7 @@ object SpendAlertManager {
 
     /**
      * Push notification asking the user to assign a category when a spend cannot be recognized.
+     * Features in-line direct category classification actions for 1-tap categorization without opening app.
      */
     fun notifyUnrecognizedSpend(
         context: Context,
@@ -55,6 +56,7 @@ object SpendAlertManager {
     ) {
         createNotificationChannels(context)
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notifId = (NOTIF_ID_UNRECOGNIZED_BASE + (expenseId % 1000)).toInt()
 
         val openIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -64,33 +66,58 @@ object SpendAlertManager {
 
         val pendingIntent = PendingIntent.getActivity(
             context,
-            (NOTIF_ID_UNRECOGNIZED_BASE + expenseId % 1000).toInt(),
+            notifId,
             openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+
+        fun createCategoryActionPendingIntent(category: String, actionCode: Int): PendingIntent {
+            val intent = Intent(context, com.example.receiver.CategoryActionReceiver::class.java).apply {
+                action = com.example.receiver.CategoryActionReceiver.ACTION_ASSIGN_CATEGORY
+                putExtra(com.example.receiver.CategoryActionReceiver.EXTRA_EXPENSE_ID, expenseId)
+                putExtra(com.example.receiver.CategoryActionReceiver.EXTRA_CATEGORY, category)
+                putExtra(com.example.receiver.CategoryActionReceiver.EXTRA_NOTIFICATION_ID, notifId)
+            }
+            return PendingIntent.getBroadcast(
+                context,
+                notifId * 10 + actionCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
 
         val formattedAmount = formatCurrency(amount, currency)
         val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS)
             .setSmallIcon(R.drawable.ic_stat_rupee)
             .setLargeIcon(getNotificationLargeIcon(context))
             .setColor(0xFF059669.toInt())
-            .setContentTitle("Assign Category to Spend")
-            .setContentText("Transaction at $merchant of $formattedAmount needs a category.")
+            .setContentTitle("Categorize Spend: $formattedAmount")
+            .setContentText("Transaction at '$merchant' needs a category.")
             .setStyle(
                 NotificationCompat.BigTextStyle()
-                    .bigText("We couldn't recognize the category for '$merchant' ($formattedAmount). Tap here to categorize this spend now.")
+                    .bigText("We couldn't recognize '$merchant' ($formattedAmount). Tap a quick category below or open the app for more.")
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .addAction(
-                android.R.drawable.ic_input_add,
-                "Assign Category",
-                pendingIntent
+                0,
+                "Dining",
+                createCategoryActionPendingIntent("Food & Dining", 1)
+            )
+            .addAction(
+                0,
+                "Groceries",
+                createCategoryActionPendingIntent("Groceries", 2)
+            )
+            .addAction(
+                0,
+                "Shopping",
+                createCategoryActionPendingIntent("Shopping", 3)
             )
             .build()
 
-        manager.notify((NOTIF_ID_UNRECOGNIZED_BASE + (expenseId % 1000)).toInt(), notification)
+        manager.notify(notifId, notification)
     }
 
     /**

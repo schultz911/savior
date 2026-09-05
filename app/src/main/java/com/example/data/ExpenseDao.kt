@@ -18,13 +18,13 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE monthKey = :monthKey ORDER BY timestamp DESC")
     fun getExpensesForMonth(monthKey: String): Flow<List<ExpenseEntity>>
 
-    @Query("SELECT SUM(amount) FROM expenses WHERE monthKey = :monthKey")
+    @Query("SELECT SUM(CASE WHEN amount > refundedAmount THEN amount - refundedAmount ELSE 0.0 END) FROM expenses WHERE monthKey = :monthKey")
     fun getTotalExpenditureForMonth(monthKey: String): Flow<Double?>
 
-    @Query("SELECT SUM(amount) FROM expenses WHERE monthKey = :monthKey AND type = :type")
+    @Query("SELECT SUM(CASE WHEN amount > refundedAmount THEN amount - refundedAmount ELSE 0.0 END) FROM expenses WHERE monthKey = :monthKey AND type = :type")
     fun getTotalByTypeForMonth(monthKey: String, type: ExpenseType): Flow<Double?>
 
-    @Query("SELECT SUM(amount) FROM expenses WHERE monthKey = :monthKey")
+    @Query("SELECT SUM(CASE WHEN amount > refundedAmount THEN amount - refundedAmount ELSE 0.0 END) FROM expenses WHERE monthKey = :monthKey")
     suspend fun getTotalExpenditureForMonthSync(monthKey: String): Double?
 
     @Query("SELECT * FROM expenses WHERE monthKey = :monthKey ORDER BY timestamp DESC")
@@ -54,8 +54,17 @@ interface ExpenseDao {
     @Query("UPDATE expenses SET category = :newCategory, type = :newType WHERE LOWER(TRIM(merchantOrRecipient)) = LOWER(TRIM(:merchant))")
     suspend fun updateCategoryAndTypeForMerchant(merchant: String, newCategory: String, newType: ExpenseType)
 
-    @Query("SELECT SUM(amount) FROM expenses WHERE monthKey = :monthKey AND category = :category")
+    @Query("SELECT SUM(CASE WHEN amount > refundedAmount THEN amount - refundedAmount ELSE 0.0 END) FROM expenses WHERE monthKey = :monthKey AND category = :category")
     suspend fun getTotalForCategoryInMonthSync(monthKey: String, category: String): Double?
+
+    @Query("SELECT * FROM expenses WHERE timestamp >= :minTimestamp AND timestamp <= :maxTimestamp AND (refundedAmount < amount) AND (ABS(amount - :amount) < 0.01 OR (LENGTH(:merchantKeyword) > 2 AND LOWER(merchantOrRecipient) LIKE '%' || LOWER(:merchantKeyword) || '%')) ORDER BY timestamp DESC LIMIT 1")
+    suspend fun findMatchingDebitForRefund(amount: Double, merchantKeyword: String, minTimestamp: Long, maxTimestamp: Long): ExpenseEntity?
+
+    @Query("UPDATE expenses SET refundedAmount = MIN(amount, refundedAmount + :refundAmount) WHERE id = :id")
+    suspend fun applyRefund(id: Long, refundAmount: Double)
+
+    @Query("UPDATE expenses SET isReversal = :isReversal WHERE id = :id")
+    suspend fun updateIsReversal(id: Long, isReversal: Boolean)
 
     @Query("SELECT COUNT(*) > 0 FROM expenses WHERE sender = :sender AND timestamp = :timestamp AND amount = :amount")
     suspend fun existsByContent(sender: String, timestamp: Long, amount: Double): Boolean

@@ -34,8 +34,21 @@ data class ExpenseEntity(
     val timestamp: Long = System.currentTimeMillis(),
     val monthKey: String = formatMonthKey(timestamp),
     @ColumnInfo(name = "isRecurring", defaultValue = "0")
-    val isRecurring: Boolean = false
+    val isRecurring: Boolean = false,
+    @ColumnInfo(name = "refundedAmount", defaultValue = "0.0")
+    val refundedAmount: Double = 0.0,
+    @ColumnInfo(name = "isReversal", defaultValue = "0")
+    val isReversal: Boolean = false
 ) {
+    val netAmount: Double
+        get() = (amount - refundedAmount).coerceAtLeast(0.0)
+
+    val isFullyRefunded: Boolean
+        get() = refundedAmount >= amount && amount > 0.0
+
+    val isPartiallyRefunded: Boolean
+        get() = refundedAmount > 0.0 && refundedAmount < amount
+
     companion object {
         fun formatMonthKey(epochMillis: Long): String {
             val sdf = SimpleDateFormat("yyyy-MM", Locale.US)

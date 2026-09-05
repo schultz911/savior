@@ -56,6 +56,15 @@
             </intent-filter>
         </receiver>
 
+        <!-- Receiver for In-line Notification Category Actions -->
+        <receiver
+            android:name=".receiver.CategoryActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.savior.ACTION_ASSIGN_CATEGORY" />
+            </intent-filter>
+        </receiver>
+
         <!-- Persistent Notification Foreground Service -->
         <service
             android:name=".service.LiveExpenditureNotificationService"

@@ -193,6 +193,22 @@ fun TransactionItemCard(
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
+                    } else if (expense.isFullyRefunded) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = SavioEmeraldContainer,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder)
+                        ) {
+                            Text(
+                                text = "Reversed",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp
+                                ),
+                                color = SavioEmerald,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
                     } else {
                         // Type Badge
                         Surface(
@@ -237,15 +253,53 @@ fun TransactionItemCard(
 
             // Amount & Interactive Category Tag
             Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = formattedAmount,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        textDecoration = if (isBlacklisted) TextDecoration.LineThrough else TextDecoration.None
-                    ),
-                    color = if (isBlacklisted) SavioBlacklistMuted else typeColor
-                )
+                if (expense.isFullyRefunded) {
+                    Text(
+                        text = formattedAmount,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            textDecoration = TextDecoration.LineThrough
+                        ),
+                        color = SavioSlateMuted
+                    )
+                    Text(
+                        text = "+${effectiveCurrency}${numberFormatter.format(expense.refundedAmount)} Refunded",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        ),
+                        color = SavioEmerald
+                    )
+                } else if (expense.isPartiallyRefunded) {
+                    Text(
+                        text = "-${effectiveCurrency}${numberFormatter.format(expense.netAmount)}",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            textDecoration = if (isBlacklisted) TextDecoration.LineThrough else TextDecoration.None
+                        ),
+                        color = if (isBlacklisted) SavioBlacklistMuted else typeColor
+                    )
+                    Text(
+                        text = "(${effectiveCurrency}${numberFormatter.format(expense.refundedAmount)} refunded)",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 10.sp
+                        ),
+                        color = SavioEmerald
+                    )
+                } else {
+                    Text(
+                        text = formattedAmount,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            textDecoration = if (isBlacklisted) TextDecoration.LineThrough else TextDecoration.None
+                        ),
+                        color = if (isBlacklisted) SavioBlacklistMuted else typeColor
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(2.dp))
 
