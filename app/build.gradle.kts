@@ -80,6 +80,7 @@ dependencies {
   implementation(platform(libs.firebase.bom))
   // implementation(libs.accompanist.permissions)
   implementation("androidx.biometric:biometric:1.2.0-alpha05")
+  implementation("androidx.fragment:fragment-ktx:1.8.6")
   implementation(libs.androidx.activity.compose)
   // implementation(libs.androidx.camera.camera2)
   // implementation(libs.androidx.camera.core)
