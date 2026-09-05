@@ -13,9 +13,14 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -185,10 +190,8 @@ fun SpendTrackerScreen(
     val currentMonthExpenses by viewModel.currentMonthExpenses.collectAsStateWithLifecycle()
     val filteredExpenses by viewModel.filteredExpenses.collectAsStateWithLifecycle()
     val monthlyTotal by viewModel.monthlyTotal.collectAsStateWithLifecycle()
-    val debitsTotal by viewModel.debitsTotal.collectAsStateWithLifecycle()
     val transfersTotal by viewModel.transfersTotal.collectAsStateWithLifecycle()
     val spendsTotal by viewModel.spendsTotal.collectAsStateWithLifecycle()
-    val blacklistedDeductions by viewModel.blacklistedDeductions.collectAsStateWithLifecycle()
     val blacklistedMerchants by viewModel.blacklistedMerchants.collectAsStateWithLifecycle()
     val monthlySavings by viewModel.monthlySavings.collectAsStateWithLifecycle()
     val monthlySalary by viewModel.monthlySalary.collectAsStateWithLifecycle()
@@ -300,43 +303,38 @@ fun SpendTrackerScreen(
                             }
                         }
                     ) {
-                        // Emerald Green Rupee Icon matching app title font
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = SavioEmeraldContainer,
-                            border = BorderStroke(1.dp, SavioEmeraldBorder),
+                        // Actual App Icon: Emerald green rupee symbol with lighter green circle around it
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_savio_logo),
+                            contentDescription = "Savio Logo",
                             modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "₹",
-                                    style = MaterialTheme.typography.titleLarge.copy(
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        // Savior Wordmark: One cohesive word with rupee symbol forming the 'r'
+                        Text(
+                            text = buildAnnotatedString {
+                                withStyle(
+                                    SpanStyle(
+                                        color = SavioSlateDark,
                                         fontWeight = FontWeight.Black,
-                                        color = SavioEmerald
+                                        fontSize = 22.sp,
+                                        letterSpacing = (-0.4).sp
                                     )
-                                )
+                                ) {
+                                    append("Savio")
+                                }
+                                withStyle(
+                                    SpanStyle(
+                                        color = SavioEmerald,
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 22.sp,
+                                        letterSpacing = (-0.4).sp
+                                    )
+                                ) {
+                                    append("₹")
+                                }
                             }
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        // Savio in SlateDark, Rupee in Emerald
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Savio",
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Black,
-                                    letterSpacing = 0.5.sp
-                                ),
-                                color = SavioSlateDark
-                            )
-                            Text(
-                                text = "₹",
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Black,
-                                    letterSpacing = 0.5.sp
-                                ),
-                                color = SavioEmerald
-                            )
-                        }
+                        )
                     }
                 },
                 actions = {
@@ -544,7 +542,6 @@ fun SpendTrackerScreen(
                         ExpenditureHeroCard(
                             monthDisplay = ExpenseEntity.formatMonthDisplay(selectedMonthKey),
                             totalExpenditure = monthlyTotal,
-                            debitsTotal = debitsTotal,
                             transfersTotal = transfersTotal,
                             spendsTotal = spendsTotal,
                             currency = currency,
@@ -552,7 +549,6 @@ fun SpendTrackerScreen(
                             monthlySavings = monthlySavings,
                             savingsGoal = savingsGoal,
                             monthlyBudget = monthlyBudget,
-                            blacklistedDeductions = blacklistedDeductions,
                             isNotificationActive = isNotificationActive,
                             onToggleNotification = { viewModel.togglePersistentNotification(it) }
                         )
@@ -582,72 +578,76 @@ fun SpendTrackerScreen(
                         )
                     }
 
-                    // Filter & Search Controls
+                    // Search & Transaction Type Filters
                     item {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            // Search Bar
-                            OutlinedTextField(
-                                value = searchQuery,
-                                onValueChange = { viewModel.setSearchQuery(it) },
-                                placeholder = { Text("Search merchant, card, category...") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Search,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp),
-                                        tint = SavioSlateMuted
-                                    )
-                                },
-                                trailingIcon = {
-                                    if (searchQuery.isNotEmpty()) {
-                                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                                            Icon(
-                                                imageVector = Icons.Default.Clear,
-                                                contentDescription = "Clear Search",
-                                                modifier = Modifier.size(16.dp),
-                                                tint = SavioSlateMuted
-                                            )
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = GlassCardBg),
+                            border = BorderStroke(1.dp, GlassCardBorder)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                OutlinedTextField(
+                                    value = searchQuery,
+                                    onValueChange = { viewModel.setSearchQuery(it) },
+                                    placeholder = { Text("Search merchant, card, category...") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Search,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = SavioSlateMuted
+                                        )
+                                    },
+                                    trailingIcon = {
+                                        if (searchQuery.isNotEmpty()) {
+                                            IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Clear,
+                                                    contentDescription = "Clear Search",
+                                                    modifier = Modifier.size(16.dp),
+                                                    tint = SavioSlateMuted
+                                                )
+                                            }
                                         }
-                                    }
-                                },
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("search_field"),
-                                singleLine = true,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedContainerColor = GlassSurface,
-                                    unfocusedContainerColor = GlassSurface,
-                                    focusedBorderColor = SavioEmerald,
-                                    unfocusedBorderColor = GlassCardBorder
+                                    },
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("search_field"),
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedContainerColor = GlassSurface,
+                                        unfocusedContainerColor = GlassSurface,
+                                        focusedBorderColor = SavioEmerald,
+                                        unfocusedBorderColor = GlassCardBorder
+                                    )
                                 )
-                            )
 
-                            Spacer(modifier = Modifier.height(10.dp))
+                                Spacer(modifier = Modifier.height(10.dp))
 
-                            // Filter Chips: All, Debits, Transfers, Spends
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                ExpenseFilter.entries.forEach { filter ->
-                                    val isSelected = selectedFilter == filter
-                                    val filterColor = when (filter) {
-                                        ExpenseFilter.ALL -> SavioEmerald
-                                        ExpenseFilter.DEBITS -> SavioSpendRose
-                                        ExpenseFilter.TRANSFERS -> SavioTransferIndigo
-                                        ExpenseFilter.SPENDS -> SavioSpendRose
-                                    }
+                                // Filter Chips: All, Spends, Transfers
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    ExpenseFilter.entries.forEach { filter ->
+                                        val isSelected = selectedFilter == filter
+                                        val filterColor = when (filter) {
+                                            ExpenseFilter.ALL -> SavioEmerald
+                                            ExpenseFilter.SPENDS -> SavioSpendRose
+                                            ExpenseFilter.TRANSFERS -> SavioTransferIndigo
+                                        }
 
-                                    FilterChip(
-                                        selected = isSelected,
-                                        onClick = { viewModel.setFilter(filter) },
-                                        label = {
-                                            Text(
-                                                text = filter.label,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                            )
-                                        },
+                                        FilterChip(
+                                            selected = isSelected,
+                                            onClick = { viewModel.setFilter(filter) },
+                                            label = {
+                                                Text(
+                                                    text = filter.label,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                                )
+                                            },
                                         shape = RoundedCornerShape(12.dp),
                                         colors = FilterChipDefaults.filterChipColors(
                                             selectedContainerColor = filterColor.copy(alpha = 0.15f),
@@ -659,6 +659,7 @@ fun SpendTrackerScreen(
                             }
                         }
                     }
+                }
 
                     // Transaction List Header
                     item {
@@ -803,78 +804,84 @@ fun SpendTrackerScreen(
 fun CreativeRupeeWadAddButton(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .size(68.dp)
-            .shadow(12.dp, shape = CircleShape, ambientColor = SavioEmerald, spotColor = SavioEmerald),
-        contentAlignment = Alignment.Center
+            .size(72.dp),
+        contentAlignment = Alignment.TopCenter
     ) {
-        // Back note rotated -14 degrees
-        Surface(
+        // Stack of Rupee Banknotes (upper portion)
+        Box(
             modifier = Modifier
-                .size(width = 44.dp, height = 30.dp)
-                .rotate(-14f),
-            shape = RoundedCornerShape(4.dp),
-            color = Color(0xFF047857),
-            border = BorderStroke(0.8.dp, Color(0xFF34D399).copy(alpha = 0.5f))
-        ) {}
-
-        // Mid note rotated +10 degrees
-        Surface(
-            modifier = Modifier
-                .size(width = 45.dp, height = 30.dp)
-                .rotate(10f),
-            shape = RoundedCornerShape(4.dp),
-            color = Color(0xFF059669),
-            border = BorderStroke(0.8.dp, Color(0xFFA7F3D0).copy(alpha = 0.6f))
-        ) {}
-
-        // Front Note (Horizontal, prominent ₹ note graphic)
-        Surface(
-            modifier = Modifier
-                .size(width = 48.dp, height = 32.dp),
-            shape = RoundedCornerShape(5.dp),
-            color = SavioEmerald,
-            border = BorderStroke(1.dp, Color(0xFFA7F3D0))
+                .padding(top = 6.dp)
+                .size(width = 54.dp, height = 34.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
+            // Back note rotated -12 degrees
+            Surface(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.linearGradient(
-                            listOf(Color(0xFF10B981), Color(0xFF047857))
+                    .size(width = 46.dp, height = 28.dp)
+                    .rotate(-12f),
+                shape = RoundedCornerShape(5.dp),
+                color = Color(0xFF047857),
+                border = BorderStroke(0.8.dp, Color(0xFF34D399).copy(alpha = 0.5f))
+            ) {}
+
+            // Mid note rotated +10 degrees
+            Surface(
+                modifier = Modifier
+                    .size(width = 48.dp, height = 28.dp)
+                    .rotate(10f),
+                shape = RoundedCornerShape(5.dp),
+                color = Color(0xFF059669),
+                border = BorderStroke(0.8.dp, Color(0xFFA7F3D0).copy(alpha = 0.6f))
+            ) {}
+
+            // Front Note (straight, prominent ₹ banknote)
+            Surface(
+                modifier = Modifier
+                    .size(width = 52.dp, height = 30.dp),
+                shape = RoundedCornerShape(6.dp),
+                color = SavioEmerald,
+                border = BorderStroke(1.dp, Color(0xFFA7F3D0))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(Color(0xFF10B981), Color(0xFF047857))
+                            )
+                        )
+                        .padding(horizontal = 6.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Text(
+                        text = "₹",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Black,
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 15.sp
                         )
                     )
-                    .padding(horizontal = 4.dp),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                // Watermark ₹
-                Text(
-                    text = "₹",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Black,
-                        color = Color.White.copy(alpha = 0.85f),
-                        fontSize = 15.sp
-                    )
-                )
+                }
             }
         }
 
-        // Superimposed Floating Plus Badge
+        // Circular Plus Button in the middle, overlapping the bottom edge of the note stack
         Box(
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .offset(x = 4.dp, y = 4.dp)
-                .size(26.dp)
-                .shadow(4.dp, CircleShape)
+                .align(Alignment.BottomCenter)
+                .offset(y = (-6).dp)
+                .size(34.dp)
+                .shadow(8.dp, CircleShape, ambientColor = SavioEmerald, spotColor = SavioEmerald)
                 .clip(CircleShape)
                 .background(Color.White)
-                .border(1.5.dp, SavioEmerald, CircleShape),
+                .border(2.5.dp, SavioEmerald, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
                 contentDescription = "Add Spend",
                 tint = SavioEmerald,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
     }

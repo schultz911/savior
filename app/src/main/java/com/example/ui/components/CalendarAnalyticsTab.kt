@@ -22,6 +22,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -457,6 +460,20 @@ fun CalendarAnalyticsTab(
                                 color = SavioSlateDark
                             )
                         }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "┄┄",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black),
+                                color = SavioEmerald
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Salary (Dotted Line)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SavioEmerald
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -568,6 +585,13 @@ fun TwelveMonthStackedBarGraph(
         }
     }
 
+    val currentSalary = remember(months) {
+        months.map { it.salary }.firstOrNull { it > 0.0 } ?: 50000.0
+    }
+    val salaryFraction = remember(currentSalary, maxChartVal) {
+        (currentSalary / maxChartVal).toFloat().coerceIn(0.08f, 0.95f)
+    }
+
     var inspectedMonth by remember { mutableStateOf<MonthAnalytics?>(null) }
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -630,12 +654,28 @@ fun TwelveMonthStackedBarGraph(
             }
         }
 
-        // Horizontal scroll container for the 12 month columns
+        // Horizontal scroll container for the 12 month columns with dotted salary line
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(scrollState)
-                .padding(vertical = 8.dp),
+                .padding(vertical = 8.dp)
+                .drawWithContent {
+                    drawContent()
+                    // Dotted line across the entire graph representing the monthly salary
+                    val chartHeightPx = 160.dp.toPx()
+                    val labelHeightPx = 8.dp.toPx() + 18.dp.toPx()
+                    val barBottomY = size.height - labelHeightPx
+                    val salaryLineY = barBottomY - (salaryFraction * chartHeightPx)
+
+                    drawLine(
+                        color = SavioEmerald,
+                        start = Offset(0f, salaryLineY),
+                        end = Offset(size.width, salaryLineY),
+                        strokeWidth = 2.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                    )
+                },
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.Bottom
         ) {

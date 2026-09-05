@@ -95,7 +95,8 @@ fun SpendBreakupPieChartCard(
     // Exclude blacklisted merchants from spend breakup
     val validExpenses = remember(expenses, blacklistedMerchants) {
         expenses.filterNot { exp ->
-            blacklistedMerchants.any { it.equals(exp.merchantOrRecipient.trim(), ignoreCase = true) }
+            val norm = exp.merchantOrRecipient.trim()
+            norm.isNotBlank() && blacklistedMerchants.any { norm.contains(it, ignoreCase = true) || it.contains(norm, ignoreCase = true) }
         }
     }
 

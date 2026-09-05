@@ -6,10 +6,11 @@ import java.util.regex.Pattern
 
 object SmsParser {
 
-    // Negative keywords: Non-expenditures, OTPs, incoming credits
+    // Negative keywords: Non-expenditures, OTPs, incoming credits, ads, intimations
     private val EXCLUSION_PATTERNS = listOf(
         Pattern.compile("(?i)\\b(otp|one time password|verification code|security code|is your code|secret code)\\b"),
         Pattern.compile("(?i)\\b(refund(?:ed)?|cashback|salary credited|credited with|deposited|credit alert)\\b"),
+        Pattern.compile("(?i)\\b(pre-approved|apply now|congratulations|click here|claim your|loan offer|discount on|cash prize)\\b"),
         Pattern.compile("(?i)\\b(received (?:rs\\.?|usd|\\$)?\\s*\\d+)\\b")
     )
 
@@ -32,14 +33,14 @@ object SmsParser {
     )
 
     // Regex for matching amounts with currency symbols or codes
-    // Matches: $100, $ 100.50, USD 45.00, EUR 12.30, Rs. 500, INR 1,200.00, 1,450.50 USD
+    // Matches: $100, $ 100.50, USD 45.00, Rs.50000.00, Rs. 50,000.00, INR 5,00,000.00
     private val AMOUNT_PATTERNS = listOf(
-        // $ / € / £ / ₹ / Rs followed by number
-        Pattern.compile("""(?i)([$€£¥₹]|Rs\.?|INR|USD|EUR|GBP|CAD|AUD)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)"""),
+        // $ / € / £ / ₹ / Rs followed by number (greedy match for full digits and comma separators)
+        Pattern.compile("""(?i)([$€£¥₹]|Rs\.?|INR|USD|EUR|GBP|CAD|AUD)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)"""),
         // Number followed by USD / EUR / etc.
-        Pattern.compile("""(?i)([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)\s*([$€£¥₹]|USD|EUR|GBP|INR|CAD|AUD)"""),
-        // "debited by/for/with 120.00" or "spent 45.50"
-        Pattern.compile("""(?i)(?:debited|spent|paid|charged|amount of|sum of|txn of|withdrawn)\s*(?:of|by|for|with)?\s*([$€£¥₹]|Rs\.?|USD|EUR|GBP)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)""")
+        Pattern.compile("""(?i)([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*([$€£¥₹]|USD|EUR|GBP|INR|CAD|AUD)"""),
+        // "debited by/for/with 50000.00" or "spent 45.50"
+        Pattern.compile("""(?i)(?:debited|spent|paid|charged|amount of|sum of|txn of|withdrawn)\s*(?:of|by|for|with)?\s*([$€£¥₹]|Rs\.?|INR|USD|EUR|GBP)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)""")
     )
 
     // Regex for card / account numbers
@@ -59,7 +60,7 @@ object SmsParser {
         val cleanBody = smsBody.trim()
         if (cleanBody.isEmpty()) return null
 
-        // Check for exclusions (OTP, refunds, credits)
+        // Check for exclusions (OTP, refunds, credits, ads)
         for (pattern in EXCLUSION_PATTERNS) {
             if (pattern.matcher(cleanBody).find()) {
                 // If it's pure OTP or credited, ignore
@@ -87,10 +88,9 @@ object SmsParser {
             }
         }
 
-        // Determine expense type
+        // Only two types of transactions: SPEND (paying merchants) and TRANSFER (money sent to people)
         val expenseType = when {
             isTransfer -> ExpenseType.TRANSFER
-            isDebit -> ExpenseType.DEBIT
             else -> ExpenseType.SPEND
         }
 
@@ -123,9 +123,9 @@ object SmsParser {
     private fun extractAmountAndCurrency(text: String): Pair<Double, String>? {
         for (pattern in AMOUNT_PATTERNS) {
             val matcher = pattern.matcher(text)
-            if (matcher.find()) {
+            while (matcher.find()) {
                 // Handle different pattern group configurations
-                var curr = "$"
+                var curr = "₹"
                 var amtStr = ""
 
                 if (matcher.groupCount() == 2) {
@@ -149,7 +149,7 @@ object SmsParser {
                 if (amt != null && amt > 0.0) {
                     // Quick sanity check: Ignore balances, e.g. if the match was "Avl Bal $3000"
                     val start = matcher.start()
-                    val prefix = if (start > 10) text.substring(start - 10, start).lowercase() else ""
+                    val prefix = if (start > 12) text.substring(start - 12, start).lowercase() else text.substring(0, start).lowercase()
                     if (prefix.contains("bal") || prefix.contains("avl") || prefix.contains("limit")) {
                         // Keep searching for the actual debit/spent amount
                         continue

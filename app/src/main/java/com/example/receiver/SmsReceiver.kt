@@ -40,12 +40,10 @@ class SmsReceiver : BroadcastReceiver() {
                 }
 
                 val fullText = combinedBodies.toString().trim()
-                val parsed = SmsParser.parse(fullText, sender)
-
-                if (parsed != null && parsed.isExpense) {
-                    com.example.service.ExpenseProcessingHelper.processAndInsertExpense(
+                if (fullText.isNotEmpty()) {
+                    com.example.service.ExpenseProcessingHelper.processRawSms(
                         context = context,
-                        parsed = parsed,
+                        rawText = fullText,
                         sender = sender,
                         timestamp = timestamp
                     )

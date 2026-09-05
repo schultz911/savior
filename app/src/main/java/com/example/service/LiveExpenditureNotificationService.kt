@@ -88,28 +88,30 @@ class LiveExpenditureNotificationService : Service() {
 
                 val currency = prefs.currency
                 val budget = prefs.monthlyBudget
+                val blacklisted = prefs.getBlacklistedMerchants()
 
                 var totalSpend = 0.0
-                var debitsSum = 0.0
                 var transfersSum = 0.0
-                var cardSpendsSum = 0.0
+                var spendsSum = 0.0
 
                 for (exp in currentMonthExpenses) {
+                    val normMerchant = exp.merchantOrRecipient.trim().lowercase()
+                    if (blacklisted.any { normMerchant.contains(it.lowercase()) || it.lowercase().contains(normMerchant) }) {
+                        continue // Blacklisted merchants are simply ignored and not considered
+                    }
                     totalSpend += exp.amount
                     when (exp.type) {
-                        ExpenseType.DEBIT -> debitsSum += exp.amount
                         ExpenseType.TRANSFER -> transfersSum += exp.amount
-                        ExpenseType.SPEND -> cardSpendsSum += exp.amount
+                        else -> spendsSum += exp.amount
                     }
                 }
 
                 val totalFormatted = formatCurrency(totalSpend, currency)
-                val debitsFormatted = formatCurrency(debitsSum, currency)
                 val transfersFormatted = formatCurrency(transfersSum, currency)
-                val spendsFormatted = formatCurrency(cardSpendsSum, currency)
+                val spendsFormatted = formatCurrency(spendsSum, currency)
 
                 val title = "$monthDisplay Spend: $totalFormatted"
-                val breakdown = "Debits: $debitsFormatted • Spends: $spendsFormatted • Transfers: $transfersFormatted"
+                val breakdown = "Spends: $spendsFormatted • Transfers: $transfersFormatted"
 
                 val progress = if (budget > 0) {
                     ((totalSpend / budget) * 100).toInt().coerceIn(0, 100)

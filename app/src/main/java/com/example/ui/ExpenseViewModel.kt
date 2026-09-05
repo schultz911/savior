@@ -29,9 +29,8 @@ import java.util.Locale
 
 enum class ExpenseFilter(val label: String) {
     ALL("All Txns"),
-    DEBITS("Debits"),
-    TRANSFERS("Transfers"),
-    SPENDS("Spends")
+    SPENDS("Spends"),
+    TRANSFERS("Transfers")
 }
 
 enum class SavioScreenTab {
@@ -130,9 +129,8 @@ class ExpenseViewModel(
         expenses.filter { item ->
             val matchesFilter = when (filter) {
                 ExpenseFilter.ALL -> true
-                ExpenseFilter.DEBITS -> item.type == ExpenseType.DEBIT
-                ExpenseFilter.TRANSFERS -> item.type == ExpenseType.TRANSFER
                 ExpenseFilter.SPENDS -> item.type == ExpenseType.SPEND
+                ExpenseFilter.TRANSFERS -> item.type == ExpenseType.TRANSFER
             }
             val matchesQuery = if (query.isBlank()) true else {
                 item.merchantOrRecipient.contains(query, ignoreCase = true) ||
@@ -149,19 +147,10 @@ class ExpenseViewModel(
         initialValue = emptyList()
     )
 
-    // Deductions from blacklisted merchants in the current selected month
-    val blacklistedDeductions: StateFlow<Double> = combine(
-        currentMonthExpenses,
-        _blacklistedMerchants
-    ) { expenses, blacklisted ->
-        expenses.filter { isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }.sumOf { it.amount }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = 0.0
-    )
+    // Blacklisted merchants are completely ignored and not considered in spend totals
+    val blacklistedDeductions: StateFlow<Double> = MutableStateFlow(0.0).asStateFlow()
 
-    // Net Monthly Total = raw sum - blacklisted deductions
+    // Monthly Total = all valid transactions from non-blacklisted merchants
     val monthlyTotal: StateFlow<Double> = combine(
         currentMonthExpenses,
         _blacklistedMerchants
@@ -174,17 +163,7 @@ class ExpenseViewModel(
         initialValue = 0.0
     )
 
-    val debitsTotal: StateFlow<Double> = combine(
-        currentMonthExpenses,
-        _blacklistedMerchants
-    ) { list, blacklisted ->
-        list.filter { it.type == ExpenseType.DEBIT && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
-            .sumOf { it.amount }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = 0.0
-    )
+    val debitsTotal: StateFlow<Double> = MutableStateFlow(0.0).asStateFlow()
 
     val transfersTotal: StateFlow<Double> = combine(
         currentMonthExpenses,

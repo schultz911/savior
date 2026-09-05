@@ -454,7 +454,7 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Transactions from blacklisted merchants are automatically deducted from your spend totals and savings calculations.",
+                        text = "Transactions from blacklisted merchants are completely ignored and not considered in spend totals or savings calculations.",
                         style = MaterialTheme.typography.bodySmall,
                         color = SavioSlateMuted
                     )
@@ -682,7 +682,7 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Uses gemini-3.5-flash-lite to categorize bank & card SMS spends automatically.",
+                        text = "Uses gemini-3.5-flash-lite to parse bank SMS (spends, transfers, OTPs, ads) and categorize transactions automatically.",
                         style = MaterialTheme.typography.bodySmall,
                         color = SavioSlateMuted
                     )

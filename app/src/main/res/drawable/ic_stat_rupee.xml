@@ -4,7 +4,16 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+
+    <!-- Outer Circle Ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:pathData="M12,2 C17.52,2 22,6.48 22,12 C22,17.52 17.52,22 12,22 C6.48,22 2,17.52 2,12 C2,6.48 6.48,2 12,2 Z" />
+
+    <!-- Rupee Symbol Inside Circle -->
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M13.66,7 C13.1,5.82 11.9,5 10.5,5 L6,5 L6,3 L18,3 L18,5 L14.53,5 C15.42,5.82 16,7.01 16,8.33 L18,8.33 L18,10.33 L16,10.33 C15.75,12.75 13.67,14.67 11.16,14.67 L9.81,14.67 L16.89,23 L14.28,23 L7.5,15 L7.5,13 L10.5,13 C12.43,13 14,11.43 14,9.5 C14,8.55 13.62,7.69 13,7.07 L6,7.07 L6,9 L6,7 L13.66,7 Z" />
+        android:pathData="M8.5,6.5 L15.5,6.5 L15.5,7.7 L13,7.7 C14,8.1 14.7,8.8 14.8,9.8 L15.5,9.8 L15.5,11 L14.7,11 C14.1,12.8 12.6,13.9 10.5,14 L9.7,14 L14.5,18.5 L12.5,18.5 L8,14.3 L8,13.2 L10.2,13.2 C11.5,13.2 12.5,12.5 12.8,11 L8.5,11 L8.5,9.8 L12.8,9.8 C12.6,8.9 11.6,8.1 10.2,7.7 L8.5,7.7 Z" />
 </vector>

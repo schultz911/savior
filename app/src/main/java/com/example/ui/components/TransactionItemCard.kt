@@ -101,7 +101,6 @@ fun TransactionItemCard(
     val formattedDate = dateFormatter.format(Date(expense.timestamp))
 
     val (typeColor, typeBg, _) = when (expense.type) {
-        ExpenseType.DEBIT -> Triple(SavioSpendRose, SavioSpendRoseBg, Icons.Default.ArrowDownward)
         ExpenseType.TRANSFER -> Triple(SavioTransferIndigo, SavioTransferIndigoBg, Icons.Default.SwapHoriz)
         ExpenseType.SPEND -> Triple(SavioSpendRose, SavioSpendRoseBg, Icons.Default.CreditCard)
     }
@@ -167,7 +166,7 @@ fun TransactionItemCard(
                             border = androidx.compose.foundation.BorderStroke(1.dp, SavioBlacklistRed.copy(alpha = 0.4f))
                         ) {
                             Text(
-                                text = "Deducted",
+                                text = "Ignored",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 9.sp

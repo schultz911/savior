@@ -1,14 +1,68 @@
 package com.example.service
 
 import android.content.Context
+import android.util.Log
 import com.example.SpendTrackerApplication
 import com.example.ai.OpenRouterCategorizer
 import com.example.data.ExpenseEntity
 import com.example.sms.ParsedSms
+import com.example.sms.SmsParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 object ExpenseProcessingHelper {
+    private const val TAG = "ExpenseProcessingHelper"
+
+    /**
+     * Process raw incoming SMS using OpenRouter AI (gemini-3.5-flash-lite) if available,
+     * or fallback to local SmsParser.
+     * Determines whether message is credit, debit, intimation, ad, OTP etc.
+     */
+    suspend fun processRawSms(
+        context: Context,
+        rawText: String,
+        sender: String,
+        timestamp: Long = System.currentTimeMillis()
+    ): ExpenseEntity? = withContext(Dispatchers.IO) {
+        val app = context.applicationContext as? SpendTrackerApplication ?: return@withContext null
+        val prefs = app.preferences
+        val apiKey = prefs.openRouterApiKey.trim()
+
+        // 1. Try OpenRouter AI processing if API key is provided
+        if (apiKey.isNotEmpty()) {
+            val aiParsed = OpenRouterCategorizer.parseSmsTransaction(
+                rawText = rawText,
+                sender = sender,
+                apiKey = apiKey,
+                model = prefs.openRouterModel
+            )
+            if (aiParsed != null) {
+                if (!aiParsed.isExpense) {
+                    Log.d(TAG, "SMS classified as non-expense (${aiParsed.classification}), ignoring: '$rawText'")
+                    return@withContext null
+                }
+
+                val parsed = ParsedSms(
+                    amount = aiParsed.amount,
+                    currency = aiParsed.currency,
+                    type = aiParsed.type,
+                    title = aiParsed.merchant,
+                    accountInfo = aiParsed.accountInfo,
+                    category = aiParsed.category,
+                    isExpense = true,
+                    rawText = rawText
+                )
+                return@withContext processAndInsertExpense(context, parsed, sender, timestamp)
+            }
+        }
+
+        // 2. Fallback to enhanced local regex parser
+        val localParsed = SmsParser.parse(rawText, sender)
+        if (localParsed != null && localParsed.isExpense) {
+            return@withContext processAndInsertExpense(context, localParsed, sender, timestamp)
+        }
+        return@withContext null
+    }
 
     /**
      * Categorizes using remembered merchant rules, OpenRouter gemini-3.5-flash-lite,
@@ -39,13 +93,14 @@ object ExpenseProcessingHelper {
         if (!rememberedCategory.isNullOrBlank()) {
             finalCategory = rememberedCategory
             isUnrecognized = false
-        } else if (apiKey.isNotEmpty()) {
+        } else if (apiKey.isNotEmpty() && (finalCategory.isBlank() || finalCategory.equals("General", ignoreCase = true) || finalCategory.equals("Uncategorized", ignoreCase = true))) {
             val aiResult = OpenRouterCategorizer.categorizeSms(
                 rawText = parsed.rawText,
                 merchant = parsed.title,
                 amount = parsed.amount,
                 currency = preferredCurrency,
-                apiKey = apiKey
+                apiKey = apiKey,
+                model = prefs.openRouterModel
             )
             if (aiResult.category == "UNKNOWN") {
                 finalCategory = "Uncategorized"

@@ -51,10 +51,9 @@ class ExpenseRepository(
 
     suspend fun parseAndAddMessage(rawBody: String, sender: String = "TestSMS"): Boolean =
         withContext(Dispatchers.IO) {
-            val parsed = SmsParser.parse(rawBody, sender) ?: return@withContext false
-            val inserted = com.example.service.ExpenseProcessingHelper.processAndInsertExpense(
+            val inserted = com.example.service.ExpenseProcessingHelper.processRawSms(
                 context = context,
-                parsed = parsed,
+                rawText = rawBody,
                 sender = sender,
                 timestamp = System.currentTimeMillis()
             )

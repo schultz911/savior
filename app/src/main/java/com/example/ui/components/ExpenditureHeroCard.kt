@@ -69,7 +69,6 @@ import java.util.Locale
 fun ExpenditureHeroCard(
     monthDisplay: String,
     totalExpenditure: Double,
-    debitsTotal: Double,
     transfersTotal: Double,
     spendsTotal: Double,
     currency: String,
@@ -77,6 +76,7 @@ fun ExpenditureHeroCard(
     monthlySavings: Double = 0.0,
     savingsGoal: Double = 0.0,
     monthlyBudget: Double = 0.0,
+    debitsTotal: Double = 0.0,
     blacklistedDeductions: Double = 0.0,
     isNotificationActive: Boolean,
     onToggleNotification: (Boolean) -> Unit,
@@ -90,7 +90,6 @@ fun ExpenditureHeroCard(
     }
 
     val totalFormatted = "$currency${numberFormatter.format(totalExpenditure)}"
-    val debitsFormatted = "$currency${numberFormatter.format(debitsTotal)}"
     val transfersFormatted = "$currency${numberFormatter.format(transfersTotal)}"
     val spendsFormatted = "$currency${numberFormatter.format(spendsTotal)}"
     val salaryFormatted = "$currency${numberFormatter.format(monthlySalary)}"
@@ -201,34 +200,6 @@ fun ExpenditureHeroCard(
                 ),
                 color = SavioSlateDark
             )
-
-            // Blacklisted Deductions indicator if any
-            if (blacklistedDeductions > 0.0) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = SavioBlacklistBg,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, SavioBlacklistRed.copy(alpha = 0.3f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Block,
-                            contentDescription = null,
-                            tint = SavioBlacklistRed,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text(
-                            text = "Blacklisted Deductions: -$currency${numberFormatter.format(blacklistedDeductions)}",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
-                            color = SavioBlacklistRed
-                        )
-                    }
-                }
-            }
 
             // Glassmorphic Salary & Live Savings Summary Card
             if (monthlySalary > 0) {
@@ -360,35 +331,26 @@ fun ExpenditureHeroCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Breakdown Tiles: Debits, Transfers, Spends
+            // Breakdown Tiles: Only Two Types (Spends & Transfers)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 SpendCategoryPill(
-                    label = "Debits",
-                    amount = debitsFormatted,
-                    icon = Icons.Default.ArrowDownward,
-                    accentColor = SavioSpendRose,
-                    backgroundColor = SavioSpendRoseBg,
-                    modifier = Modifier.weight(1f)
-                )
-
-                SpendCategoryPill(
-                    label = "Transfers",
-                    amount = transfersFormatted,
-                    icon = Icons.Default.SwapHoriz,
-                    accentColor = SavioTransferIndigo,
-                    backgroundColor = SavioTransferIndigoBg,
-                    modifier = Modifier.weight(1f)
-                )
-
-                SpendCategoryPill(
-                    label = "Spends",
+                    label = "Spends (Merchants)",
                     amount = spendsFormatted,
                     icon = Icons.Default.CreditCard,
                     accentColor = SavioSpendRose,
                     backgroundColor = SavioSpendRoseBg,
+                    modifier = Modifier.weight(1f)
+                )
+
+                SpendCategoryPill(
+                    label = "Transfers (People)",
+                    amount = transfersFormatted,
+                    icon = Icons.Default.SwapHoriz,
+                    accentColor = SavioTransferIndigo,
+                    backgroundColor = SavioTransferIndigoBg,
                     modifier = Modifier.weight(1f)
                 )
             }

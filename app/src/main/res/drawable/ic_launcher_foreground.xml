@@ -1,47 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Soft Glassmorphic Ambient Halo -->
+    <!-- Lighter Green Background Disc -->
     <path
-        android:pathData="M54,18 C73.88,18 90,34.12 90,54 C90,73.88 73.88,90 54,90 C34.12,90 18,73.88 18,54 C18,34.12 34.12,18 54,18 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:centerX="54"
-                android:centerY="46"
-                android:gradientRadius="44"
-                android:type="radial">
-                <item android:offset="0.0" android:color="#3310B981" />
-                <item android:offset="0.7" android:color="#1A059669" />
-                <item android:offset="1.0" android:color="#00059669" />
-            </gradient>
-        </aapt:attr>
-    </path>
+        android:pathData="M54,20 C72.78,20 88,35.22 88,54 C88,72.78 72.78,88 54,88 C35.22,88 20,72.78 20,54 C20,35.22 35.22,20 54,20 Z"
+        android:fillColor="#ECFDF5" />
 
-    <!-- Frosted Glass Central Disc -->
+    <!-- Lighter Green Circle Border Ring -->
     <path
-        android:pathData="M54,23 C71.12,23 85,36.88 85,54 C85,71.12 71.12,85 54,85 C36.88,85 23,71.12 23,54 C23,36.88 36.88,23 54,23 Z"
-        android:fillColor="#F0FFFFFF"
-        android:strokeColor="#5010B981"
-        android:strokeWidth="1.5" />
+        android:pathData="M54,20 C72.78,20 88,35.22 88,54 C88,72.78 72.78,88 54,88 C35.22,88 20,72.78 20,54 C20,35.22 35.22,20 54,20 Z"
+        android:strokeColor="#6EE7B7"
+        android:strokeWidth="3.5" />
 
-    <!-- Emerald Green Rupee Symbol (₹) -->
+    <!-- Emerald Green Rupee Symbol (₹) in the Center -->
     <path
-        android:pathData="M37,33 L71,33 L71,38.5 L58.5,38.5 C63.5,40.5 66.8,44.2 67,49 L71,49 L71,54.5 L66.8,54.5 C65.2,63.5 57.5,69 47,69.5 L43,69.5 L66,92 L53.5,92 L34.5,70 L34.5,64.5 L46,64.5 C52.5,64.5 57.5,61 58.8,54.5 L37,54.5 L37,49 L58.8,49 C57.8,44.5 53,40.5 46,39 L37,39 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:startX="37"
-                android:startY="33"
-                android:endX="71"
-                android:endY="92"
-                android:type="linear">
-                <item android:offset="0.0" android:color="#10B981" />
-                <item android:offset="1.0" android:color="#047857" />
-            </gradient>
-        </aapt:attr>
-    </path>
+        android:pathData="M39,34 L69,34 L69,39 L58,39 C62.4,40.8 65.4,44 65.6,48.4 L69,48.4 L69,53.4 L65.4,53.4 C64,61.4 57.2,66.2 48,66.6 L44.4,66.6 L65,87 L53.8,87 L36.8,67 L36.8,62.2 L47,62.2 C52.8,62.2 57.2,59 58.4,53.4 L39,53.4 L39,48.4 L58.4,48.4 C57.4,44.4 53.2,40.8 47,39.4 L39,39.4 Z"
+        android:fillColor="#059669" />
 </vector>

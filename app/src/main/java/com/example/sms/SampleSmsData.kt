@@ -29,7 +29,7 @@ object SampleSmsData {
             sender = "ICICI-ALERT",
             body = "Debit alert: Your A/c XX8921 was debited by INR 3,250.00 towards Electricity Bill BESCOM on 02-Sep.",
             description = "ICICI Electricity Bill (₹3,250)",
-            expectedType = ExpenseType.DEBIT
+            expectedType = ExpenseType.SPEND
         ),
         SampleSms(
             sender = "AXIS-BANK",
@@ -41,7 +41,7 @@ object SampleSmsData {
             sender = "KOTAK-BANK",
             body = "Kotak Bank: Rs 10,000.00 withdrawn from ATM #4012 on 01-Sep from A/c ending 6620.",
             description = "Kotak ATM Withdrawal (₹10,000)",
-            expectedType = ExpenseType.DEBIT
+            expectedType = ExpenseType.SPEND
         ),
         SampleSms(
             sender = "PAYTM-UPI",
@@ -89,7 +89,7 @@ object SampleSmsData {
             ExpenseEntity(
                 amount = 3250.00,
                 currency = currency,
-                type = ExpenseType.DEBIT,
+                type = ExpenseType.SPEND,
                 merchantOrRecipient = "Electricity Bill",
                 accountInfo = "A/c ••8921",
                 category = "Bills & Utilities",
@@ -115,7 +115,7 @@ object SampleSmsData {
             ExpenseEntity(
                 amount = 10000.00,
                 currency = currency,
-                type = ExpenseType.DEBIT,
+                type = ExpenseType.SPEND,
                 merchantOrRecipient = "ATM Cash Withdrawal",
                 accountInfo = "A/c ••6620",
                 category = "General",
