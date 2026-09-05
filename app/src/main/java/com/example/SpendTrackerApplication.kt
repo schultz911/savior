@@ -31,7 +31,11 @@ class SpendTrackerApplication : Application() {
 
         // If persistent notification is enabled, ensure it's started/synced
         if (preferences.isPersistentNotificationEnabled) {
-            LiveExpenditureNotificationService.updateLiveExpenditure(this)
+            try {
+                LiveExpenditureNotificationService.updateLiveExpenditure(this)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 

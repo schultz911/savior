@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.REORDER_TASKS" />
 
     <application
         android:name=".SpendTrackerApplication"
@@ -48,13 +50,17 @@
             </intent-filter>
         </receiver>
 
-        <!-- Boot Receiver to restart persistent status bar notification on reboot -->
+        <!-- Boot Receiver to autostart app and restart persistent status bar notification on reboot -->
         <receiver
             android:name=".receiver.BootReceiver"
-            android:exported="false">
-            <intent-filter>
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter android:priority="999">
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
 

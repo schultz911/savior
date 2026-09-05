@@ -21,6 +21,23 @@ class ExampleRobolectricTest {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val appName = context.getString(R.string.app_name)
     assertEquals("Savio₹", appName)
+
+    val d1 = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_savio_logo)
+    assertNotNull(d1)
+    val d2 = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_stat_rupee)
+    assertNotNull(d2)
+    val d3 = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_launcher_foreground)
+    assertNotNull(d3)
+    val d4 = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_savio_launcher_foreground)
+    assertNotNull(d4)
+  }
+
+  @Test
+  fun `test boot receiver`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val receiver = com.example.receiver.BootReceiver()
+    val intent = android.content.Intent(android.content.Intent.ACTION_BOOT_COMPLETED)
+    receiver.onReceive(context, intent)
   }
 
   @Test

@@ -48,18 +48,29 @@ class LiveExpenditureNotificationService : Service() {
             progress = 0
         )
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(
-                    NOTIFICATION_ID,
-                    initialNotification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-                )
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    startForeground(
+                        NOTIFICATION_ID,
+                        initialNotification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                    )
+                } else {
+                    startForeground(NOTIFICATION_ID, initialNotification)
+                }
             } else {
                 startForeground(NOTIFICATION_ID, initialNotification)
             }
-        } else {
-            startForeground(NOTIFICATION_ID, initialNotification)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            try {
+                val notificationManager =
+                    getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.notify(NOTIFICATION_ID, initialNotification)
+            } catch (ne: Exception) {
+                ne.printStackTrace()
+            }
         }
     }
 
