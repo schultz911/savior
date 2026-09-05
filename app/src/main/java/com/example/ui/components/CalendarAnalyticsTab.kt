@@ -123,7 +123,10 @@ fun CalendarAnalyticsTab(
     val currentCal = remember { Calendar.getInstance() }
     val currentYear = currentCal.get(Calendar.YEAR)
 
-    val availableYears = listOf(currentYear - 1, currentYear, currentYear + 1)
+    val availableYears = remember(allExpenses, currentYear) {
+        val yearsFromData = allExpenses.mapNotNull { it.monthKey.split("-").firstOrNull()?.toIntOrNull() }
+        (yearsFromData + listOf(currentYear - 1, currentYear, currentYear + 1)).distinct().sorted()
+    }
     var selectedYear by remember {
         val initialYear = selectedMonthKey.split("-").firstOrNull()?.toIntOrNull() ?: currentYear
         mutableIntStateOf(initialYear)
@@ -141,26 +144,32 @@ fun CalendarAnalyticsTab(
         val sdfShort = SimpleDateFormat("MMM", Locale.US)
         val sdfFull = SimpleDateFormat("MMM yyyy", Locale.US)
         val cal = Calendar.getInstance()
-        (1..12).map { monthNum ->
+        (1..12).mapNotNull { monthNum ->
             cal.set(selectedYear, monthNum - 1, 1)
             val monthKey = String.format(Locale.US, "%04d-%02d", selectedYear, monthNum)
             val fullLabel = sdfFull.format(cal.time)
             val shortLabel = sdfShort.format(cal.time)
 
-            val cached = last12Months.firstOrNull { it.monthKey == monthKey }
-            if (cached != null) {
-                cached
-            } else {
-                val expensesForM = if (allExpenses.isNotEmpty()) {
-                    allExpenses.filter { it.monthKey == monthKey }
-                } else if (monthKey == selectedMonthKey) {
-                    currentMonthExpenses
-                } else emptyList()
+            val expensesForM = if (allExpenses.isNotEmpty()) {
+                allExpenses.filter { it.monthKey == monthKey }
+            } else if (monthKey == selectedMonthKey) {
+                currentMonthExpenses
+            } else emptyList()
 
-                val totalSpent = expensesForM.filter {
-                    !it.category.equals("Self", ignoreCase = true) &&
-                    !it.category.equals("Credit Card Bill", ignoreCase = true)
-                }.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
+            val cached = last12Months.firstOrNull { it.monthKey == monthKey }
+            val hasData = expensesForM.isNotEmpty() || (cached != null && cached.totalSpent > 0.0)
+
+            if (!hasData) {
+                null
+            } else {
+                val totalSpent = if (expensesForM.isNotEmpty()) {
+                    expensesForM.filter {
+                        !it.category.equals("Self", ignoreCase = true) &&
+                        !it.category.equals("Credit Card Bill", ignoreCase = true)
+                    }.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
+                } else {
+                    cached?.totalSpent ?: 0.0
+                }
                 val savedAmount = monthlySalary - totalSpent
                 val isOverspent = totalSpent > monthlySalary
                 val rate = if (monthlySalary > 0) (savedAmount / monthlySalary) * 100.0 else 0.0
@@ -264,7 +273,11 @@ fun CalendarAnalyticsTab(
                                     color = SavioSlateDark
                                 )
                                 Text(
-                                    text = "Permanent history & dynamic scale for $selectedYear",
+                                    text = if (monthsForYear.isNotEmpty()) {
+                                        "Permanent history · ${monthsForYear.size} active month(s) in $selectedYear"
+                                    } else {
+                                        "Permanent history · No data for $selectedYear"
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = SavioSlateMuted
                                 )
@@ -282,10 +295,18 @@ fun CalendarAnalyticsTab(
                     ) {
                         IconButton(
                             onClick = {
-                                selectedYear -= 1
+                                val targetYear = selectedYear - 1
+                                selectedYear = targetYear
                                 val monthPart = selectedMonthKey.split("-").getOrNull(1)?.toIntOrNull() ?: 1
-                                val newKey = String.format(Locale.US, "%04d-%02d", selectedYear, monthPart)
-                                onSelectMonth(newKey)
+                                val candidateKey = String.format(Locale.US, "%04d-%02d", targetYear, monthPart)
+                                val yearMonthsWithData = allExpenses.filter { it.monthKey.startsWith("$targetYear-") }
+                                    .map { it.monthKey }.distinct().sorted()
+                                val keyToSelect = if (yearMonthsWithData.contains(candidateKey)) {
+                                    candidateKey
+                                } else {
+                                    yearMonthsWithData.lastOrNull() ?: candidateKey
+                                }
+                                onSelectMonth(keyToSelect)
                             },
                             modifier = Modifier.size(36.dp)
                         ) {
@@ -304,8 +325,15 @@ fun CalendarAnalyticsTab(
                                     onClick = {
                                         selectedYear = yr
                                         val monthPart = selectedMonthKey.split("-").getOrNull(1)?.toIntOrNull() ?: 1
-                                        val newKey = String.format(Locale.US, "%04d-%02d", yr, monthPart)
-                                        onSelectMonth(newKey)
+                                        val candidateKey = String.format(Locale.US, "%04d-%02d", yr, monthPart)
+                                        val yearMonthsWithData = allExpenses.filter { it.monthKey.startsWith("$yr-") }
+                                            .map { it.monthKey }.distinct().sorted()
+                                        val keyToSelect = if (yearMonthsWithData.contains(candidateKey)) {
+                                            candidateKey
+                                        } else {
+                                            yearMonthsWithData.lastOrNull() ?: candidateKey
+                                        }
+                                        onSelectMonth(keyToSelect)
                                     },
                                     label = {
                                         Text(
@@ -324,10 +352,18 @@ fun CalendarAnalyticsTab(
 
                         IconButton(
                             onClick = {
-                                selectedYear += 1
+                                val targetYear = selectedYear + 1
+                                selectedYear = targetYear
                                 val monthPart = selectedMonthKey.split("-").getOrNull(1)?.toIntOrNull() ?: 1
-                                val newKey = String.format(Locale.US, "%04d-%02d", selectedYear, monthPart)
-                                onSelectMonth(newKey)
+                                val candidateKey = String.format(Locale.US, "%04d-%02d", targetYear, monthPart)
+                                val yearMonthsWithData = allExpenses.filter { it.monthKey.startsWith("$targetYear-") }
+                                    .map { it.monthKey }.distinct().sorted()
+                                val keyToSelect = if (yearMonthsWithData.contains(candidateKey)) {
+                                    candidateKey
+                                } else {
+                                    yearMonthsWithData.lastOrNull() ?: candidateKey
+                                }
+                                onSelectMonth(keyToSelect)
                             },
                             modifier = Modifier.size(36.dp)
                         ) {
@@ -728,187 +764,221 @@ fun TwelveMonthStackedBarGraph(
     var inspectedMonth by remember { mutableStateOf<MonthAnalytics?>(null) }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        // Active inspector banner when user taps any column
-        inspectedMonth?.let { item ->
+        if (months.isEmpty()) {
             Surface(
                 shape = RoundedCornerShape(14.dp),
-                color = SavioEmeraldContainer,
-                border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder),
+                color = GlassBackground,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp)
+                    .padding(vertical = 16.dp)
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Column {
-                        Text(
-                            text = item.monthLabel,
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                            color = SavioSlateDark
-                        )
-                        Text(
-                            text = "Salary: $currency${numberFormat.format(item.salary)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SavioSlateMuted
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = "Spent",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = SavioSpendRose
-                            )
-                            Text(
-                                text = "$currency${numberFormat.format(item.totalSpent)}",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                color = SavioSpendRose
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = "Saved",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = SavioSavingsGreen
-                            )
-                            Text(
-                                text = "$currency${numberFormat.format(item.savedAmount.coerceAtLeast(0.0))}",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                color = SavioSavingsGreen
-                            )
-                        }
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Insights,
+                        contentDescription = null,
+                        tint = SavioSlateMuted,
+                        modifier = Modifier.size(36.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "No spend data available for this year",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                        color = SavioSlateMuted
+                    )
                 }
             }
-        }
-
-        // Horizontal scroll container for the 12 month columns with dotted salary line
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(scrollState)
-                .padding(vertical = 8.dp)
-                .drawWithContent {
-                    drawContent()
-                    // Dotted line across the entire graph representing the monthly salary
-                    val chartHeightPx = 160.dp.toPx()
-                    val labelHeightPx = 8.dp.toPx() + 18.dp.toPx()
-                    val barBottomY = size.height - labelHeightPx
-                    val salaryLineY = barBottomY - (salaryFraction * chartHeightPx)
-
-                    drawLine(
-                        color = SavioEmerald,
-                        start = Offset(0f, salaryLineY),
-                        end = Offset(size.width, salaryLineY),
-                        strokeWidth = 2.dp.toPx(),
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
-                    )
-                },
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Bottom
-        ) {
-            months.forEach { monthData ->
-                val isSelected = monthData.monthKey == selectedMonthKey
-
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
+        } else {
+            // Active inspector banner when user taps any column
+            inspectedMonth?.let { item ->
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = SavioEmeraldContainer,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder),
                     modifier = Modifier
-                        .clickable {
-                            inspectedMonth = monthData
-                            onSelectMonth(monthData.monthKey)
-                            onBarSelect(monthData.monthKey)
-                        }
-                        .testTag("bar_${monthData.monthKey}")
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
                 ) {
-                    val chartHeightDp = 160.dp
-                    val barWidth = if (isSelected) 32.dp else 26.dp
-
-                    // Calculate accurate scaling across the full height
-                    val monthSpend = monthData.totalSpent
-                    val monthSalary = monthData.salary
-                    val monthMax = maxOf(monthSpend, monthSalary)
-
-                    // Height fraction of this month's activity relative to max across 12 months (0.10f floor to 1.0f max)
-                    val columnHeightFraction = (monthMax / maxChartVal).toFloat().coerceIn(0.12f, 1.0f)
-
-                    // Proportion of spent vs saved inside this month's column
-                    val spentRatio = if (monthMax > 0) {
-                        (monthSpend / monthMax).toFloat().coerceIn(0.04f, 1.0f)
-                    } else 0.04f
-
-                    val savedRatio = (1.0f - spentRatio).coerceAtLeast(0f)
-
-                    Box(
+                    Row(
                         modifier = Modifier
-                            .height(chartHeightDp)
-                            .width(barWidth),
-                        contentAlignment = Alignment.BottomCenter
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Background track for full height
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .width(barWidth)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(GlassBackground)
-                                .border(1.dp, GlassCardBorder, RoundedCornerShape(8.dp))
-                        )
-
-                        // Active Stacked Bar scaling across the height
-                        Column(
-                            modifier = Modifier
-                                .fillMaxHeight(columnHeightFraction)
-                                .width(barWidth)
-                                .clip(RoundedCornerShape(8.dp))
-                                .then(
-                                    if (isSelected) Modifier.border(2.dp, SavioEmerald, RoundedCornerShape(8.dp))
-                                    else Modifier
-                                )
-                        ) {
-                            // Upper part: RED for amount spent
-                            Box(
-                                modifier = Modifier
-                                    .weight(spentRatio)
-                                    .fillMaxWidth()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(SavioSpendRose, SavioSpendRose.copy(alpha = 0.85f))
-                                        )
-                                    )
+                        Column {
+                            Text(
+                                text = item.monthLabel,
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                color = SavioSlateDark
                             )
-
-                            // Lower part: GREEN for amount saved
-                            if (savedRatio > 0.01f) {
-                                Box(
-                                    modifier = Modifier
-                                        .weight(savedRatio)
-                                        .fillMaxWidth()
-                                        .background(
-                                            Brush.verticalGradient(
-                                                listOf(SavioSavingsGreen.copy(alpha = 0.85f), SavioSavingsGreen)
-                                            )
-                                        )
+                            Text(
+                                text = "Salary: $currency${numberFormat.format(item.salary)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SavioSlateMuted
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "Spent",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = SavioSpendRose
+                                )
+                                Text(
+                                    text = "$currency${numberFormat.format(item.totalSpent)}",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = SavioSpendRose
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "Saved",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = SavioSavingsGreen
+                                )
+                                Text(
+                                    text = "$currency${numberFormat.format(item.savedAmount.coerceAtLeast(0.0))}",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = SavioSavingsGreen
                                 )
                             }
                         }
                     }
+                }
+            }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+            // Month columns with dotted salary line
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = if (months.size <= 5) Alignment.Center else Alignment.CenterStart
+            ) {
+                Row(
+                    modifier = Modifier
+                        .then(if (months.size > 5) Modifier.horizontalScroll(scrollState) else Modifier)
+                        .padding(vertical = 8.dp)
+                        .drawWithContent {
+                            drawContent()
+                            // Dotted line across the entire graph representing the monthly salary
+                            val chartHeightPx = 160.dp.toPx()
+                            val labelHeightPx = 8.dp.toPx() + 18.dp.toPx()
+                            val barBottomY = size.height - labelHeightPx
+                            val salaryLineY = barBottomY - (salaryFraction * chartHeightPx)
 
-                    // Month Short Label
-                    Text(
-                        text = monthData.shortLabel,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = if (isSelected) FontWeight.Black else FontWeight.Medium,
-                            fontSize = 11.sp
-                        ),
-                        color = if (isSelected) SavioEmerald else SavioSlateMuted
-                    )
+                            drawLine(
+                                color = SavioEmerald,
+                                start = Offset(0f, salaryLineY),
+                                end = Offset(size.width, salaryLineY),
+                                strokeWidth = 2.dp.toPx(),
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                            )
+                        },
+                    horizontalArrangement = if (months.size <= 5) Arrangement.spacedBy(20.dp) else Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    months.forEach { monthData ->
+                        val isSelected = monthData.monthKey == selectedMonthKey
+
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .clickable {
+                                    inspectedMonth = monthData
+                                    onSelectMonth(monthData.monthKey)
+                                    onBarSelect(monthData.monthKey)
+                                }
+                                .testTag("bar_${monthData.monthKey}")
+                        ) {
+                            val chartHeightDp = 160.dp
+                            val barWidth = if (months.size <= 4) 44.dp else if (isSelected) 32.dp else 26.dp
+
+                            // Calculate accurate scaling across the full height
+                            val monthSpend = monthData.totalSpent
+                            val monthSalary = monthData.salary
+                            val monthMax = maxOf(monthSpend, monthSalary)
+
+                            // Height fraction of this month's activity relative to max across months (0.12f floor to 1.0f max)
+                            val columnHeightFraction = (monthMax / maxChartVal).toFloat().coerceIn(0.12f, 1.0f)
+
+                            // Proportion of spent vs saved inside this month's column
+                            val spentRatio = if (monthMax > 0) {
+                                (monthSpend / monthMax).toFloat().coerceIn(0.04f, 1.0f)
+                            } else 0.04f
+
+                            val savedRatio = (1.0f - spentRatio).coerceAtLeast(0f)
+
+                            Box(
+                                modifier = Modifier
+                                    .height(chartHeightDp)
+                                    .width(barWidth),
+                                contentAlignment = Alignment.BottomCenter
+                            ) {
+                                // Background track for full height
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .width(barWidth)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(GlassBackground)
+                                        .border(1.dp, GlassCardBorder, RoundedCornerShape(8.dp))
+                                )
+
+                                // Active Stacked Bar scaling across the height
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxHeight(columnHeightFraction)
+                                        .width(barWidth)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .then(
+                                            if (isSelected) Modifier.border(2.dp, SavioEmerald, RoundedCornerShape(8.dp))
+                                            else Modifier
+                                        )
+                                ) {
+                                    // Upper part: RED for amount spent
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(spentRatio)
+                                            .fillMaxWidth()
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    listOf(SavioSpendRose, SavioSpendRose.copy(alpha = 0.85f))
+                                                )
+                                            )
+                                    )
+
+                                    // Lower part: GREEN for amount saved
+                                    if (savedRatio > 0.01f) {
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(savedRatio)
+                                                .fillMaxWidth()
+                                                .background(
+                                                    Brush.verticalGradient(
+                                                        listOf(SavioSavingsGreen.copy(alpha = 0.85f), SavioSavingsGreen)
+                                                    )
+                                                )
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Month Short Label
+                            Text(
+                                text = monthData.shortLabel,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = if (isSelected) FontWeight.Black else FontWeight.Medium,
+                                    fontSize = 11.sp
+                                ),
+                                color = if (isSelected) SavioEmerald else SavioSlateMuted
+                            )
+                        }
+                    }
                 }
             }
         }
