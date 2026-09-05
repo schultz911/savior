@@ -179,8 +179,8 @@ class MainActivity : FragmentActivity() {
         )
     }
 
-    override fun onPause() {
-        super.onPause()
+    override fun onStop() {
+        super.onStop()
         AppSecurityManager.onAppBackgrounded()
     }
 
@@ -264,8 +264,9 @@ fun SpendTrackerScreen(
     var pendingRestorePassphrase by remember { mutableStateOf("") }
 
     val exportBackupLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/octet-stream")
+        ActivityResultContracts.CreateDocument("*/*")
     ) { uri ->
+        AppSecurityManager.onActivityResultCompleted()
         if (uri != null && pendingBackupPassphrase.isNotEmpty()) {
             coroutineScope.launch {
                 try {
@@ -290,12 +291,15 @@ fun SpendTrackerScreen(
                     pendingBackupPassphrase = ""
                 }
             }
+        } else {
+            pendingBackupPassphrase = ""
         }
     }
 
     val restoreBackupLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
+        AppSecurityManager.onActivityResultCompleted()
         if (uri != null && pendingRestorePassphrase.isNotEmpty()) {
             coroutineScope.launch {
                 try {
@@ -320,13 +324,15 @@ fun SpendTrackerScreen(
                     pendingRestorePassphrase = ""
                 }
             }
+        } else {
+            pendingRestorePassphrase = ""
         }
     }
 
     val activity = context as? androidx.fragment.app.FragmentActivity
 
     LaunchedEffect(isAppLocked, isBiometricLockEnabled) {
-        if (isAppLocked && isBiometricLockEnabled && activity != null) {
+        if (isAppLocked && isBiometricLockEnabled && !AppSecurityManager.isAwaitingActivityResult && activity != null) {
             AppSecurityManager.promptBiometric(
                 activity = activity,
                 onSuccess = { biometricErrorMessage = null },
@@ -389,6 +395,7 @@ fun SpendTrackerScreen(
     val permissionsLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
+        AppSecurityManager.onActivityResultCompleted()
         hasSmsPermissions = checkHasSmsPermissions()
         hasNotificationPermission = checkHasNotificationPermission()
 
@@ -408,7 +415,15 @@ fun SpendTrackerScreen(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             perms.add(Manifest.permission.POST_NOTIFICATIONS)
         }
-        permissionsLauncher.launch(perms.toTypedArray())
+        AppSecurityManager.markAwaitingActivityResult()
+        try {
+            permissionsLauncher.launch(perms.toTypedArray())
+        } catch (e: Exception) {
+            AppSecurityManager.onActivityResultCompleted()
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar("Could not request permissions: ${e.localizedMessage}")
+            }
+        }
     }
 
     // React to feedback events
@@ -654,11 +669,29 @@ fun SpendTrackerScreen(
                         onUpdateLockTimeout = { viewModel.setLockTimeoutSeconds(it) },
                         onTriggerBackupExport = { passphrase ->
                             pendingBackupPassphrase = passphrase
-                            exportBackupLauncher.launch(DatabaseBackupHelper.generateDefaultFileName())
+                            AppSecurityManager.markAwaitingActivityResult()
+                            try {
+                                exportBackupLauncher.launch(DatabaseBackupHelper.generateDefaultFileName())
+                            } catch (e: Exception) {
+                                AppSecurityManager.onActivityResultCompleted()
+                                pendingBackupPassphrase = ""
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Could not open file picker: ${e.localizedMessage}")
+                                }
+                            }
                         },
                         onTriggerBackupRestore = { passphrase ->
                             pendingRestorePassphrase = passphrase
-                            restoreBackupLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+                            AppSecurityManager.markAwaitingActivityResult()
+                            try {
+                                restoreBackupLauncher.launch(arrayOf("*/*"))
+                            } catch (e: Exception) {
+                                AppSecurityManager.onActivityResultCompleted()
+                                pendingRestorePassphrase = ""
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Could not open file picker: ${e.localizedMessage}")
+                                }
+                            }
                         }
                     )
                 }
@@ -962,7 +995,7 @@ fun SpendTrackerScreen(
 
     // Biometric App Lock Overlay
     BiometricLockOverlay(
-        isLocked = isAppLocked && isBiometricLockEnabled,
+        isLocked = isAppLocked && isBiometricLockEnabled && !AppSecurityManager.isAwaitingActivityResult,
         errorMessage = biometricErrorMessage,
         onAuthenticateClick = {
             if (activity != null) {

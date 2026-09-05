@@ -1,6 +1,7 @@
 package com.example.security
 
 import android.content.Context
+import android.os.Build
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -16,11 +17,50 @@ object AppSecurityManager {
 
     private var lastBackgroundTimestamp: Long = 0L
 
+    @Volatile
+    var isAwaitingActivityResult: Boolean = false
+
+    @Volatile
+    private var lastActivityResultCompletionTimestamp: Long = 0L
+
+    @Volatile
+    private var isPromptActive: Boolean = false
+
+    fun markAwaitingActivityResult() {
+        isAwaitingActivityResult = true
+        lastBackgroundTimestamp = System.currentTimeMillis()
+    }
+
+    fun onActivityResultCompleted() {
+        isAwaitingActivityResult = false
+        lastActivityResultCompletionTimestamp = System.currentTimeMillis()
+        lastBackgroundTimestamp = System.currentTimeMillis()
+    }
+
     fun canAuthenticate(context: Context): Boolean {
-        val biometricManager = BiometricManager.from(context)
-        return biometricManager.canAuthenticate(
-            BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
-        ) == BiometricManager.BIOMETRIC_SUCCESS
+        return try {
+            val biometricManager = BiometricManager.from(context)
+            val authenticators = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            } else {
+                @Suppress("DEPRECATION")
+                BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                BiometricManager.Authenticators.BIOMETRIC_WEAK
+            }
+            val res = biometricManager.canAuthenticate(authenticators)
+            if (res == BiometricManager.BIOMETRIC_SUCCESS) {
+                true
+            } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+                keyguardManager?.isDeviceSecure == true
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            false
+        }
     }
 
     fun onAppForegrounded(isBiometricEnabled: Boolean, lockTimeoutSeconds: Int) {
@@ -29,20 +69,30 @@ object AppSecurityManager {
             return
         }
 
+        val now = System.currentTimeMillis()
+        if (isAwaitingActivityResult || (now - lastActivityResultCompletionTimestamp < 3000L)) {
+            // Returning from permission dialog, SAF file picker, or activity result initiated inside app
+            isAwaitingActivityResult = false
+            lastBackgroundTimestamp = now
+            return
+        }
+
         if (lastBackgroundTimestamp == 0L) {
-            // App fresh cold start
+            // First cold launch of app session
             _isLocked.value = true
             return
         }
 
-        val elapsedSeconds = (System.currentTimeMillis() - lastBackgroundTimestamp) / 1000
+        val elapsedSeconds = (now - lastBackgroundTimestamp) / 1000
         if (elapsedSeconds >= lockTimeoutSeconds) {
             _isLocked.value = true
         }
     }
 
     fun onAppBackgrounded() {
-        lastBackgroundTimestamp = System.currentTimeMillis()
+        if (!isAwaitingActivityResult) {
+            lastBackgroundTimestamp = System.currentTimeMillis()
+        }
     }
 
     fun lock() {
@@ -51,6 +101,7 @@ object AppSecurityManager {
 
     fun unlock() {
         _isLocked.value = false
+        isPromptActive = false
         lastBackgroundTimestamp = System.currentTimeMillis()
     }
 
@@ -61,37 +112,69 @@ object AppSecurityManager {
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
-        val executor = ContextCompat.getMainExecutor(activity)
-        val prompt = BiometricPrompt(
-            activity,
-            executor,
-            object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    super.onAuthenticationSucceeded(result)
-                    unlock()
-                    onSuccess()
-                }
+        if (isPromptActive) return
+        if (activity.isFinishing || activity.isDestroyed) return
+        if (activity.supportFragmentManager.isStateSaved) return
 
-                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    super.onAuthenticationError(errorCode, errString)
-                    onError(errString.toString())
-                }
+        if (!canAuthenticate(activity)) {
+            unlock()
+            onSuccess()
+            return
+        }
 
-                override fun onAuthenticationFailed() {
-                    super.onAuthenticationFailed()
-                    onError("Authentication failed. Please try again.")
-                }
-            }
-        )
+        try {
+            isPromptActive = true
+            val executor = ContextCompat.getMainExecutor(activity)
+            val prompt = BiometricPrompt(
+                activity,
+                executor,
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                        super.onAuthenticationSucceeded(result)
+                        isPromptActive = false
+                        unlock()
+                        onSuccess()
+                    }
 
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle(title)
-            .setSubtitle(subtitle)
-            .setAllowedAuthenticators(
-                BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        super.onAuthenticationError(errorCode, errString)
+                        isPromptActive = false
+                        if (errorCode == BiometricPrompt.ERROR_USER_CANCELED ||
+                            errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
+                            errorCode == BiometricPrompt.ERROR_CANCELED
+                        ) {
+                            onError("Tap 'Unlock Savio₹' to authenticate.")
+                        } else {
+                            onError(errString.toString())
+                        }
+                    }
+
+                    override fun onAuthenticationFailed() {
+                        super.onAuthenticationFailed()
+                        onError("Authentication failed. Please try again.")
+                    }
+                }
             )
-            .build()
 
-        prompt.authenticate(promptInfo)
+            val promptInfoBuilder = BiometricPrompt.PromptInfo.Builder()
+                .setTitle(title)
+                .setSubtitle(subtitle)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                promptInfoBuilder.setAllowedAuthenticators(
+                    BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                promptInfoBuilder.setDeviceCredentialAllowed(true)
+            }
+
+            prompt.authenticate(promptInfoBuilder.build())
+        } catch (e: Exception) {
+            isPromptActive = false
+            onError(e.localizedMessage ?: "Biometric prompt error")
+        }
     }
 }

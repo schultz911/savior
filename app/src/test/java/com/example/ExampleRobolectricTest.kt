@@ -115,4 +115,33 @@ class ExampleRobolectricTest {
     assertEquals("Credit Card Bill", parsed2.category)
     assertEquals(parsed1.amount, parsed2.amount, 0.01)
   }
+
+  @Test
+  fun `test app security manager activity result does not cause lock`() {
+    val securityManager = com.example.security.AppSecurityManager
+    securityManager.unlock()
+    org.junit.Assert.assertFalse(securityManager.isLocked.value)
+
+    // User triggers permission dialog or vault picker
+    securityManager.markAwaitingActivityResult()
+    assertTrue(securityManager.isAwaitingActivityResult)
+
+    // Android pauses/stops app transiently for dialog
+    securityManager.onAppBackgrounded()
+
+    // Activity returns from launcher
+    securityManager.onActivityResultCompleted()
+    org.junit.Assert.assertFalse(securityManager.isAwaitingActivityResult)
+
+    // App foregrounds
+    securityManager.onAppForegrounded(isBiometricEnabled = true, lockTimeoutSeconds = 0)
+    org.junit.Assert.assertFalse(securityManager.isLocked.value)
+  }
+
+  @Test
+  fun `test backup helper generates valid filename`() {
+    val fileName = com.example.util.DatabaseBackupHelper.generateDefaultFileName()
+    assertTrue(fileName.startsWith("savior_encrypted_backup_"))
+    assertTrue(fileName.endsWith(".savior"))
+  }
 }
