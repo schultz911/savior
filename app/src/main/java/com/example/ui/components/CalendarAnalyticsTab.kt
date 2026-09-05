@@ -203,6 +203,52 @@ fun CalendarAnalyticsTab(
     }
     val selectedSavings = monthlySalary - selectedTotalSpend
 
+    // Month-over-Month (MoM) Delta Calculations
+    val prevMonthKey = remember(selectedMonthKey) {
+        try {
+            val sdf = SimpleDateFormat("yyyy-MM", Locale.US)
+            val date = sdf.parse(selectedMonthKey)
+            if (date != null) {
+                val c = Calendar.getInstance().apply { time = date }
+                c.add(Calendar.MONTH, -1)
+                sdf.format(c.time)
+            } else null
+        } catch (e: Exception) { null }
+    }
+
+    val prevMonthShortLabel = remember(prevMonthKey) {
+        if (prevMonthKey != null) {
+            try {
+                val sdf = SimpleDateFormat("yyyy-MM", Locale.US)
+                val sdfShort = SimpleDateFormat("MMM", Locale.US)
+                val d = sdf.parse(prevMonthKey)
+                if (d != null) sdfShort.format(d) else "last month"
+            } catch (e: Exception) { "last month" }
+        } else "last month"
+    }
+
+    val prevMonthExpenses = remember(prevMonthKey, allExpenses) {
+        if (prevMonthKey != null && allExpenses.isNotEmpty()) {
+            allExpenses.filter { it.monthKey == prevMonthKey }
+        } else emptyList()
+    }
+
+    val prevTotalSpend = remember(prevMonthExpenses, last12Months, prevMonthKey) {
+        if (prevMonthExpenses.isNotEmpty()) {
+            prevMonthExpenses.filter {
+                !it.category.equals("Self", ignoreCase = true) &&
+                !it.category.equals("Credit Card Bill", ignoreCase = true)
+            }.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
+        } else {
+            last12Months.firstOrNull { it.monthKey == prevMonthKey }?.totalSpent ?: 0.0
+        }
+    }
+
+    val momDeltaSpend = selectedTotalSpend - prevTotalSpend
+    val momDeltaPercent = if (prevTotalSpend > 0) {
+        ((selectedTotalSpend - prevTotalSpend) / prevTotalSpend) * 100.0
+    } else null
+
     val displayedExpenses = remember(selectedMonthExpenses, analyticsFilter, selectedAccount) {
         selectedMonthExpenses.filter { item ->
             val matchesFilter = when (analyticsFilter) {
@@ -515,6 +561,24 @@ fun CalendarAnalyticsTab(
                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                                 color = SavioSpendRose
                             )
+                            if (momDeltaPercent != null) {
+                                val isLess = momDeltaSpend < 0
+                                val deltaFormatted = "$currency${numberFormatter.format(kotlin.math.abs(momDeltaSpend))}"
+                                val pctText = String.format(Locale.US, "%.1f", kotlin.math.abs(momDeltaPercent))
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (isLess) SavioSavingsGreenBg else SavioSpendRoseBg,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                ) {
+                                    Text(
+                                        text = if (isLess) "▼ $pctText% vs $prevMonthShortLabel (-$deltaFormatted)"
+                                               else "▲ $pctText% vs $prevMonthShortLabel (+$deltaFormatted)",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                                        color = if (isLess) SavioSavingsGreen else SavioSpendRose,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -609,7 +673,9 @@ fun CalendarAnalyticsTab(
                     CategoryWiseBarGraph(
                         monthKey = selectedMonthKey,
                         expenses = selectedMonthExpenses,
-                        currency = currency
+                        currency = currency,
+                        prevMonthExpenses = prevMonthExpenses,
+                        prevMonthShortLabel = prevMonthShortLabel
                     )
                 }
             }
@@ -996,13 +1062,25 @@ fun CategoryWiseBarGraph(
     monthKey: String,
     expenses: List<ExpenseEntity>,
     currency: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    prevMonthExpenses: List<ExpenseEntity> = emptyList(),
+    prevMonthShortLabel: String = ""
 ) {
     val numberFormatter = remember {
         NumberFormat.getNumberInstance(Locale.US).apply {
             maximumFractionDigits = 0
             minimumFractionDigits = 0
         }
+    }
+
+    val prevCategoryTotals = remember(prevMonthExpenses) {
+        val nonExcluded = prevMonthExpenses.filter {
+            !it.category.equals("Self", ignoreCase = true) &&
+            !it.category.equals("Credit Card Bill", ignoreCase = true)
+        }
+        val targetList = if (nonExcluded.isNotEmpty()) nonExcluded else prevMonthExpenses
+        targetList.groupBy { it.category.ifBlank { "General Spend" } }
+            .mapValues { (_, list) -> list.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) } }
     }
 
     val categoryList = remember(expenses) {
@@ -1015,7 +1093,7 @@ fun CategoryWiseBarGraph(
             .map { (cat, list) ->
                 CategorySpendBarItem(
                     category = cat,
-                    amount = list.sumOf { it.amount },
+                    amount = list.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) },
                     count = list.size
                 )
             }
@@ -1103,11 +1181,34 @@ fun CategoryWiseBarGraph(
                                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                                 color = SavioSpendRose
                             )
-                            Text(
-                                text = "$pct% of month",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = SavioSlateMuted
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "$pct% of month",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = SavioSlateMuted
+                                )
+                                if (prevMonthExpenses.isNotEmpty()) {
+                                    val prevCatSpend = prevCategoryTotals[item.category]
+                                    if (prevCatSpend == null || prevCatSpend == 0.0) {
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "• ★ New",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
+                                            color = SavioTransferIndigo
+                                        )
+                                    } else {
+                                        val delta = item.amount - prevCatSpend
+                                        val deltaFormatted = "$currency${numberFormatter.format(kotlin.math.abs(delta))}"
+                                        val isDrop = delta < 0
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = if (isDrop) "• ▼ -$deltaFormatted" else "• ▲ +$deltaFormatted",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
+                                            color = if (isDrop) SavioSavingsGreen else SavioSpendRose
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
 

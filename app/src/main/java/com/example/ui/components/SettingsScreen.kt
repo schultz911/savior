@@ -134,6 +134,8 @@ fun SettingsScreen(
     onUpdateLockTimeout: (Int) -> Unit = {},
     onTriggerBackupExport: (passphrase: String) -> Unit = {},
     onTriggerBackupRestore: (passphrase: String) -> Unit = {},
+    onCreateSnapshot: (() -> Unit)? = null,
+    onRestoreSnapshot: (() -> Unit)? = null,
     merchantRules: List<MerchantRuleEntity> = emptyList(),
     onAddMerchantRule: (pattern: String, category: String, alias: String) -> Unit = { _, _, _ -> },
     onDeleteMerchantRule: (Long) -> Unit = {},
@@ -1312,6 +1314,55 @@ fun SettingsScreen(
                             Text("Restore Vault", fontSize = 12.sp)
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "Auto-Rotated Local Snapshots (Last 3 Saved)",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = SavioSlateDark
+                    )
+                    Text(
+                        text = "Instant 1-tap backup stored safely inside device sandbox without needing a file picker.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SavioSlateMuted
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = { onCreateSnapshot?.invoke() },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FileDownload,
+                                contentDescription = "Take Snapshot",
+                                modifier = Modifier.size(16.dp),
+                                tint = SavioEmerald
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Take Snapshot", fontSize = 12.sp, color = SavioSlateDark)
+                        }
+
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = { onRestoreSnapshot?.invoke() },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.UploadFile,
+                                contentDescription = "Restore Snapshot",
+                                modifier = Modifier.size(16.dp),
+                                tint = SavioSlateDark
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Restore Latest", fontSize = 12.sp, color = SavioSlateDark)
+                        }
+                    }
                 }
             }
         }
@@ -1376,7 +1427,7 @@ fun SettingsScreen(
                 )
 
                 Text(
-                    text = "v1.1.0",
+                    text = "v1.2.0 (vNext)",
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Normal,
                         fontSize = 12.sp

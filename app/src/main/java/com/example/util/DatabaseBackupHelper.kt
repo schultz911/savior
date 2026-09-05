@@ -5,10 +5,15 @@ import com.example.data.ExpenseDao
 import com.example.data.ExpenseEntity
 import com.example.data.ExpensePreferences
 import com.example.data.ExpenseType
+import com.example.data.MerchantRuleDao
+import com.example.data.MerchantRuleEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
@@ -30,7 +35,8 @@ object DatabaseBackupHelper {
     private const val SALT_LENGTH_BYTES = 16
     private const val ITERATIONS = 10000
     private const val KEY_LENGTH_BITS = 256
-    private const val BACKUP_VERSION = 1
+    const val BACKUP_VERSION = 2
+    const val DEFAULT_SNAPSHOT_PASSPHRASE = "Savio_Vault_Snapshot_Local_Secure_Key"
 
     fun generateDefaultFileName(): String {
         val dateStr = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
@@ -41,10 +47,13 @@ object DatabaseBackupHelper {
         dao: ExpenseDao,
         preferences: ExpensePreferences,
         passphrase: String,
-        outputStream: OutputStream
+        outputStream: OutputStream,
+        ruleDao: MerchantRuleDao? = null
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
             val allExpenses = dao.getAllExpensesSync()
+            val allRules = ruleDao?.getAllRulesSync() ?: emptyList()
+            val allCategoryLimits = preferences.getAllCategoryLimits()
 
             val rootJson = JSONObject().apply {
                 put("version", BACKUP_VERSION)
@@ -58,6 +67,25 @@ object DatabaseBackupHelper {
                 preferences.getBlacklistedMerchants().forEach { blacklistedArray.put(it) }
                 put("blacklistedMerchants", blacklistedArray)
 
+                // Category limits map
+                val categoryLimitsObj = JSONObject()
+                allCategoryLimits.forEach { (cat, lim) -> categoryLimitsObj.put(cat, lim) }
+                put("categoryLimits", categoryLimitsObj)
+
+                // Merchant rules (Auto-Rule & Merchant Alias Engine)
+                val rulesArray = JSONArray()
+                allRules.forEach { r ->
+                    val rObj = JSONObject().apply {
+                        put("merchantPattern", r.merchantPattern)
+                        put("assignedCategory", r.assignedCategory)
+                        put("normalizedAlias", r.normalizedAlias)
+                        put("isRegex", r.isRegex)
+                    }
+                    rulesArray.put(rObj)
+                }
+                put("merchantRules", rulesArray)
+
+                // Expenses with refund & reversal state
                 val expensesArray = JSONArray()
                 allExpenses.forEach { exp ->
                     val obj = JSONObject().apply {
@@ -72,6 +100,8 @@ object DatabaseBackupHelper {
                         put("timestamp", exp.timestamp)
                         put("monthKey", exp.monthKey)
                         put("isRecurring", exp.isRecurring)
+                        put("refundedAmount", exp.refundedAmount)
+                        put("isReversal", exp.isReversal)
                     }
                     expensesArray.put(obj)
                 }
@@ -114,7 +144,8 @@ object DatabaseBackupHelper {
         inputStream: InputStream,
         passphrase: String,
         dao: ExpenseDao,
-        preferences: ExpensePreferences
+        preferences: ExpensePreferences,
+        ruleDao: MerchantRuleDao? = null
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
             val allBytes = inputStream.use { it.readBytes() }
@@ -163,6 +194,32 @@ object DatabaseBackupHelper {
                 }
             }
 
+            // Restore Category Limits if present
+            if (rootJson.has("categoryLimits")) {
+                val catLimitsObj = rootJson.getJSONObject("categoryLimits")
+                val keys = catLimitsObj.keys()
+                while (keys.hasNext()) {
+                    val cat = keys.next()
+                    val limit = catLimitsObj.getDouble(cat)
+                    preferences.setCategoryLimit(cat, limit)
+                }
+            }
+
+            // Restore Merchant Rules if present
+            if (rootJson.has("merchantRules") && ruleDao != null) {
+                val rulesArr = rootJson.getJSONArray("merchantRules")
+                for (i in 0 until rulesArr.length()) {
+                    val rObj = rulesArr.getJSONObject(i)
+                    val rule = MerchantRuleEntity(
+                        merchantPattern = rObj.getString("merchantPattern"),
+                        assignedCategory = rObj.getString("assignedCategory"),
+                        normalizedAlias = rObj.optString("normalizedAlias", ""),
+                        isRegex = rObj.optBoolean("isRegex", false)
+                    )
+                    ruleDao.insertRule(rule)
+                }
+            }
+
             val expensesArray = rootJson.getJSONArray("expenses")
             val entitiesToInsert = mutableListOf<ExpenseEntity>()
 
@@ -185,7 +242,9 @@ object DatabaseBackupHelper {
                     sender = obj.optString("sender", "BackupRestore"),
                     timestamp = obj.getLong("timestamp"),
                     monthKey = obj.optString("monthKey", ExpenseEntity.formatMonthKey(obj.getLong("timestamp"))),
-                    isRecurring = obj.optBoolean("isRecurring", false)
+                    isRecurring = obj.optBoolean("isRecurring", false),
+                    refundedAmount = obj.optDouble("refundedAmount", 0.0),
+                    isReversal = obj.optBoolean("isReversal", false)
                 )
                 entitiesToInsert.add(entity)
             }
@@ -198,6 +257,73 @@ object DatabaseBackupHelper {
             Result.failure(IllegalArgumentException("Incorrect passphrase or corrupted backup file."))
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    // ==========================================
+    // Rolling Local Encrypted Snapshot Engine
+    // ==========================================
+    fun getSnapshotsDirectory(context: Context): File {
+        val dir = File(context.getExternalFilesDir(null) ?: context.filesDir, "snapshots")
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        return dir
+    }
+
+    suspend fun createLocalRollingSnapshot(
+        context: Context,
+        dao: ExpenseDao,
+        preferences: ExpensePreferences,
+        ruleDao: MerchantRuleDao?,
+        passphrase: String = DEFAULT_SNAPSHOT_PASSPHRASE,
+        maxSnapshots: Int = 3
+    ): Result<File> = withContext(Dispatchers.IO) {
+        try {
+            val dir = getSnapshotsDirectory(context)
+            val timestampStr = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            val snapshotFile = File(dir, "savior_snapshot_$timestampStr.savior")
+
+            FileOutputStream(snapshotFile).use { out ->
+                val result = createEncryptedBackup(dao, preferences, passphrase, out, ruleDao)
+                if (result.isFailure) {
+                    snapshotFile.delete()
+                    return@withContext Result.failure(result.exceptionOrNull() ?: Exception("Snapshot creation failed"))
+                }
+            }
+
+            // Prune older snapshots to keep only the 3 most recent
+            val existing = dir.listFiles { _, name -> name.startsWith("savior_snapshot_") && name.endsWith(".savior") }
+            if (existing != null && existing.size > maxSnapshots) {
+                existing.sortedBy { it.lastModified() }
+                    .take(existing.size - maxSnapshots)
+                    .forEach { it.delete() }
+            }
+
+            Result.success(snapshotFile)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun listLocalSnapshots(context: Context): List<File> {
+        val dir = getSnapshotsDirectory(context)
+        return dir.listFiles { _, name -> name.startsWith("savior_snapshot_") && name.endsWith(".savior") }
+            ?.sortedByDescending { it.lastModified() }
+            ?: emptyList()
+    }
+
+    suspend fun restoreLatestLocalSnapshot(
+        context: Context,
+        dao: ExpenseDao,
+        preferences: ExpensePreferences,
+        ruleDao: MerchantRuleDao?,
+        passphrase: String = DEFAULT_SNAPSHOT_PASSPHRASE
+    ): Result<Int> = withContext(Dispatchers.IO) {
+        val snapshots = listLocalSnapshots(context)
+        val latest = snapshots.firstOrNull() ?: return@withContext Result.failure(IllegalStateException("No local snapshot available to restore."))
+        FileInputStream(latest).use { input ->
+            restoreEncryptedBackup(input, passphrase, dao, preferences, ruleDao)
         }
     }
 }

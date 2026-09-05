@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -86,6 +87,7 @@ fun ExpenditureHeroCard(
     onToggleNotification: (Boolean) -> Unit,
     safeSpendPacing: com.example.ui.SafeSpendPacing? = null,
     upcomingCommitmentsCount: Int = 0,
+    onUpcomingCommitmentsClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val numberFormatter = remember {
@@ -416,13 +418,50 @@ fun ExpenditureHeroCard(
                             )
                         }
 
-                        if (safeSpendPacing.upcomingRecurringTotal > 0) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "$currency${numberFormatter.format(safeSpendPacing.upcomingRecurringTotal)} reserved for $upcomingCommitmentsCount upcoming bill(s)",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                                color = Color(0xFF6B7280)
-                            )
+                        if (safeSpendPacing.upcomingRecurringTotal > 0 || upcomingCommitmentsCount > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = SavioEmeraldContainer.copy(alpha = 0.7f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = onUpcomingCommitmentsClick != null) {
+                                        onUpcomingCommitmentsClick?.invoke()
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.EventRepeat,
+                                            contentDescription = null,
+                                            tint = SavioEmerald,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "$upcomingCommitmentsCount upcoming bill(s) • $currency${numberFormatter.format(safeSpendPacing.upcomingRecurringTotal)} reserved",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            ),
+                                            color = SavioSlateDark
+                                        )
+                                    }
+
+                                    Text(
+                                        text = "View Radar ↗",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        color = SavioEmerald
+                                    )
+                                }
+                            }
                         }
                     }
                 }

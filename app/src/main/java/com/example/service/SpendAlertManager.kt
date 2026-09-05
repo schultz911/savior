@@ -213,4 +213,73 @@ object SpendAlertManager {
         }
         return "$currency${formatter.format(amount)}"
     }
+
+    /**
+     * Proactive reminder when an unpaid recurring bill or subscription is due within 48 hours.
+     */
+    fun checkAndNotifyUpcomingBills(
+        context: Context,
+        bills: List<com.example.engine.PredictedRecurringBill>,
+        currency: String
+    ) {
+        if (bills.isEmpty()) return
+        val cal = java.util.Calendar.getInstance()
+        val currentDay = cal.get(java.util.Calendar.DAY_OF_MONTH)
+        val currentMonthKey = com.example.data.ExpenseEntity.formatMonthKey(System.currentTimeMillis())
+
+        val alertPrefs = context.getSharedPreferences("spend_tracker_recurring_alerts", Context.MODE_PRIVATE)
+
+        for (bill in bills) {
+            if (bill.isPaidThisMonth) continue
+            val diffDays = bill.typicalDayOfMonth - currentDay
+            // Alert if due within next 2 days or today (0, 1, or 2 days away)
+            if (diffDays in 0..2) {
+                val alertKey = "${currentMonthKey}_${bill.merchant}_${bill.typicalDayOfMonth}"
+                if (alertPrefs.getBoolean(alertKey, false)) {
+                    // Already notified this month
+                    continue
+                }
+
+                createNotificationChannels(context)
+                val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                val notifId = 4000 + Math.abs(bill.merchant.hashCode()) % 1000
+
+                val openIntent = Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    putExtra(MainActivity.EXTRA_NAVIGATE_TAB, MainActivity.TAB_DASHBOARD)
+                }
+                val pendingIntent = PendingIntent.getActivity(
+                    context,
+                    notifId,
+                    openIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+
+                val dueText = when (diffDays) {
+                    0 -> "due today"
+                    1 -> "due tomorrow"
+                    else -> "due in 2 days"
+                }
+                val formattedAmt = formatCurrency(bill.expectedAmount, currency)
+
+                val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS)
+                    .setSmallIcon(R.drawable.ic_stat_rupee)
+                    .setLargeIcon(getNotificationLargeIcon(context))
+                    .setColor(0xFF059669.toInt())
+                    .setContentTitle("⚡ Upcoming Bill: $formattedAmt for ${bill.merchant}")
+                    .setContentText("Subscription/bill is $dueText (~${bill.typicalDayOfMonth}th). Safe daily spend is protected.")
+                    .setStyle(
+                        NotificationCompat.BigTextStyle()
+                            .bigText("Heads up: Your recurring commitment for ${bill.merchant} of $formattedAmt is $dueText. Your daily pacing has reserved this amount.")
+                    )
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setAutoCancel(true)
+                    .setContentIntent(pendingIntent)
+                    .build()
+
+                manager.notify(notifId, notification)
+                alertPrefs.edit().putBoolean(alertKey, true).apply()
+            }
+        }
+    }
 }

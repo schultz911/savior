@@ -25,6 +25,13 @@ import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Typeface
+import com.example.ui.PacingStatus
+import com.example.engine.RecurringDetectionEngine
+
 class LiveExpenditureNotificationService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -36,8 +43,8 @@ class LiveExpenditureNotificationService : Service() {
         createNotificationChannel(this)
         val initialNotification = buildNotification(
             monthTitle = "Spend Tracker",
-            totalSpendText = "Tracking live expenditures...",
-            breakdownText = "Monitoring SMS for debits, transfers & spends",
+            contentText = "Monitoring SMS for debits, transfers & spends",
+            pacingStatus = PacingStatus.ON_TRACK,
             progress = 0,
             showProgress = false
         )
@@ -105,25 +112,24 @@ class LiveExpenditureNotificationService : Service() {
                     val isSelf = exp.type == ExpenseType.SELF || exp.category.equals("Self", ignoreCase = true)
                     val isCreditCard = exp.type == ExpenseType.CREDIT_CARD || exp.category.equals("Credit Card Bill", ignoreCase = true)
 
+                    // Net spend calculation: debit amount minus refunded / reversed amount
+                    val netAmount = (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
+
                     if (isSelf) {
-                        selfSum += exp.amount
+                        selfSum += netAmount
                     } else if (isCreditCard) {
-                        creditCardsSum += exp.amount
+                        creditCardsSum += netAmount
                     } else if (exp.type == ExpenseType.P2P) {
-                        transfersSum += exp.amount
-                        totalSpend += exp.amount
+                        transfersSum += netAmount
+                        totalSpend += netAmount
                     } else {
-                        spendsSum += exp.amount
-                        totalSpend += exp.amount
+                        spendsSum += netAmount
+                        totalSpend += netAmount
                     }
                 }
 
                 val totalFormatted = formatCurrency(totalSpend, currency)
-                val transfersFormatted = formatCurrency(transfersSum, currency)
-                val spendsFormatted = formatCurrency(spendsSum, currency)
-
-                val title = "$monthDisplay Spend: $totalFormatted"
-                val breakdown = "Spends: $spendsFormatted • Transfers: $transfersFormatted"
+                val title = "$monthDisplay Spends:  $totalFormatted"
 
                 val cal = java.util.Calendar.getInstance()
                 val daysInMonth = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
@@ -131,25 +137,50 @@ class LiveExpenditureNotificationService : Service() {
                 val daysRemaining = (daysInMonth - currentDay + 1).coerceAtLeast(1)
 
                 val allExpensesSync = dao.getAllExpensesSync()
-                val recurringCommitments = com.example.engine.RecurringDetectionEngine.detectRecurringBills(allExpensesSync, currentMonthKey)
+                val recurringCommitments = RecurringDetectionEngine.detectRecurringBills(allExpensesSync, currentMonthKey)
                 val upcomingRecurring = recurringCommitments.filter { !it.isPaidThisMonth }.sumOf { it.expectedAmount }
                 val remainingDiscretionary = (budget - totalSpend - upcomingRecurring).coerceAtLeast(0.0)
                 val safeDaily = if (budget > 0) remainingDiscretionary / daysRemaining else 0.0
+
+                // Proactively alert user if any recurring bill is due in the next 48 hours
+                SpendAlertManager.checkAndNotifyUpcomingBills(this@LiveExpenditureNotificationService, recurringCommitments, currency)
 
                 val progress = if (budget > 0) {
                     ((totalSpend / budget) * 100).toInt().coerceIn(0, 100)
                 } else 0
 
-                val budgetSubtext = if (budget > 0) {
-                    val budgetFormatted = formatCurrency(budget, currency)
-                    val safeDailyFormatted = formatCurrency(safeDaily, currency)
-                    "$progress% of $budgetFormatted • Safe: $safeDailyFormatted/d ($daysRemaining d left)"
-                } else null
+                val pacingStatus = when {
+                    budget <= 0.0 -> PacingStatus.ON_TRACK
+                    totalSpend > budget -> PacingStatus.OVER_PACED
+                    safeDaily <= 0 || totalSpend > (budget / daysInMonth) * currentDay * 1.15 -> PacingStatus.CAUTION
+                    else -> PacingStatus.ON_TRACK
+                }
+
+                val pacingText = when (pacingStatus) {
+                    PacingStatus.OVER_PACED -> {
+                        val overAmount = formatCurrency(totalSpend - budget, currency)
+                        "Over-Paced by $overAmount"
+                    }
+                    PacingStatus.CAUTION -> {
+                        val safeDailyFormatted = formatCurrency(safeDaily, currency)
+                        "Caution: $safeDailyFormatted/d ($daysRemaining d left)"
+                    }
+                    PacingStatus.ON_TRACK -> {
+                        val safeDailyFormatted = formatCurrency(safeDaily, currency)
+                        "Safe: $safeDailyFormatted/d ($daysRemaining d left)"
+                    }
+                }
+
+                val contentText = if (budget > 0) {
+                    "$progress% of budget • $pacingText"
+                } else {
+                    "100% of budget • Tracking live (${currentMonthExpenses.size} txns)"
+                }
 
                 val notification = buildNotification(
                     monthTitle = title,
-                    totalSpendText = breakdown,
-                    breakdownText = budgetSubtext ?: "${currentMonthExpenses.size} transactions this month",
+                    contentText = contentText,
+                    pacingStatus = pacingStatus,
                     progress = progress,
                     showProgress = budget > 0
                 )
@@ -165,8 +196,8 @@ class LiveExpenditureNotificationService : Service() {
 
     private fun buildNotification(
         monthTitle: String,
-        totalSpendText: String,
-        breakdownText: String,
+        contentText: String,
+        pacingStatus: PacingStatus,
         progress: Int,
         showProgress: Boolean
     ): Notification {
@@ -177,16 +208,6 @@ class LiveExpenditureNotificationService : Service() {
             this,
             0,
             openAppIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val syncIntent = Intent(this, LiveExpenditureNotificationService::class.java).apply {
-            action = ACTION_SYNC
-        }
-        val pendingSyncIntent = PendingIntent.getService(
-            this,
-            1,
-            syncIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -201,17 +222,19 @@ class LiveExpenditureNotificationService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val pacedLargeIcon = getPacedNotificationLargeIcon(this, pacingStatus)
+
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_rupee)
-            .setLargeIcon(SpendAlertManager.getNotificationLargeIcon(this))
+            .setLargeIcon(pacedLargeIcon)
             .setColor(0xFF059669.toInt())
             .setContentTitle(monthTitle)
-            .setContentText(totalSpendText)
+            .setContentText(contentText)
             .setSubText("Live Spend")
             .setStyle(
                 NotificationCompat.BigTextStyle()
                     .setBigContentTitle(monthTitle)
-                    .bigText("$totalSpendText\n$breakdownText")
+                    .bigText(contentText)
             )
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -220,13 +243,8 @@ class LiveExpenditureNotificationService : Service() {
             .setContentIntent(pendingOpenIntent)
             .addAction(
                 android.R.drawable.ic_input_add,
-                "+ Add Spend",
+                "Add Spend",
                 pendingAddExpenseIntent
-            )
-            .addAction(
-                android.R.drawable.ic_menu_rotate,
-                "Refresh",
-                pendingSyncIntent
             )
             .addAction(
                 android.R.drawable.ic_menu_view,
@@ -239,6 +257,43 @@ class LiveExpenditureNotificationService : Service() {
         }
 
         return builder.build()
+    }
+
+    private fun getPacedNotificationLargeIcon(context: Context, status: PacingStatus): Bitmap {
+        val size = (context.resources.displayMetrics.density * 64).toInt().coerceAtLeast(96)
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        val (bgColor, ringColor, accentColor) = when (status) {
+            PacingStatus.ON_TRACK -> Triple(0xFFECFDF5.toInt(), 0xFF10B981.toInt(), 0xFF059669.toInt()) // Emerald Green Safe
+            PacingStatus.CAUTION -> Triple(0xFFFFFBEB.toInt(), 0xFFF59E0B.toInt(), 0xFFD97706.toInt()) // Amber Caution
+            PacingStatus.OVER_PACED -> Triple(0xFFFFF1F2.toInt(), 0xFFF43F5E.toInt(), 0xFFE11D48.toInt()) // Rose / Red Over
+        }
+
+        val radius = size / 2f
+        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = bgColor
+            style = Paint.Style.FILL
+        }
+        canvas.drawCircle(radius, radius, radius - 2f, bgPaint)
+
+        val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = ringColor
+            style = Paint.Style.STROKE
+            strokeWidth = size * 0.065f
+        }
+        canvas.drawCircle(radius, radius, radius - size * 0.04f, ringPaint)
+
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = accentColor
+            textSize = size * 0.48f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+        val yPos = radius - ((textPaint.descent() + textPaint.ascent()) / 2)
+        canvas.drawText("₹", radius, yPos, textPaint)
+
+        return bitmap
     }
 
     private fun formatCurrency(amount: Double, currency: String): String {

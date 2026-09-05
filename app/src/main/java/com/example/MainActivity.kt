@@ -105,6 +105,7 @@ import com.example.ui.components.InstrumentLiquidityCard
 import com.example.ui.components.ManualAddExpenseDialog
 import com.example.ui.components.MonthSelector
 import com.example.ui.components.PermissionsBanner
+import com.example.ui.components.RecurringCommitmentsSheet
 import com.example.ui.components.SettingsScreen
 import com.example.ui.components.SpendBreakupPieChartCard
 import com.example.ui.components.TestSmsBottomSheet
@@ -265,6 +266,7 @@ fun SpendTrackerScreen(
     val selectedAccountFilter by viewModel.selectedAccountFilter.collectAsStateWithLifecycle()
 
     var selectedMerchantForSheet by remember { mutableStateOf<String?>(null) }
+    var showRecurringCommitmentsSheet by remember { mutableStateOf(false) }
 
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     var pendingBackupPassphrase by remember { mutableStateOf("") }
@@ -284,7 +286,8 @@ fun SpendTrackerScreen(
                             dao = app.database.expenseDao(),
                             preferences = app.preferences,
                             passphrase = pendingBackupPassphrase,
-                            outputStream = outputStream
+                            outputStream = outputStream,
+                            ruleDao = app.database.merchantRuleDao()
                         )
                         if (res.isSuccess) {
                             snackbarHostState.showSnackbar("Vault backup saved! (${res.getOrNull()} transactions encrypted)")
@@ -317,7 +320,8 @@ fun SpendTrackerScreen(
                             inputStream = inputStream,
                             passphrase = pendingRestorePassphrase,
                             dao = app.database.expenseDao(),
-                            preferences = app.preferences
+                            preferences = app.preferences,
+                            ruleDao = app.database.merchantRuleDao()
                         )
                         if (res.isSuccess) {
                             snackbarHostState.showSnackbar("Successfully restored ${res.getOrNull()} expenditures!")
@@ -702,6 +706,38 @@ fun SpendTrackerScreen(
                                     snackbarHostState.showSnackbar("Could not open file picker: ${e.localizedMessage}")
                                 }
                             }
+                        },
+                        onCreateSnapshot = {
+                            coroutineScope.launch {
+                                val app = context.applicationContext as SpendTrackerApplication
+                                val res = DatabaseBackupHelper.createLocalRollingSnapshot(
+                                    context = context,
+                                    dao = app.database.expenseDao(),
+                                    preferences = app.preferences,
+                                    ruleDao = app.database.merchantRuleDao()
+                                )
+                                if (res.isSuccess) {
+                                    snackbarHostState.showSnackbar("Local vault snapshot created! (${res.getOrNull()?.name})")
+                                } else {
+                                    snackbarHostState.showSnackbar("Snapshot failed: ${res.exceptionOrNull()?.message}")
+                                }
+                            }
+                        },
+                        onRestoreSnapshot = {
+                            coroutineScope.launch {
+                                val app = context.applicationContext as SpendTrackerApplication
+                                val res = DatabaseBackupHelper.restoreLatestLocalSnapshot(
+                                    context = context,
+                                    dao = app.database.expenseDao(),
+                                    preferences = app.preferences,
+                                    ruleDao = app.database.merchantRuleDao()
+                                )
+                                if (res.isSuccess) {
+                                    snackbarHostState.showSnackbar("Successfully restored ${res.getOrNull()} expenditures from latest snapshot!")
+                                } else {
+                                    snackbarHostState.showSnackbar("Restore snapshot failed: ${res.exceptionOrNull()?.message}")
+                                }
+                            }
                         }
                     )
                 }
@@ -766,7 +802,8 @@ fun SpendTrackerScreen(
                             isNotificationActive = isNotificationActive,
                             onToggleNotification = { viewModel.togglePersistentNotification(it) },
                             safeSpendPacing = safeSpendPacing,
-                            upcomingCommitmentsCount = predictedRecurringBills.count { !it.isPaidThisMonth }
+                            upcomingCommitmentsCount = predictedRecurringBills.count { !it.isPaidThisMonth },
+                            onUpcomingCommitmentsClick = { showRecurringCommitmentsSheet = true }
                         )
                     }
 
@@ -1003,6 +1040,16 @@ fun SpendTrackerScreen(
             expenses = merchantExpenses,
             onDismiss = { selectedMerchantForSheet = null },
             onToggleBlacklist = { viewModel.toggleBlacklistMerchant(it) },
+            onToggleRecurring = { m, isRec -> viewModel.toggleRecurringForMerchant(m, isRec) }
+        )
+    }
+
+    // Interactive Subscription Radar & Recurring Commitments Sheet
+    if (showRecurringCommitmentsSheet) {
+        RecurringCommitmentsSheet(
+            bills = predictedRecurringBills,
+            currency = currency,
+            onDismiss = { showRecurringCommitmentsSheet = false },
             onToggleRecurring = { m, isRec -> viewModel.toggleRecurringForMerchant(m, isRec) }
         )
     }
