@@ -268,6 +268,57 @@ fun SettingsScreen(
             }
         }
 
+        // 1. Live Status Bar Notification Card
+        item {
+            Card(
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = GlassCardBg),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, GlassCardBorder, RoundedCornerShape(22.dp))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = null,
+                                tint = SavioEmerald,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Live Status Bar Spend Tracker",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = SavioSlateDark
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Keeps live total spend & monthly budget status in your notifications.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SavioSlateMuted
+                        )
+                    }
+
+                    Switch(
+                        checked = isNotificationActive,
+                        onCheckedChange = { onToggleNotification(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = SavioEmerald
+                        )
+                    )
+                }
+            }
+        }
+
         // 2. Financial Baseline & Savings Target Card
         item {
             Card(
@@ -470,7 +521,7 @@ fun SettingsScreen(
             }
         }
 
-        // 3. Blacklisted Merchants Manager Card (Feature Request)
+        // 3. Per-Category Spend Limits Card
         item {
             Card(
                 shape = RoundedCornerShape(22.dp),
@@ -478,115 +529,104 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(1.dp, GlassCardBorder, RoundedCornerShape(22.dp))
-                    .testTag("blacklisted_merchants_card")
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Block,
-                            contentDescription = null,
-                            tint = SavioBlacklistRed,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Blacklisted Merchants",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = SavioSlateDark
-                        )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isCategoryLimitsExpanded = !isCategoryLimitsExpanded },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Tune,
+                                contentDescription = null,
+                                tint = SavioEmerald,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Per-Category Spend Limits",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = SavioSlateDark
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { isCategoryLimitsExpanded = !isCategoryLimitsExpanded },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isCategoryLimitsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (isCategoryLimitsExpanded) "Collapse" else "Expand",
+                                tint = SavioEmerald
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Transactions from blacklisted merchants are completely ignored and not considered in spend totals or savings calculations.",
+                        text = "Alerts triggered at 80% usage and when overshooting the limit.",
                         style = MaterialTheme.typography.bodySmall,
                         color = SavioSlateMuted
                     )
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    AnimatedVisibility(visible = isCategoryLimitsExpanded) {
+                        Column {
+                            Spacer(modifier = Modifier.height(12.dp))
 
-                    // Input to add a new merchant to blacklist
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = newBlacklistInput,
-                            onValueChange = { newBlacklistInput = it },
-                            placeholder = { Text("Enter merchant name to blacklist") },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = SavioBlacklistRed,
-                                unfocusedBorderColor = GlassCardBorder
-                            )
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                if (newBlacklistInput.isNotBlank()) {
-                                    onAddBlacklistedMerchant(newBlacklistInput.trim())
-                                    newBlacklistInput = ""
-                                }
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = SavioBlacklistRed)
-                        ) {
-                            Icon(imageVector = Icons.Default.Add, contentDescription = "Add")
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Blacklist")
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // List of current blacklisted merchants
-                    if (blacklistedMerchants.isEmpty()) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = GlassBackground,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "No merchants blacklisted. Blacklisted merchants will appear here.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = SavioSlateMuted,
-                                modifier = Modifier.padding(14.dp)
-                            )
-                        }
-                    } else {
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            blacklistedMerchants.forEach { merchant ->
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = SavioBlacklistBg,
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, SavioBlacklistRed.copy(alpha = 0.3f))
+                            OpenRouterCategorizer.KNOWN_CATEGORIES.filterNot {
+                                it.equals("Self", ignoreCase = true) || it.equals("Credit Card Bill", ignoreCase = true)
+                            }.forEach { category ->
+                                val currentVal = localCategoryLimits[category] ?: ""
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = merchant,
-                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                            color = SavioBlacklistRed
+                                    Text(
+                                        text = category,
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                        color = SavioSlateDark,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    OutlinedTextField(
+                                        value = currentVal,
+                                        onValueChange = { newVal ->
+                                            val filtered = newVal.filter { it.isDigit() }
+                                            localCategoryLimits[category] = filtered
+                                        },
+                                        placeholder = { Text("0") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        prefix = { Text(selectedCurrency) },
+                                        modifier = Modifier.width(130.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        singleLine = true,
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = SavioEmerald,
+                                            unfocusedBorderColor = GlassCardBorder
                                         )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "Remove $merchant",
-                                            tint = SavioBlacklistRed,
-                                            modifier = Modifier
-                                                .size(16.dp)
-                                                .clickable { onRemoveBlacklistedMerchant(merchant) }
-                                        )
-                                    }
+                                    )
                                 }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = {
+                                    val map = mutableMapOf<String, Double>()
+                                    for ((cat, str) in localCategoryLimits) {
+                                        val v = str.toDoubleOrNull() ?: 0.0
+                                        if (v > 0) map[cat] = v
+                                    }
+                                    onUpdateCategoryLimits(map)
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald)
+                            ) {
+                                Text("Update Category Limits")
                             }
                         }
                     }
@@ -594,7 +634,7 @@ fun SettingsScreen(
             }
         }
 
-        // Auto-Rule & Merchant Alias Engine (Deterministic Local Classifier) Card
+        // 4. Merchant Rules & Aliases (Deterministic Local Classifier) Card
         item {
             Card(
                 shape = RoundedCornerShape(22.dp),
@@ -818,7 +858,7 @@ fun SettingsScreen(
             }
         }
 
-        // 4. Per-Category Spend Limits Card
+        // 5. Blacklisted Merchants Manager Card
         item {
             Card(
                 shape = RoundedCornerShape(22.dp),
@@ -826,250 +866,123 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(1.dp, GlassCardBorder, RoundedCornerShape(22.dp))
+                    .testTag("blacklisted_merchants_card")
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { isCategoryLimitsExpanded = !isCategoryLimitsExpanded },
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Tune,
-                                contentDescription = null,
-                                tint = SavioEmerald,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Per-Category Spend Limits",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = SavioSlateDark
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { isCategoryLimitsExpanded = !isCategoryLimitsExpanded },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isCategoryLimitsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                contentDescription = if (isCategoryLimitsExpanded) "Collapse" else "Expand",
-                                tint = SavioEmerald
-                            )
-                        }
-                    }
-
-                    Text(
-                        text = "Alerts triggered at 80% usage and when overshooting the limit.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SavioSlateMuted
-                    )
-
-                    AnimatedVisibility(visible = isCategoryLimitsExpanded) {
-                        Column {
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            OpenRouterCategorizer.KNOWN_CATEGORIES.filterNot {
-                                it.equals("Self", ignoreCase = true) || it.equals("Credit Card Bill", ignoreCase = true)
-                            }.forEach { category ->
-                                val currentVal = localCategoryLimits[category] ?: ""
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = category,
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                                        color = SavioSlateDark,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    OutlinedTextField(
-                                        value = currentVal,
-                                        onValueChange = { newVal ->
-                                            val filtered = newVal.filter { it.isDigit() }
-                                            localCategoryLimits[category] = filtered
-                                        },
-                                        placeholder = { Text("0") },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        prefix = { Text(selectedCurrency) },
-                                        modifier = Modifier.width(130.dp),
-                                        shape = RoundedCornerShape(10.dp),
-                                        singleLine = true,
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = SavioEmerald,
-                                            unfocusedBorderColor = GlassCardBorder
-                                        )
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Button(
-                                onClick = {
-                                    val map = mutableMapOf<String, Double>()
-                                    for ((cat, str) in localCategoryLimits) {
-                                        val v = str.toDoubleOrNull() ?: 0.0
-                                        if (v > 0) map[cat] = v
-                                    }
-                                    onUpdateCategoryLimits(map)
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald)
-                            ) {
-                                Text("Update Category Limits")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 5. OpenRouter AI Integration Card
-        item {
-            Card(
-                shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(containerColor = GlassCardBg),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, GlassCardBorder, RoundedCornerShape(22.dp))
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = SavioEmerald,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "OpenRouter AI Integration",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = SavioSlateDark
-                            )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (apiKeyInput.isNotBlank()) SavioEmeraldContainer else GlassBackground
-                        ) {
-                            Text(
-                                text = if (apiKeyInput.isNotBlank()) "ACTIVE" else "LOCAL",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = if (apiKeyInput.isNotBlank()) SavioEmerald else SavioSlateMuted,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Block,
+                            contentDescription = null,
+                            tint = SavioBlacklistRed,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Blacklisted Merchants",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = SavioSlateDark
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Uses gemini-3.5-flash-lite to parse bank SMS (spends, transfers, OTPs, ads) and categorize transactions automatically.",
+                        text = "Transactions from blacklisted merchants are completely ignored and not considered in spend totals or savings calculations.",
                         style = MaterialTheme.typography.bodySmall,
                         color = SavioSlateMuted
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                    OutlinedTextField(
-                        value = apiKeyInput,
-                        onValueChange = { apiKeyInput = it.trim() },
-                        label = { Text("OpenRouter API Key") },
-                        placeholder = { Text("sk-or-v1-...") },
-                        visualTransformation = if (showApiKeyText) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            TextButton(onClick = { showApiKeyText = !showApiKeyText }) {
-                                Text(if (showApiKeyText) "Hide" else "Show", fontSize = 12.sp, color = SavioEmerald)
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("openrouter_api_key_input"),
-                        shape = RoundedCornerShape(12.dp),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = SavioEmerald,
-                            unfocusedBorderColor = GlassCardBorder
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Button(
-                        onClick = { onUpdateApiKey(apiKeyInput) },
-                        shape = RoundedCornerShape(12.dp),
+                    // Input to add a new merchant to blacklist
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald)
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Save API Key")
-                    }
-                }
-            }
-        }
-
-        // 6. Live Status Bar Notification Card
-        item {
-            Card(
-                shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(containerColor = GlassCardBg),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, GlassCardBorder, RoundedCornerShape(22.dp))
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Notifications,
-                                contentDescription = null,
-                                tint = SavioEmerald,
-                                modifier = Modifier.size(20.dp)
+                        OutlinedTextField(
+                            value = newBlacklistInput,
+                            onValueChange = { newBlacklistInput = it },
+                            placeholder = { Text("Enter merchant name to blacklist") },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = SavioBlacklistRed,
+                                unfocusedBorderColor = GlassCardBorder
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                if (newBlacklistInput.isNotBlank()) {
+                                    onAddBlacklistedMerchant(newBlacklistInput.trim())
+                                    newBlacklistInput = ""
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = SavioBlacklistRed)
+                        ) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = "Add")
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Blacklist")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // List of current blacklisted merchants
+                    if (blacklistedMerchants.isEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = GlassBackground,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Text(
-                                text = "Live Status Bar Spend Tracker",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = SavioSlateDark
+                                text = "No merchants blacklisted. Blacklisted merchants will appear here.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SavioSlateMuted,
+                                modifier = Modifier.padding(14.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Keeps live total spend & monthly budget status in your notifications.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SavioSlateMuted
-                        )
+                    } else {
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            blacklistedMerchants.forEach { merchant ->
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = SavioBlacklistBg,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, SavioBlacklistRed.copy(alpha = 0.3f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = merchant,
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = SavioBlacklistRed
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Remove $merchant",
+                                            tint = SavioBlacklistRed,
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                                .clickable { onRemoveBlacklistedMerchant(merchant) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
-
-                    Switch(
-                        checked = isNotificationActive,
-                        onCheckedChange = { onToggleNotification(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = SavioEmerald
-                        )
-                    )
                 }
             }
         }
 
-        // 7. Security & Privacy Card
+        // 6. Security & Privacy Card
         item {
             Card(
                 shape = RoundedCornerShape(22.dp),
@@ -1190,6 +1103,93 @@ fun SettingsScreen(
                                 checkedTrackColor = SavioEmerald
                             )
                         )
+                    }
+                }
+            }
+        }
+
+        // 7. OpenRouter AI Integration Card
+        item {
+            Card(
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = GlassCardBg),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, GlassCardBorder, RoundedCornerShape(22.dp))
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = SavioEmerald,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "OpenRouter AI Integration",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = SavioSlateDark
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (apiKeyInput.isNotBlank()) SavioEmeraldContainer else GlassBackground
+                        ) {
+                            Text(
+                                text = if (apiKeyInput.isNotBlank()) "ACTIVE" else "LOCAL",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (apiKeyInput.isNotBlank()) SavioEmerald else SavioSlateMuted,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Uses gemini-3.5-flash-lite to parse bank SMS (spends, transfers, OTPs, ads) and categorize transactions automatically.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SavioSlateMuted
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = apiKeyInput,
+                        onValueChange = { apiKeyInput = it.trim() },
+                        label = { Text("OpenRouter API Key") },
+                        placeholder = { Text("sk-or-v1-...") },
+                        visualTransformation = if (showApiKeyText) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            TextButton(onClick = { showApiKeyText = !showApiKeyText }) {
+                                Text(if (showApiKeyText) "Hide" else "Show", fontSize = 12.sp, color = SavioEmerald)
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("openrouter_api_key_input"),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = SavioEmerald,
+                            unfocusedBorderColor = GlassCardBorder
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = { onUpdateApiKey(apiKeyInput) },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald)
+                    ) {
+                        Text("Save API Key")
                     }
                 }
             }

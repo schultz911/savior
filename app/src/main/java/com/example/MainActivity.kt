@@ -770,24 +770,6 @@ fun SpendTrackerScreen(
                         )
                     }
 
-                    // Intra-Month Daily Spending Velocity & Burn-Down Curve
-                    item {
-                        DailyBurnDownChart(
-                            burnDownData = dailyBurnDownData,
-                            currency = currency
-                        )
-                    }
-
-                    // Multi-Account & Instrument Liquidity Intelligence
-                    item {
-                        InstrumentLiquidityCard(
-                            instruments = instrumentSummaries,
-                            selectedAccount = selectedAccountFilter,
-                            onSelectAccount = { viewModel.selectAccountFilter(it) },
-                            currency = currency
-                        )
-                    }
-
                     // AI Category Spend Breakup Pie Chart & Limits Card
                     item {
                         SpendBreakupPieChartCard(
