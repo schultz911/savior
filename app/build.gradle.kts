@@ -17,19 +17,21 @@ android {
     applicationId = "com.aistudio.spendtracker.spndtr"
     minSdk = 24
     targetSdk = 36
-    versionCode = 13
-    versionName = "1.6.0"
+    versionCode = 1
+    versionName = "1.0.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
   signingConfigs {
-    create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+    val uploadKeystore = file(System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks")
+    if (uploadKeystore.exists()) {
+      create("release") {
+        storeFile = uploadKeystore
+        storePassword = System.getenv("STORE_PASSWORD")
+        keyAlias = "upload"
+        keyPassword = System.getenv("KEY_PASSWORD")
+      }
     }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")
@@ -44,7 +46,12 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      val releaseSigning = signingConfigs.findByName("release")
+      signingConfig = if (releaseSigning != null && releaseSigning.storeFile?.exists() == true) {
+        releaseSigning
+      } else {
+        signingConfigs.getByName("debugConfig")
+      }
     }
     debug { signingConfig = signingConfigs.getByName("debugConfig") }
   }
