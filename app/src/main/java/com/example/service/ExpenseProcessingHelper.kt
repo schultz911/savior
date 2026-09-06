@@ -3,6 +3,7 @@ package com.example.service
 import android.content.Context
 import android.util.Log
 import com.example.SpendTrackerApplication
+import com.example.ai.AiCoreCategorizer
 import com.example.ai.OpenRouterCategorizer
 import com.example.data.ExpenseEntity
 import com.example.data.MerchantRuleEntity
@@ -36,7 +37,7 @@ object ExpenseProcessingHelper {
             return@withContext handleRefund(context, localParsed, sender, timestamp, isBatchSync)
         }
 
-        // 2. Try OpenRouter AI processing if API key is provided
+        // 2. Tier 1: Cloud AI (OpenRouter Gemini 3.5 Flash Lite) if API key is provided
         if (apiKey.isNotEmpty()) {
             val aiParsed = OpenRouterCategorizer.parseSmsTransaction(
                 rawText = rawText,
@@ -46,7 +47,7 @@ object ExpenseProcessingHelper {
             )
             if (aiParsed != null) {
                 if (!aiParsed.isExpense) {
-                    Log.d(TAG, "SMS classified as non-expense (${aiParsed.classification}), ignoring: '$rawText'")
+                    Log.d(TAG, "SMS classified by Cloud AI as non-expense (${aiParsed.classification}), ignoring: '$rawText'")
                     return@withContext null
                 }
 
@@ -64,7 +65,34 @@ object ExpenseProcessingHelper {
             }
         }
 
-        // 3. Fallback to enhanced local regex parser
+        // 3. Tier 2: On-Device AI (Android AICore / Gemini Nano) fallback if OpenRouter is empty or fails
+        if (AiCoreCategorizer.isAiCoreAvailable(context)) {
+            val nanoParsed = AiCoreCategorizer.parseSmsTransaction(
+                context = context,
+                rawText = rawText,
+                sender = sender
+            )
+            if (nanoParsed != null) {
+                if (!nanoParsed.isExpense) {
+                    Log.d(TAG, "SMS classified by AICore as non-expense (${nanoParsed.classification}), ignoring: '$rawText'")
+                    return@withContext null
+                }
+
+                val parsed = ParsedSms(
+                    amount = nanoParsed.amount,
+                    currency = nanoParsed.currency,
+                    type = nanoParsed.type,
+                    title = nanoParsed.merchant,
+                    accountInfo = nanoParsed.accountInfo,
+                    category = nanoParsed.category,
+                    isExpense = true,
+                    rawText = rawText
+                )
+                return@withContext processAndInsertExpense(context, parsed, sender, timestamp, isBatchSync)
+            }
+        }
+
+        // 4. Tier 3: Enhanced Local Regex Parser (100% offline, universal compatibility)
         if (localParsed != null && localParsed.isExpense) {
             return@withContext processAndInsertExpense(context, localParsed, sender, timestamp, isBatchSync)
         }
@@ -210,6 +238,35 @@ object ExpenseProcessingHelper {
                     isUnrecognized = true
                 } else {
                     finalCategory = aiResult.category
+                    if (effectiveMerchant.isNotBlank() &&
+                        !effectiveMerchant.equals("Unknown", ignoreCase = true) &&
+                        !effectiveMerchant.equals("Merchant / Payee", ignoreCase = true)
+                    ) {
+                        prefs.saveMerchantCategory(effectiveMerchant, finalCategory)
+                        ruleDao.insertRule(
+                            MerchantRuleEntity(
+                                merchantPattern = effectiveMerchant,
+                                assignedCategory = finalCategory,
+                                normalizedAlias = effectiveMerchant,
+                                isRegex = false,
+                                createdAt = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                }
+            } else if (AiCoreCategorizer.isAiCoreAvailable(context) && (finalCategory.isBlank() || finalCategory.equals("General", ignoreCase = true) || finalCategory.equals("Uncategorized", ignoreCase = true))) {
+                val nanoResult = AiCoreCategorizer.categorizeSms(
+                    context = context,
+                    rawText = parsed.rawText,
+                    merchant = effectiveMerchant,
+                    amount = parsed.amount,
+                    currency = preferredCurrency
+                )
+                if (nanoResult.category == "UNKNOWN") {
+                    finalCategory = "Uncategorized"
+                    isUnrecognized = true
+                } else {
+                    finalCategory = nanoResult.category
                     if (effectiveMerchant.isNotBlank() &&
                         !effectiveMerchant.equals("Unknown", ignoreCase = true) &&
                         !effectiveMerchant.equals("Merchant / Payee", ignoreCase = true)

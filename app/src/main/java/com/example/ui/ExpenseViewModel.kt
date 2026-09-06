@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import com.example.ai.AiCoreCategorizer
 
 import com.example.engine.PredictedRecurringBill
 import com.example.engine.RecurringDetectionEngine
@@ -78,6 +79,12 @@ data class FilterCriteria(
     val onlyRecurring: Boolean = false,
     val accountFilter: String? = null
 )
+
+enum class AiEngineTier(val label: String, val subtitle: String) {
+    CLOUD_OPENROUTER("Cloud AI Active", "Gemini 3.5 Flash Lite • Cloud Intelligence"),
+    ON_DEVICE_AICORE("On-Device AI Active", "Gemini Nano • Local AICore NPU Inference"),
+    LOCAL_RULES("Local Rules Active", "Deterministic Rule & Regex Engine • Low Power")
+}
 
 enum class SavioScreenTab {
     DASHBOARD,
@@ -162,6 +169,26 @@ class ExpenseViewModel(
 
     private val _openRouterApiKey = MutableStateFlow(preferences.openRouterApiKey)
     val openRouterApiKey: StateFlow<String> = _openRouterApiKey.asStateFlow()
+
+    val aiEngineTier: StateFlow<AiEngineTier> = _openRouterApiKey.map { key ->
+        if (key.trim().isNotEmpty()) {
+            AiEngineTier.CLOUD_OPENROUTER
+        } else if (AiCoreCategorizer.isAiCoreAvailable(getApplication())) {
+            AiEngineTier.ON_DEVICE_AICORE
+        } else {
+            AiEngineTier.LOCAL_RULES
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = if (preferences.openRouterApiKey.trim().isNotEmpty()) {
+            AiEngineTier.CLOUD_OPENROUTER
+        } else if (AiCoreCategorizer.isAiCoreAvailable(getApplication())) {
+            AiEngineTier.ON_DEVICE_AICORE
+        } else {
+            AiEngineTier.LOCAL_RULES
+        }
+    )
 
     private val _categoryLimits = MutableStateFlow(preferences.getAllCategoryLimits())
     val categoryLimits: StateFlow<Map<String, Double>> = _categoryLimits.asStateFlow()

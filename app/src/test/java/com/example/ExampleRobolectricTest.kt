@@ -2,10 +2,15 @@ package com.example
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.example.ai.AiCoreCategorizer
 import com.example.data.ExpenseType
 import com.example.sms.SmsParser
+import com.example.ui.AiEngineTier
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -509,4 +514,164 @@ class ExampleRobolectricTest {
     // Expected: exp1 (1500) - refundExp (500) = 1000.0 (excluded 8000 and blacklisted 12000 are omitted)
     assertEquals(1000.0, currentSpent, 0.01)
   }
+
+  @Test
+  fun `test aicore availability check and override`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    try {
+      AiCoreCategorizer.testAvailabilityOverride = true
+      assertTrue(AiCoreCategorizer.isAiCoreAvailable(context))
+
+      AiCoreCategorizer.testAvailabilityOverride = false
+      assertFalse(AiCoreCategorizer.isAiCoreAvailable(context))
+    } finally {
+      AiCoreCategorizer.testAvailabilityOverride = null
+    }
+  }
+
+  @Test
+  fun `test aicore json parsing of debit expense`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val mockJson = """
+      {
+        "is_financial": true,
+        "classification": "debit",
+        "amount": 349.00,
+        "currency": "INR",
+        "type": "debit",
+        "merchant": "Zepto Quick Commerce",
+        "category": "Groceries",
+        "account": "HDFC **9876"
+      }
+    """.trimIndent()
+
+    try {
+      AiCoreCategorizer.testAvailabilityOverride = true
+      AiCoreCategorizer.testInferenceProvider = { _, _ -> mockJson }
+
+      val rawSms = "Rs 349.00 debited from A/c **9876 on 06-Sep at Zepto Quick Commerce."
+      val parsed = AiCoreCategorizer.parseSmsTransaction(context, rawSms, "HDFC")
+
+      assertNotNull(parsed)
+      assertEquals(349.00, parsed!!.amount, 0.01)
+      assertEquals("₹", parsed.currency)
+      assertEquals("Zepto Quick Commerce", parsed.merchant)
+      assertEquals("Groceries", parsed.category)
+      assertEquals(ExpenseType.MERCHANT, parsed.type)
+      assertEquals("HDFC ••9876", parsed.accountInfo)
+      assertTrue(parsed.isExpense)
+    } finally {
+      AiCoreCategorizer.testAvailabilityOverride = null
+      AiCoreCategorizer.testInferenceProvider = null
+    }
+  }
+
+  @Test
+  fun `test aicore non-financial message classification`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val mockJson = """
+      {
+        "is_financial": false,
+        "classification": "otp"
+      }
+    """.trimIndent()
+
+    try {
+      AiCoreCategorizer.testAvailabilityOverride = true
+      AiCoreCategorizer.testInferenceProvider = { _, _ -> mockJson }
+
+      val rawSms = "Your OTP for netbanking login is 492019. Do not share with anyone."
+      val parsed = AiCoreCategorizer.parseSmsTransaction(context, rawSms, "HDFC")
+
+      assertNotNull(parsed)
+      assertFalse(parsed!!.isExpense)
+      assertEquals("otp", parsed.classification)
+      assertEquals(0.0, parsed.amount, 0.01)
+    } finally {
+      AiCoreCategorizer.testAvailabilityOverride = null
+      AiCoreCategorizer.testInferenceProvider = null
+    }
+  }
+
+  @Test
+  fun `test aicore categorize fallback`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val mockJson = """
+      {
+        "category": "Travel & Commute"
+      }
+    """.trimIndent()
+
+    try {
+      AiCoreCategorizer.testAvailabilityOverride = true
+      AiCoreCategorizer.testInferenceProvider = { _, _ -> mockJson }
+
+      val result = AiCoreCategorizer.categorizeSms(context, "Uber ride payment Rs 250", "UBER")
+      assertEquals("Travel & Commute", result.category)
+      assertTrue(result.isAiClassified)
+    } finally {
+      AiCoreCategorizer.testAvailabilityOverride = null
+      AiCoreCategorizer.testInferenceProvider = null
+    }
+  }
+
+  @Test
+  fun `test aicore resilience on malformed json`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    try {
+      AiCoreCategorizer.testAvailabilityOverride = true
+      AiCoreCategorizer.testInferenceProvider = { _, _ -> "Sorry, I am unable to parse this message." }
+
+      val parsed = AiCoreCategorizer.parseSmsTransaction(context, "Random text", "SENDER")
+      assertNull(parsed)
+
+      val result = AiCoreCategorizer.categorizeSms(context, "Random text", "SENDER")
+      assertEquals("UNKNOWN", result.category)
+      assertFalse(result.isAiClassified)
+    } finally {
+      AiCoreCategorizer.testAvailabilityOverride = null
+      AiCoreCategorizer.testInferenceProvider = null
+    }
+  }
+
+  @Test
+  fun `test three-tier ai waterfall tier resolution`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    try {
+      // 1. If OpenRouter API key is set -> CLOUD_OPENROUTER
+      val tierWithKey = if ("sk-or-v1-testkey".isNotBlank()) {
+        AiEngineTier.CLOUD_OPENROUTER
+      } else if (AiCoreCategorizer.isAiCoreAvailable(context)) {
+        AiEngineTier.ON_DEVICE_AICORE
+      } else {
+        AiEngineTier.LOCAL_RULES
+      }
+      assertEquals(AiEngineTier.CLOUD_OPENROUTER, tierWithKey)
+
+      // 2. If API key is blank and AICore is available -> ON_DEVICE_AICORE
+      AiCoreCategorizer.testAvailabilityOverride = true
+      val tierWithAiCore = if ("".isNotBlank()) {
+        AiEngineTier.CLOUD_OPENROUTER
+      } else if (AiCoreCategorizer.isAiCoreAvailable(context)) {
+        AiEngineTier.ON_DEVICE_AICORE
+      } else {
+        AiEngineTier.LOCAL_RULES
+      }
+      assertEquals(AiEngineTier.ON_DEVICE_AICORE, tierWithAiCore)
+
+      // 3. If API key is blank and AICore is unavailable -> LOCAL_RULES
+      AiCoreCategorizer.testAvailabilityOverride = false
+      val tierWithOffline = if ("".isNotBlank()) {
+        AiEngineTier.CLOUD_OPENROUTER
+      } else if (AiCoreCategorizer.isAiCoreAvailable(context)) {
+        AiEngineTier.ON_DEVICE_AICORE
+      } else {
+        AiEngineTier.LOCAL_RULES
+      }
+      assertEquals(AiEngineTier.LOCAL_RULES, tierWithOffline)
+    } finally {
+      AiCoreCategorizer.testAvailabilityOverride = null
+    }
+  }
 }
+

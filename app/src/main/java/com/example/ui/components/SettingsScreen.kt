@@ -113,6 +113,9 @@ import com.example.ui.theme.SavioSlateDark
 import com.example.ui.theme.SavioSlateMuted
 import com.example.ui.theme.SavioSlateSubtle
 import com.example.ui.theme.SavioSpendRose
+import com.example.ui.AiEngineTier
+import com.example.ui.theme.SavioTransferIndigo
+import com.example.ui.theme.SavioTransferIndigoBg
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -122,6 +125,7 @@ fun SettingsScreen(
     currentSavingsGoal: Double,
     currentBudget: Double,
     currentApiKey: String,
+    aiEngineTier: AiEngineTier = AiEngineTier.LOCAL_RULES,
     categoryLimits: Map<String, Double>,
     blacklistedMerchants: Set<String>,
     isNotificationActive: Boolean,
@@ -1445,33 +1449,57 @@ fun SettingsScreen(
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
                                 contentDescription = null,
-                                tint = SavioEmerald,
+                                tint = when (aiEngineTier) {
+                                    AiEngineTier.CLOUD_OPENROUTER -> SavioEmerald
+                                    AiEngineTier.ON_DEVICE_AICORE -> SavioTransferIndigo
+                                    AiEngineTier.LOCAL_RULES -> SavioSlateMuted
+                                },
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "OpenRouter AI Integration",
+                                text = "AI Transaction Intelligence",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = SavioSlateDark
                             )
                         }
 
+                        val (badgeBg, badgeTextColor, badgeText) = when (aiEngineTier) {
+                            AiEngineTier.CLOUD_OPENROUTER -> Triple(SavioEmeraldContainer, SavioEmerald, "CLOUD ACTIVE")
+                            AiEngineTier.ON_DEVICE_AICORE -> Triple(SavioTransferIndigoBg, SavioTransferIndigo, "AICORE NANO")
+                            AiEngineTier.LOCAL_RULES -> Triple(GlassBackground, SavioSlateMuted, "OFFLINE RULES")
+                        }
+
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = if (apiKeyInput.isNotBlank()) SavioEmeraldContainer else GlassBackground
+                            color = badgeBg,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                when (aiEngineTier) {
+                                    AiEngineTier.CLOUD_OPENROUTER -> SavioEmerald.copy(alpha = 0.25f)
+                                    AiEngineTier.ON_DEVICE_AICORE -> SavioTransferIndigo.copy(alpha = 0.25f)
+                                    AiEngineTier.LOCAL_RULES -> GlassCardBorder
+                                }
+                            )
                         ) {
                             Text(
-                                text = if (apiKeyInput.isNotBlank()) "ACTIVE" else "LOCAL",
+                                text = badgeText,
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = if (apiKeyInput.isNotBlank()) SavioEmerald else SavioSlateMuted,
+                                color = badgeTextColor,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Uses gemini-3.5-flash-lite to parse bank SMS (spends, transfers, OTPs, ads) and categorize transactions automatically.",
+                        text = "3-Tier Waterfall: Cloud Gemini Flash-Lite → On-Device Gemini Nano (AICore) → Offline Regex Engine.",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                        color = SavioSlateDark
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = aiEngineTier.subtitle,
                         style = MaterialTheme.typography.bodySmall,
                         color = SavioSlateMuted
                     )
