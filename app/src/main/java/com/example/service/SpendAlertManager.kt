@@ -54,7 +54,6 @@ object SpendAlertManager {
         amount: Double,
         currency: String
     ) {
-        createNotificationChannels(context)
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val notifId = (NOTIF_ID_UNRECOGNIZED_BASE + (expenseId % 1000)).toInt()
 
@@ -132,7 +131,6 @@ object SpendAlertManager {
     ) {
         if (categoryLimit <= 0.0) return
 
-        createNotificationChannels(context)
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val ratio = currentCategoryTotal / categoryLimit
@@ -206,12 +204,13 @@ object SpendAlertManager {
         return BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)
     }
 
-    private fun formatCurrency(amount: Double, currency: String): String {
-        val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
-            minimumFractionDigits = 2
-            maximumFractionDigits = 2
-        }
-        return "$currency${formatter.format(amount)}"
+    private val currencyFormatter = NumberFormat.getNumberInstance(Locale.US).apply {
+        minimumFractionDigits = 2
+        maximumFractionDigits = 2
+    }
+
+    private fun formatCurrency(amount: Double, currency: String): String = synchronized(currencyFormatter) {
+        "$currency${currencyFormatter.format(amount)}"
     }
 
     /**
@@ -240,7 +239,6 @@ object SpendAlertManager {
                     continue
                 }
 
-                createNotificationChannels(context)
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 val notifId = 4000 + Math.abs(bill.merchant.hashCode()) % 1000
 
@@ -314,7 +312,6 @@ object SpendAlertManager {
         // Rate-limit: alert at most once every 4 days per month
         if (currentDay - lastAlertDay < 4) return
 
-        createNotificationChannels(context)
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val openIntent = Intent(context, MainActivity::class.java).apply {
@@ -373,7 +370,6 @@ object SpendAlertManager {
         val alertKey = "anomaly_${expense.id}"
         if (alertPrefs.getBoolean(alertKey, false)) return
 
-        createNotificationChannels(context)
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val notifId = (NOTIF_ID_ANOMALY_BASE + (expense.id % 1000)).toInt()
 

@@ -4,10 +4,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
-import com.example.SpendTrackerApplication
-import com.example.data.ExpenseEntity
-import com.example.service.LiveExpenditureNotificationService
-import com.example.sms.SmsParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

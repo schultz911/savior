@@ -28,6 +28,7 @@ class SpendTrackerApplication : Application() {
 
         // Initialize Notification Channels
         LiveExpenditureNotificationService.createNotificationChannel(this)
+        com.example.service.SpendAlertManager.createNotificationChannels(this)
 
         // Schedule Background SMS Reliability Watchdog (Doze Protection)
         com.example.service.SmsCatchUpWorker.schedule(this)

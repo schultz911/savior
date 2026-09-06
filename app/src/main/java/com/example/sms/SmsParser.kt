@@ -71,6 +71,16 @@ object SmsParser {
         Pattern.compile("""(?i)(?:info[:\s]+)([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s*(?:on\b|ref\b|avl\b)|[.!,;]|$)""")
     )
 
+    // Pre-compiled hot-path patterns
+    private val RECEIVED_CREDIT_PATTERN = Pattern.compile("(?i)\\b(received (?:rs\\.?|usd|\\$)?\\s*\\d+)\\b")
+    private val TRANSFER_REGEX_1 = Regex("""(?i)\b(?:sent|transferred|transfer)\b.{1,35}\bto\b""")
+    private val TRANSFER_REGEX_2 = Regex("""(?i)\b(?:upi/p2a/|p2p)\b""")
+
+    private val PREFIX_ARTICLE_REGEX = Regex("(?i)^(the|a|an)\\s+")
+    private val TRANSFER_PREFIX_REGEX = Regex("(?i)^transfer(?:red)?\\s+to\\s+")
+    private val SUFFIX_ENTITY_REGEX = Regex("(?i)\\s+(ltd|inc|corp|co|llc|pvt|services|vpa)$")
+    private val SPECIAL_CHARS_REGEX = Regex("[*#_/]")
+
     fun parse(smsBody: String, sender: String = ""): ParsedSms? {
         val cleanBody = smsBody.trim()
         if (cleanBody.isEmpty()) return null
@@ -110,14 +120,14 @@ object SmsParser {
         if (cleanBody.contains("credited", ignoreCase = true) && !cleanBody.contains("debited", ignoreCase = true)) {
             return null
         }
-        if (Pattern.compile("(?i)\\b(received (?:rs\\.?|usd|\\$)?\\s*\\d+)\\b").matcher(cleanBody).find() && !isRefund) {
+        if (RECEIVED_CREDIT_PATTERN.matcher(cleanBody).find() && !isRefund) {
             return null
         }
 
         // Determine if message is an expenditure
         val isTransfer = TRANSFER_KEYWORDS.any { lower.contains(it) } ||
-                Regex("""(?i)\b(?:sent|transferred|transfer)\b.{1,35}\bto\b""").containsMatchIn(cleanBody) ||
-                Regex("""(?i)\b(?:upi/p2a/|p2p)\b""").containsMatchIn(cleanBody)
+                TRANSFER_REGEX_1.containsMatchIn(cleanBody) ||
+                TRANSFER_REGEX_2.containsMatchIn(cleanBody)
         val isDebit = DEBIT_KEYWORDS.any { lower.contains(it) }
         val isSpend = SPEND_KEYWORDS.any { lower.contains(it) }
 
@@ -294,10 +304,10 @@ object SmsParser {
             return raw.trimEnd('.', ',')
         }
 
-        var clean = raw.replace(Regex("(?i)^(the|a|an)\\s+"), "")
-            .replace(Regex("(?i)^transfer(?:red)?\\s+to\\s+"), "")
-            .replace(Regex("(?i)\\s+(ltd|inc|corp|co|llc|pvt|services|vpa)$"), "")
-            .replace(Regex("[*#_/]"), " ")
+        var clean = raw.replace(PREFIX_ARTICLE_REGEX, "")
+            .replace(TRANSFER_PREFIX_REGEX, "")
+            .replace(SUFFIX_ENTITY_REGEX, "")
+            .replace(SPECIAL_CHARS_REGEX, " ")
             .trim()
             .trimEnd('.', ',', ';', ':', '-', ' ')
 

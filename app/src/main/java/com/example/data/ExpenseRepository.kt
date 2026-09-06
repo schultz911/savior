@@ -3,7 +3,6 @@ package com.example.data
 import android.content.Context
 import com.example.service.LiveExpenditureNotificationService
 import com.example.sms.SampleSmsData
-import com.example.sms.SmsParser
 import com.example.sms.SmsReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -164,7 +163,8 @@ class ExpenseRepository(
                 context = context,
                 rawText = msg.body,
                 sender = msg.sender,
-                timestamp = msg.timestamp
+                timestamp = msg.timestamp,
+                isBatchSync = true
             )
             if (inserted != null) {
                 insertedCount++

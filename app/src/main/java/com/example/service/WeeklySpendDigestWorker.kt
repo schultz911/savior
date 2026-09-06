@@ -54,11 +54,13 @@ class WeeklySpendDigestWorker(
             val sevenDaysAgo = now - TimeUnit.DAYS.toMillis(7)
             val recentExpenses = app.repository.getExpensesSince(sevenDaysAgo)
 
+            val blacklisted = app.preferences.getBlacklistedMerchants().map { it.trim().lowercase(Locale.US) }
             val validExpenses = recentExpenses.filter {
                 !it.isReversal &&
                 it.type != ExpenseType.SELF &&
                 !it.category.equals("Self", ignoreCase = true) &&
-                !it.category.equals("Credit Card Bill", ignoreCase = true)
+                !it.category.equals("Credit Card Bill", ignoreCase = true) &&
+                !blacklisted.any { b -> it.merchantOrRecipient.trim().lowercase(Locale.US).contains(b) }
             }
 
             val totalWeeklySpend = validExpenses.sumOf { it.netAmount }

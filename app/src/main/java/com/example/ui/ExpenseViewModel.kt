@@ -370,10 +370,6 @@ class ExpenseViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = SafeSpendPacing()
     )
-
-    // Blacklisted merchants are completely ignored and not considered in spend totals
-    val blacklistedDeductions: StateFlow<Double> = MutableStateFlow(0.0).asStateFlow()
-
     // Monthly Total = all valid transactions from non-blacklisted merchants, excluding Self and Credit Card Bill
     val monthlyTotal: StateFlow<Double> = combine(
         currentMonthExpenses,
@@ -585,6 +581,20 @@ class ExpenseViewModel(
         val sdfFull = SimpleDateFormat("MMM yyyy", Locale.US)
         val sdfShort = SimpleDateFormat("MMM", Locale.US)
 
+        val spendByMonth = mutableMapOf<String, Double>()
+        val hasDataMonthKeys = mutableSetOf<String>()
+        val normalizedBlacklist = blacklisted.map { it.trim().lowercase(Locale.US) }.toSet()
+
+        for (exp in expenses) {
+            hasDataMonthKeys.add(exp.monthKey)
+            val norm = exp.merchantOrRecipient.trim().lowercase(Locale.US)
+            if (norm.isNotBlank() && normalizedBlacklist.contains(norm)) continue
+            if (isSelf(exp) || isCreditCard(exp)) continue
+
+            val net = (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
+            spendByMonth[exp.monthKey] = (spendByMonth[exp.monthKey] ?: 0.0) + net
+        }
+
         val months = mutableListOf<MonthAnalytics>()
 
         for (i in 11 downTo 0) {
@@ -598,12 +608,7 @@ class ExpenseViewModel(
             val year = cal.get(Calendar.YEAR)
             val monthNum = cal.get(Calendar.MONTH) + 1
 
-            val totalSpent = expenses.filter {
-                it.monthKey == monthKey &&
-                !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) &&
-                !isSelf(it) &&
-                !isCreditCard(it)
-            }.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
+            val totalSpent = spendByMonth[monthKey] ?: 0.0
             val savedAmount = salary - totalSpent
             val isOverspent = totalSpent > salary
             val rate = if (salary > 0) (savedAmount / salary) * 100.0 else 0.0
@@ -624,7 +629,7 @@ class ExpenseViewModel(
             )
         }
         val monthsWithData = months.filter { m ->
-            m.totalSpent > 0.0 || expenses.any { it.monthKey == m.monthKey }
+            m.totalSpent > 0.0 || hasDataMonthKeys.contains(m.monthKey)
         }
         return if (monthsWithData.isNotEmpty()) monthsWithData else months.takeLast(1)
     }
@@ -635,10 +640,24 @@ class ExpenseViewModel(
         }
     }
 
+    // Pre-normalized lowercase set for instant O(1) blacklist lookups
+    val normalizedBlacklistedMerchants: StateFlow<Set<String>> = _blacklistedMerchants
+        .map { set -> set.map { it.trim().lowercase(Locale.US) }.filter { it.isNotBlank() }.toSet() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = preferences.getBlacklistedMerchants().map { it.trim().lowercase(Locale.US) }.filter { it.isNotBlank() }.toSet()
+        )
+
     fun isBlacklistedMerchant(merchant: String, blacklisted: Set<String> = _blacklistedMerchants.value): Boolean {
-        val norm = merchant.trim()
+        val norm = merchant.trim().lowercase(Locale.US)
         if (norm.isBlank()) return false
-        return blacklisted.any { it.equals(norm, ignoreCase = true) }
+        val normalized = if (blacklisted === _blacklistedMerchants.value) {
+            normalizedBlacklistedMerchants.value
+        } else {
+            blacklisted.map { it.trim().lowercase(Locale.US) }.toSet()
+        }
+        return normalized.contains(norm)
     }
 
     fun blacklistMerchant(merchant: String) {

@@ -82,7 +82,6 @@ fun ExpenditureHeroCard(
     savingsGoal: Double = 0.0,
     monthlyBudget: Double = 0.0,
     debitsTotal: Double = 0.0,
-    blacklistedDeductions: Double = 0.0,
     isNotificationActive: Boolean,
     onToggleNotification: (Boolean) -> Unit,
     safeSpendPacing: com.example.ui.SafeSpendPacing? = null,

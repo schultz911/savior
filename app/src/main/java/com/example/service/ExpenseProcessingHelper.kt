@@ -5,6 +5,7 @@ import android.util.Log
 import com.example.SpendTrackerApplication
 import com.example.ai.OpenRouterCategorizer
 import com.example.data.ExpenseEntity
+import com.example.data.MerchantRuleEntity
 import com.example.sms.ParsedSms
 import com.example.sms.SmsParser
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +23,8 @@ object ExpenseProcessingHelper {
         context: Context,
         rawText: String,
         sender: String,
-        timestamp: Long = System.currentTimeMillis()
+        timestamp: Long = System.currentTimeMillis(),
+        isBatchSync: Boolean = false
     ): ExpenseEntity? = withContext(Dispatchers.IO) {
         val app = context.applicationContext as? SpendTrackerApplication ?: return@withContext null
         val prefs = app.preferences
@@ -31,7 +33,7 @@ object ExpenseProcessingHelper {
         // 1. Check if it's a refund or reversal via deterministic local parser
         val localParsed = SmsParser.parse(rawText, sender)
         if (localParsed != null && localParsed.isRefund) {
-            return@withContext handleRefund(context, localParsed, sender, timestamp)
+            return@withContext handleRefund(context, localParsed, sender, timestamp, isBatchSync)
         }
 
         // 2. Try OpenRouter AI processing if API key is provided
@@ -58,13 +60,13 @@ object ExpenseProcessingHelper {
                     isExpense = true,
                     rawText = rawText
                 )
-                return@withContext processAndInsertExpense(context, parsed, sender, timestamp)
+                return@withContext processAndInsertExpense(context, parsed, sender, timestamp, isBatchSync)
             }
         }
 
         // 3. Fallback to enhanced local regex parser
         if (localParsed != null && localParsed.isExpense) {
-            return@withContext processAndInsertExpense(context, localParsed, sender, timestamp)
+            return@withContext processAndInsertExpense(context, localParsed, sender, timestamp, isBatchSync)
         }
         return@withContext null
     }
@@ -77,7 +79,8 @@ object ExpenseProcessingHelper {
         context: Context,
         parsed: ParsedSms,
         sender: String,
-        timestamp: Long
+        timestamp: Long,
+        isBatchSync: Boolean = false
     ): ExpenseEntity? = withContext(Dispatchers.IO) {
         val app = context.applicationContext as? SpendTrackerApplication ?: return@withContext null
         val dao = app.database.expenseDao()
@@ -124,7 +127,7 @@ object ExpenseProcessingHelper {
             resultExpense = refundEntity.copy(id = id)
         }
 
-        if (prefs.isPersistentNotificationEnabled) {
+        if (!isBatchSync && prefs.isPersistentNotificationEnabled) {
             LiveExpenditureNotificationService.updateLiveExpenditure(context)
         }
 
@@ -139,7 +142,8 @@ object ExpenseProcessingHelper {
         context: Context,
         parsed: ParsedSms,
         sender: String,
-        timestamp: Long = System.currentTimeMillis()
+        timestamp: Long = System.currentTimeMillis(),
+        isBatchSync: Boolean = false
     ): ExpenseEntity? = withContext(Dispatchers.IO) {
         val app = context.applicationContext as? SpendTrackerApplication ?: return@withContext null
         val dao = app.database.expenseDao()
@@ -205,6 +209,21 @@ object ExpenseProcessingHelper {
                     isUnrecognized = true
                 } else {
                     finalCategory = aiResult.category
+                    if (effectiveMerchant.isNotBlank() &&
+                        !effectiveMerchant.equals("Unknown", ignoreCase = true) &&
+                        !effectiveMerchant.equals("Merchant / Payee", ignoreCase = true)
+                    ) {
+                        prefs.saveMerchantCategory(effectiveMerchant, finalCategory)
+                        ruleDao.insertRule(
+                            MerchantRuleEntity(
+                                merchantPattern = effectiveMerchant,
+                                assignedCategory = finalCategory,
+                                normalizedAlias = effectiveMerchant,
+                                isRegex = false,
+                                createdAt = System.currentTimeMillis()
+                            )
+                        )
+                    }
                 }
             } else {
                 // Local fallback logic: if local category is General Spend, treat as unrecognized
@@ -268,8 +287,8 @@ object ExpenseProcessingHelper {
             checkAnomalySpikeAlert(context, entity)
         }
 
-        // 4. Update persistent notification
-        if (prefs.isPersistentNotificationEnabled) {
+        // 4. Update persistent notification (deferred during batch sync)
+        if (!isBatchSync && prefs.isPersistentNotificationEnabled) {
             LiveExpenditureNotificationService.updateLiveExpenditure(context)
         }
 

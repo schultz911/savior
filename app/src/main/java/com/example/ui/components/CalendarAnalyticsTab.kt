@@ -161,15 +161,14 @@ fun CalendarAnalyticsTab(
         val sdfShort = SimpleDateFormat("MMM", Locale.US)
         val sdfFull = SimpleDateFormat("MMM yyyy", Locale.US)
         val cal = Calendar.getInstance()
+        val expensesByMonth = if (allExpenses.isNotEmpty()) allExpenses.groupBy { it.monthKey } else emptyMap()
         (1..12).mapNotNull { monthNum ->
             cal.set(selectedYear, monthNum - 1, 1)
             val monthKey = String.format(Locale.US, "%04d-%02d", selectedYear, monthNum)
             val fullLabel = sdfFull.format(cal.time)
             val shortLabel = sdfShort.format(cal.time)
 
-            val expensesForM = if (allExpenses.isNotEmpty()) {
-                allExpenses.filter { it.monthKey == monthKey }
-            } else if (monthKey == selectedMonthKey) {
+            val expensesForM = expensesByMonth[monthKey] ?: if (monthKey == selectedMonthKey) {
                 currentMonthExpenses
             } else emptyList()
 

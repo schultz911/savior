@@ -102,7 +102,6 @@ import com.example.ui.components.AssignCategoryDialog
 import com.example.ui.components.CalendarAnalyticsTab
 import com.example.ui.components.DailyBurnDownChart
 import com.example.ui.components.ExpenditureHeroCard
-import com.example.ui.components.InstrumentLiquidityCard
 import com.example.ui.components.ManualAddExpenseDialog
 import com.example.ui.components.MonthSelector
 import com.example.ui.components.PermissionsBanner
