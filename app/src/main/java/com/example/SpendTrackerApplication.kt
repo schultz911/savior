@@ -21,6 +21,12 @@ class SpendTrackerApplication : Application() {
         super.onCreate()
         instance = this
 
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            android.util.Log.e("SpendTrackerApp", "Uncaught exception on thread [${thread.name}]", throwable)
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
+
         database = AppDatabase.getDatabase(this)
         preferences = ExpensePreferences(this)
         repository = ExpenseRepository(this, database.expenseDao(), preferences, database.merchantRuleDao())

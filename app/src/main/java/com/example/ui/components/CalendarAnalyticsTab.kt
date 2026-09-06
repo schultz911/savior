@@ -183,7 +183,9 @@ fun CalendarAnalyticsTab(
                     expensesForM.filter {
                         !it.isExcluded &&
                         (isBlacklistedMerchant == null || !isBlacklistedMerchant(it.merchantOrRecipient)) &&
+                        it.type != ExpenseType.SELF &&
                         !it.category.equals("Self", ignoreCase = true) &&
+                        it.type != ExpenseType.CREDIT_CARD &&
                         !it.category.equals("Credit Card Bill", ignoreCase = true)
                     }.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0)
                 } else {
@@ -218,7 +220,9 @@ fun CalendarAnalyticsTab(
             ?: selectedMonthExpenses.filter {
                 !it.isExcluded &&
                 (isBlacklistedMerchant == null || !isBlacklistedMerchant(it.merchantOrRecipient)) &&
+                it.type != ExpenseType.SELF &&
                 !it.category.equals("Self", ignoreCase = true) &&
+                it.type != ExpenseType.CREDIT_CARD &&
                 !it.category.equals("Credit Card Bill", ignoreCase = true)
             }.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0)
     }
@@ -259,7 +263,9 @@ fun CalendarAnalyticsTab(
             prevMonthExpenses.filter {
                 !it.isExcluded &&
                 (isBlacklistedMerchant == null || !isBlacklistedMerchant(it.merchantOrRecipient)) &&
+                it.type != ExpenseType.SELF &&
                 !it.category.equals("Self", ignoreCase = true) &&
+                it.type != ExpenseType.CREDIT_CARD &&
                 !it.category.equals("Credit Card Bill", ignoreCase = true)
             }.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0)
         } else {
@@ -1124,7 +1130,9 @@ fun CategoryWiseBarGraph(
         val nonExcluded = prevMonthExpenses.filter {
             !it.isExcluded &&
             (isBlacklistedMerchant == null || !isBlacklistedMerchant(it.merchantOrRecipient)) &&
+            it.type != ExpenseType.SELF &&
             !it.category.equals("Self", ignoreCase = true) &&
+            it.type != ExpenseType.CREDIT_CARD &&
             !it.category.equals("Credit Card Bill", ignoreCase = true)
         }
         val targetList = nonExcluded
@@ -1136,7 +1144,9 @@ fun CategoryWiseBarGraph(
         val nonExcluded = expenses.filter {
             !it.isExcluded &&
             (isBlacklistedMerchant == null || !isBlacklistedMerchant(it.merchantOrRecipient)) &&
+            it.type != ExpenseType.SELF &&
             !it.category.equals("Self", ignoreCase = true) &&
+            it.type != ExpenseType.CREDIT_CARD &&
             !it.category.equals("Credit Card Bill", ignoreCase = true)
         }
         val targetList = nonExcluded

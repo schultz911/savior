@@ -32,10 +32,6 @@ class SmsCatchUpWorker(
             val app = applicationContext as? SpendTrackerApplication ?: return Result.success()
             val insertedCount = app.repository.syncInbox()
             Log.d(TAG, "SmsCatchUpWorker completed. Ingested $insertedCount missed messages.")
-
-            if (insertedCount > 0 && app.preferences.isPersistentNotificationEnabled) {
-                LiveExpenditureNotificationService.updateLiveExpenditure(applicationContext)
-            }
             return Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "SmsCatchUpWorker failed with error: ${e.message}", e)

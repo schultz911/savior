@@ -26,8 +26,6 @@ class ExampleRobolectricTest {
     assertNotNull(d1)
     val d2 = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_stat_rupee)
     assertNotNull(d2)
-    val d3 = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_launcher_foreground)
-    assertNotNull(d3)
     val d4 = androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_savio_launcher_foreground)
     assertNotNull(d4)
   }

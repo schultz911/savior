@@ -161,7 +161,9 @@ class MainActivity : FragmentActivity() {
                     viewModel = viewModel,
                     manualAddTrigger = manualAddTrigger,
                     syncTrigger = syncTrigger,
-                    initialAssignExpenseId = assignCategoryExpenseIdState
+                    initialAssignExpenseId = assignCategoryExpenseIdState,
+                    initialNavigateTab = initialNavigateTab,
+                    onTabNavigated = { initialNavigateTab = null }
                 )
             }
         }
@@ -195,6 +197,7 @@ class MainActivity : FragmentActivity() {
     private var manualAddTrigger by mutableStateOf(0L)
     private var syncTrigger by mutableStateOf(0L)
     private var assignCategoryExpenseIdState by mutableStateOf<Long?>(null)
+    private var initialNavigateTab by mutableStateOf<SavioScreenTab?>(null)
 
     private fun handleIntent(intent: android.content.Intent?) {
         if (intent != null) {
@@ -210,6 +213,11 @@ class MainActivity : FragmentActivity() {
             }
             if (intent.hasExtra(EXTRA_ASSIGN_CATEGORY_EXPENSE_ID)) {
                 assignCategoryExpenseIdState = intent.getLongExtra(EXTRA_ASSIGN_CATEGORY_EXPENSE_ID, -1L)
+            }
+            if (intent.getIntExtra("extra_open_tab", -1) == 1) {
+                initialNavigateTab = SavioScreenTab.ANALYTICS
+            } else if (intent.getStringExtra(EXTRA_NAVIGATE_TAB) == TAB_DASHBOARD) {
+                initialNavigateTab = SavioScreenTab.DASHBOARD
             }
         }
     }
@@ -263,6 +271,8 @@ fun SpendTrackerScreen(
     manualAddTrigger: Long = 0L,
     syncTrigger: Long = 0L,
     initialAssignExpenseId: Long? = null,
+    initialNavigateTab: SavioScreenTab? = null,
+    onTabNavigated: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -441,6 +451,13 @@ fun SpendTrackerScreen(
             if (found != null) {
                 assignCategoryTargetExpense = found
             }
+        }
+    }
+
+    LaunchedEffect(initialNavigateTab) {
+        if (initialNavigateTab != null) {
+            viewModel.setTab(initialNavigateTab)
+            onTabNavigated()
         }
     }
 

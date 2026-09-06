@@ -106,12 +106,6 @@ class ExpenseRepository(
     fun getExpensesForMonth(monthKey: String): Flow<List<ExpenseEntity>> =
         expenseDao.getExpensesForMonth(monthKey)
 
-    fun getTotalExpenditureForMonth(monthKey: String): Flow<Double?> =
-        expenseDao.getTotalExpenditureForMonth(monthKey)
-
-    fun getTotalByTypeForMonth(monthKey: String, type: ExpenseType): Flow<Double?> =
-        expenseDao.getTotalByTypeForMonth(monthKey, type)
-
     suspend fun insertExpense(expense: ExpenseEntity): Long = withContext(Dispatchers.IO) {
         val id = expenseDao.insertExpense(expense)
         if (id > 0 && preferences.isPersistentNotificationEnabled) {

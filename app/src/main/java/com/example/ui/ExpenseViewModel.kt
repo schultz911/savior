@@ -267,11 +267,13 @@ class ExpenseViewModel(
 
             matchesFilter && matchesQuery && matchesCategory && matchesAmount && matchesRecurring && matchesAccount
         }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     // Trailing 30-Day Median Transaction Spend for Anomaly Benchmarks
     val trailingMedianSpend: StateFlow<Double> = allExpenses.map { list ->
@@ -613,7 +615,7 @@ class ExpenseViewModel(
             hasDataMonthKeys.add(exp.monthKey)
             if (exp.isExcluded) continue
             val norm = exp.merchantOrRecipient.trim().lowercase(Locale.US)
-            if (norm.isNotBlank() && normalizedBlacklist.contains(norm)) continue
+            if (norm.isNotBlank() && normalizedBlacklist.any { norm.contains(it) || it.contains(norm) }) continue
             if (isSelf(exp) || isCreditCard(exp)) continue
 
             val net = exp.effectiveSpendAmount

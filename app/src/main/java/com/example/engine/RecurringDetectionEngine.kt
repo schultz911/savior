@@ -1,6 +1,7 @@
 package com.example.engine
 
 import com.example.data.ExpenseEntity
+import com.example.data.ExpenseType
 import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
@@ -32,13 +33,23 @@ object RecurringDetectionEngine {
     ): List<PredictedRecurringBill> {
         if (allExpenses.isEmpty()) return emptyList()
 
+        val validExpenses = allExpenses.filter {
+            !it.isExcluded &&
+            !it.isRefundOrReversal &&
+            it.type != ExpenseType.SELF &&
+            !it.category.equals("Self", ignoreCase = true) &&
+            it.type != ExpenseType.CREDIT_CARD &&
+            !it.category.equals("Credit Card Bill", ignoreCase = true)
+        }
+        if (validExpenses.isEmpty()) return emptyList()
+
         val cal = Calendar.getInstance()
         val currentDay = cal.get(Calendar.DAY_OF_MONTH)
 
         val normalizedIgnored = ignoredMerchants.map { it.trim().lowercase(Locale.US) }
 
         // Group by normalized merchant, excluding ignored recurring merchants
-        val grouped = allExpenses.groupBy { it.merchantOrRecipient.trim().lowercase(Locale.US) }
+        val grouped = validExpenses.groupBy { it.merchantOrRecipient.trim().lowercase(Locale.US) }
             .filterKeys { key ->
                 key.isNotBlank() && key != "unknown" && key != "merchant / payee" &&
                     normalizedIgnored.none { key.contains(it) || it.contains(key) }

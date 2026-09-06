@@ -18,15 +18,6 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE monthKey = :monthKey ORDER BY timestamp DESC")
     fun getExpensesForMonth(monthKey: String): Flow<List<ExpenseEntity>>
 
-    @Query("SELECT SUM(CASE WHEN amount > refundedAmount THEN amount - refundedAmount ELSE 0.0 END) FROM expenses WHERE monthKey = :monthKey")
-    fun getTotalExpenditureForMonth(monthKey: String): Flow<Double?>
-
-    @Query("SELECT SUM(CASE WHEN amount > refundedAmount THEN amount - refundedAmount ELSE 0.0 END) FROM expenses WHERE monthKey = :monthKey AND type = :type")
-    fun getTotalByTypeForMonth(monthKey: String, type: ExpenseType): Flow<Double?>
-
-    @Query("SELECT SUM(CASE WHEN amount > refundedAmount THEN amount - refundedAmount ELSE 0.0 END) FROM expenses WHERE monthKey = :monthKey")
-    suspend fun getTotalExpenditureForMonthSync(monthKey: String): Double?
-
     @Query("SELECT * FROM expenses WHERE monthKey = :monthKey ORDER BY timestamp DESC")
     suspend fun getExpensesForMonthSync(monthKey: String): List<ExpenseEntity>
 

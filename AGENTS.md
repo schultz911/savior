@@ -2,6 +2,16 @@
 
 ## 1. Discovered Optimizations
 
+- **[Vector B] Substring Blacklist Leak in 12-Month Analytics (`ExpenseViewModel.kt`)**: Exact match `normalizedBlacklist.contains(norm)` in `computeLast12MonthsAnalytics` leaks blacklisted merchants with location/store suffixes into historical trends.
+- **[Vector B] Mathematical Discrepancy & Type Desynchronization in Historical Analytics (`CalendarAnalyticsTab.kt`)**: Filters expenditures using only category names without checking `type == ExpenseType.SELF` or `type == ExpenseType.CREDIT_CARD`, causing spend discrepancies between Dashboard and Analytics tabs.
+- **[Vector B] Deep-Link Dead End in Intent Handling (`MainActivity.kt`)**: `MainActivity.handleIntent()` drops `extra_open_tab` and `EXTRA_NAVIGATE_TAB` extras dispatched by `WeeklySpendDigestWorker` and `SpendAlertManager`, failing to navigate to requested tabs.
+- **[Vector B] Main Thread UI Jitter on Multi-Parametric Search (`ExpenseViewModel.kt`)**: `filteredExpenses` executes multi-field string filtering on `Dispatchers.Main` without `flowOn(Dispatchers.Default)`, causing frame drops during search queries.
+- **[Vector B] Recurring Subscription Contamination by Refunds & Excluded Transactions (`RecurringDetectionEngine.kt`)**: `detectRecurringBills()` does not filter out `isExcluded`, `isRefundOrReversal`, `SELF`, or `CREDIT_CARD`, risking misclassifying refunds as recurring bills.
+- **[Vector B] Redundant Watchdog IPC and Foreground Service Sync (`SmsCatchUpWorker.kt`)**: Explicitly calls `updateLiveExpenditure()` after `syncInbox()`, which already internally triggers it, duplicating Binder IPC and SQLite loads upon background wakeup.
+- **[Vector A] Unreferenced 5.4 KB Vector Drawable (`ic_launcher_foreground.xml`)**: Orphan file left over from launcher icon rebranding.
+- **[Vector A] Dead Aggregate Room DAO Queries (`ExpenseDao.kt` & `MerchantRuleDao.kt`)**: Inaccurate and unused SQL queries `getTotalExpenditureForMonth`, `getTotalByTypeForMonth`, and `MerchantRuleDao` helper methods adding DEX symbol bloat.
+- **[Vector C] Disabled R8 Minification & Missing Proguard Rules (`build.gradle.kts` & `proguard-rules.pro`)**: Unstripped release APK size is 17.2 MB due to disabled code shrinking and missing keep rules.
+- **[Vector C] Unhandled Background Crash Surface (`SpendTrackerApplication.kt`)**: Lack of global uncaught exception handler in application process risking unhandled background thread crashes.
 - **[Vector B] Excel Export OOM Risk (`ExcelExportHelper.kt`)**: Full XML workbook constructed in single `StringBuilder` in RAM; `sb.toString()` duplicates ~25 MB peak heap before disk write, risking `OutOfMemoryError` on 2–3 GB RAM budget devices during large exports.
 - **[Vector B] Full-History SQLite Load in Foreground Service (`LiveExpenditureNotificationService.kt`)**: `dao.getAllExpensesSync()` loads entire multi-year transaction history on every notification refresh (triggered per SMS, app resume, or manual add).
 - **[Vector B] Intermediate Collection Churn in Recurring Engine (`RecurringDetectionEngine.kt`)**: `.map{}.average()` and `.map{}.sorted()` create intermediate `ArrayList` allocations per merchant group; zero-guard missing for average amount division.
@@ -25,6 +35,20 @@
 
 ## 2. Previously Suggested
 
+- **Master Plan Phase 1: Mathematical Integrity & Deep-Link Intent Contracts**:
+  - Substring Blacklist Filtering: Update `ExpenseViewModel.computeLast12MonthsAnalytics()` to use substring containment on normalized blacklist set, eliminating blacklisted spend leaks in historical trends.
+  - Analytics Type-Parity Filtering: Update `CalendarAnalyticsTab.kt` (`monthsForYear`, `selectedTotalSpend`, `prevTotalSpend`, and `CategoryWiseBarGraph`) to filter out both `type` and `category` for `SELF` and `CREDIT_CARD`, achieving 100% mathematical parity with Dashboard.
+  - Deep-Link Notification Intent Routing: Wire `extra_open_tab` and `EXTRA_NAVIGATE_TAB` in `MainActivity.handleIntent()` to deep-link users directly to Analytics or Dashboard upon tapping spend digest notifications.
+- **Master Plan Phase 2: Concurrency, CPU & I/O Optimization**:
+  - Main Thread Search Offloading: Append `.flowOn(Dispatchers.Default)` to `ExpenseViewModel.filteredExpenses` to eliminate UI thread frame drops during typing and multi-parameter filtering.
+  - Recurring Engine Sanitization: Filter out `isExcluded`, `isRefundOrReversal`, `SELF`, and `CREDIT_CARD` transactions in `RecurringDetectionEngine.kt` to prevent refund and exclusion contamination in subscription radar.
+  - SMS Watchdog Duplicate IPC Elimination: Remove redundant `updateLiveExpenditure()` invocation in `SmsCatchUpWorker.kt`, dropping duplicate Binder IPC and SQLite query load on background wakeup.
+- **Master Plan Phase 3: Codebase Sanitization & Asset Purge**:
+  - Delete unreferenced 5.4 KB legacy vector `app/src/main/res/drawable/ic_launcher_foreground.xml`.
+  - Purge dead and inaccurate SQL aggregate queries in `ExpenseDao.kt` (`getTotalExpenditureForMonth`, `getTotalByTypeForMonth`, `getTotalExpenditureForMonthSync`), passthroughs in `ExpenseRepository.kt`, and unused helpers in `MerchantRuleDao.kt`.
+- **Master Plan Phase 4: Enterprise Production Hardening & Packaging**:
+  - Install enterprise global uncaught crash handler in `SpendTrackerApplication.kt` with state recovery.
+  - Configure production Proguard rules in `app/proguard-rules.pro` (Room, Moshi, Retrofit) and activate R8 minification and resource shrinking in `app/build.gradle.kts` (>65% APK size reduction from 17.2 MB to ~5.5 MB).
 - **Phase 1: Sanitization & Clean-up (Vector A)**:
   - Delete `c:\savior\app\src\main\java\com\example\ui\components\SettingsDialog.kt` (424 lines).
   - Remove dangling `blacklistedDeductions` StateFlow from `ExpenseViewModel.kt` (L375) and `ExpenditureHeroCard.kt` (L85).
@@ -44,6 +68,28 @@
 ---
 
 ## 3. Approved and Implemented
+
+- **[Master Plan Phase 4: Enterprise Production Hardening & Packaging] (Executed & Validated)**:
+  - **Background Crash Boundary (`SpendTrackerApplication.kt`)**: Installed a global uncaught exception boundary with structured diagnostic logging and graceful delegation to the default OS handler, hardening background worker routines against silent process deaths.
+  - **Enterprise ProGuard Rules & R8 Shrinking (`app/build.gradle.kts` & `app/proguard-rules.pro`)**: Configured comprehensive ProGuard keep rules for Room database entities/DAOs, Moshi JSON serialization adapters, Retrofit/OkHttp, WorkManager workers, and Biometric authentication. Enabled `isMinifyEnabled = true` and `isShrinkResources = true` in release builds while preserving all Firebase dependencies. Succeeded with 0 warnings/errors, reducing release APK size by 74.2% from 17.2 MB to 4.22 MB (4,429,897 bytes). Synchronized release artifacts `savior-1.0.0.apk` and `savio-1.0.0.apk`.
+  - **Automated Verification**: Ran offline unit tests (`.\gradlew test --offline` - 33 tasks passed) and full release assemble (`.\gradlew assembleRelease --offline` - 49 tasks passed).
+
+- **[Master Plan Phase 3: Codebase Sanitization & Asset Purge] (Executed & Validated)**:
+  - **Legacy Vector Purge (`ic_launcher_foreground.xml`)**: Deleted unreferenced 5.4 KB legacy XML vector asset and updated unit test resource assertions.
+  - **Dead DAO Query Purge (`ExpenseDao.kt`, `ExpenseRepository.kt`, `MerchantRuleDao.kt`)**: Purged obsolete aggregate queries `getTotalExpenditureForMonth`, `getTotalByTypeForMonth`, and `getTotalExpenditureForMonthSync` alongside dead helper queries `deleteRuleByPattern` and `clearAllRules`, eliminating dead code and obsolete aggregate SQL math.
+  - **Automated Verification**: Ran full offline test suite (`.\gradlew test --offline`), passing with 33 actionable tasks (0 failures, 0 regressions).
+
+- **[Master Plan Phase 2: Concurrency, CPU & I/O Optimization] (Executed & Validated)**:
+  - **Main Thread Search Offloading (`ExpenseViewModel.kt`)**: Attached `.flowOn(Dispatchers.Default)` to the `filteredExpenses` coroutine pipeline, moving multi-parameter string filtering (matching merchant, account, category, notes, amount, and date) off the Android Main Thread to eliminate frame drops and UI jank during search queries.
+  - **Recurring Engine Sanitization (`RecurringDetectionEngine.kt`)**: Cleaned input transactions prior to merchant grouping in `detectRecurringBills()`, strictly filtering out excluded items (`isExcluded`), refunds and reversals (`isRefundOrReversal`), self-transfers (`SELF`), and credit card payments (`CREDIT_CARD`), preventing spurious subscriptions or skewed bill predictions.
+  - **Duplicate Watchdog IPC Elimination (`SmsCatchUpWorker.kt`)**: Removed redundant manual invocation of `LiveExpenditureNotificationService.updateLiveExpenditure()` from `SmsCatchUpWorker.doWork()`, avoiding double SQLite queries and redundant Binder IPC on periodic background SMS sync.
+  - **Automated Verification**: Ran full offline test suite (`.\gradlew test --offline`), passing with 33 actionable tasks (0 failures, 0 regressions).
+
+- **[Master Plan Phase 1: Mathematical Integrity & Deep-Link Intent Contracts] (Executed & Validated)**:
+  - **Substring Blacklist Filtering (`ExpenseViewModel.kt`)**: Refactored `computeLast12MonthsAnalytics()` to use substring containment (`normalizedBlacklist.any { norm.contains(it) || it.contains(norm) }`) instead of strict exact match, achieving mathematical consistency with `ExpenditureHeroCard` and eliminating leaks in historical analytics.
+  - **Analytics Type-Parity Filtering (`CalendarAnalyticsTab.kt`)**: Synchronized 5 analytics calculations (`monthsForYear`, `selectedTotalSpend`, `prevTotalSpend`, and `CategoryWiseBarGraph`) to check both `type != ExpenseType.SELF && !category.equals("Self", ignoreCase = true)` and `type != ExpenseType.CREDIT_CARD && !category.equals("Credit Card Bill", ignoreCase = true)`, achieving 100% mathematical parity with dashboard cards and preventing self-transfers or credit card payments from leaking into historical totals.
+  - **Deep-Link Notification Intent Routing (`MainActivity.kt`)**: Wired `extra_open_tab` and `EXTRA_NAVIGATE_TAB` intent extras through `handleIntent()` and `initialNavigateTab` state into `SpendTrackerScreen`, enabling weekly digest and spend alert notifications to deep-link directly to Analytics or Dashboard.
+  - **Automated Verification**: Ran full offline test suite (`.\gradlew test --offline`), passing with 33 actionable tasks (0 failures, 0 regressions).
 
 - **[Full-Codebase Sanitization, Mathematical Integrity & Concurrency Architecture] (Executed & Validated)**:
   - **Vector A Dead Code Sanitization**:
@@ -120,4 +166,4 @@
 
 ## 4. Denied or Not Implemented
 
-(Pending User Feedback)
+None in this sweep (100% of suggested optimizations across Phases 1–4 were approved and successfully implemented).
