@@ -26,12 +26,15 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.FilterListOff
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -119,7 +122,7 @@ fun SearchFilterBar(
                 Box(modifier = Modifier.weight(1f)) {
                     if (searchQuery.isEmpty()) {
                         Text(
-                            text = if (isGlobalSearch) "Search across all historical months..." else "Search merchant, amount, category...",
+                            text = if (isGlobalSearch) "Search across all months..." else "Search merchant, amount, category...",
                             style = MaterialTheme.typography.bodyMedium,
                             color = SavioSlateMuted
                         )
@@ -156,21 +159,6 @@ fun SearchFilterBar(
                     }
                 }
 
-                if (isGlobalSearch) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = SavioEmeraldContainer,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder),
-                        modifier = Modifier.padding(end = 6.dp)
-                    ) {
-                        Text(
-                            text = "🌐 All Time",
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
-                            color = SavioEmerald
-                        )
-                    }
-                }
 
                 // Filter expand/collapse button with indicator dot
                 Box {
@@ -266,16 +254,18 @@ fun SearchFilterBar(
                 ) {
                     // Global Search Scope Pill
                     FilterChip(
-                        label = if (isGlobalSearch) "🌐 All Months (Global)" else "📅 This Month",
+                        label = if (isGlobalSearch) "All Months (Global)" else "This Month",
                         isSelected = isGlobalSearch,
-                        onClick = { onToggleGlobalSearch(!isGlobalSearch) }
+                        onClick = { onToggleGlobalSearch(!isGlobalSearch) },
+                        icon = if (isGlobalSearch) Icons.Default.Public else Icons.Default.CalendarMonth
                     )
 
                     // Recurring Only Pill
                     FilterChip(
-                        label = "🔁 Recurring Only",
+                        label = "Recurring Only",
                         isSelected = onlyRecurring,
-                        onClick = { onToggleOnlyRecurring(!onlyRecurring) }
+                        onClick = { onToggleOnlyRecurring(!onlyRecurring) },
+                        icon = Icons.Default.EventRepeat
                     )
 
                     // Amount Brackets
@@ -344,7 +334,8 @@ private fun FilterChip(
     label: String,
     isSelected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null
 ) {
     Surface(
         shape = RoundedCornerShape(10.dp),
@@ -355,14 +346,27 @@ private fun FilterChip(
         ),
         modifier = modifier.clickable { onClick() }
     ) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                fontSize = 11.sp
-            ),
-            color = if (isSelected) SavioEmerald else SavioSlateBody
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isSelected) SavioEmerald else SavioSlateBody,
+                    modifier = Modifier.size(13.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    fontSize = 11.sp
+                ),
+                color = if (isSelected) SavioEmerald else SavioSlateBody
+            )
+        }
     }
 }

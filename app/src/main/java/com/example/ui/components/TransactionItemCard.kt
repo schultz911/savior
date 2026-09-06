@@ -338,20 +338,35 @@ fun TransactionItemCard(
                             onAssignCategory?.invoke(expense)
                         }
                     ) {
-                        Text(
-                            text = "${expense.category} ✎",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 10.sp
-                            ),
-                            color = if (expense.category.equals("Uncategorized", ignoreCase = true)) {
-                                SavioSpendRose
-                            } else {
-                                SavioEmerald
-                            },
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            maxLines = 1
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = expense.category,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp
+                                ),
+                                color = if (expense.category.equals("Uncategorized", ignoreCase = true)) {
+                                    SavioSpendRose
+                                } else {
+                                    SavioEmerald
+                                },
+                                maxLines = 1
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit Category",
+                                tint = if (expense.category.equals("Uncategorized", ignoreCase = true)) {
+                                    SavioSpendRose
+                                } else {
+                                    SavioEmerald
+                                },
+                                modifier = Modifier.size(9.dp)
+                            )
+                        }
                     }
 
                     if (expense.isRecurring) {
@@ -362,16 +377,27 @@ fun TransactionItemCard(
                                 onToggleRecurring?.invoke(expense.id, !expense.isRecurring)
                             }
                         ) {
-                            Text(
-                                text = "🔁 Bill",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp
-                                ),
-                                color = Color(0xFF2563EB),
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
-                                maxLines = 1
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.EventRepeat,
+                                    contentDescription = "Bill",
+                                    tint = Color(0xFF2563EB),
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "Bill",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp
+                                    ),
+                                    color = Color(0xFF2563EB),
+                                    maxLines = 1
+                                )
+                            }
                         }
                     }
                 }
@@ -590,12 +616,23 @@ private fun TransactionDetailBottomSheet(
                             color = SavioEmeraldContainer,
                             modifier = Modifier.clickable { onChangeCategory() }
                         ) {
-                            Text(
-                                text = "${expense.category} ✎",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = SavioEmerald,
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
+                            ) {
+                                Text(
+                                    text = expense.category,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = SavioEmerald
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit Category",
+                                    tint = SavioEmerald,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
                         }
 
                         if (isBlacklisted) {
