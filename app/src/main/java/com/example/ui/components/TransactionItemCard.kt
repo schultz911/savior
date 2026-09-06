@@ -74,7 +74,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import kotlinx.coroutines.launch
@@ -136,7 +139,16 @@ fun TransactionItemCard(
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
 
+    val density = LocalDensity.current
+    var actionRowWidthPx by remember { mutableStateOf(0f) }
+    val horizontalPaddingPx = with(density) { 20.dp.toPx() }
+    val extraSlackPx = with(density) { 20.dp.toPx() }
+    val defaultMaxSlidePx = with(density) { 165.dp.toPx() }
+
     val dismissState = rememberSwipeToDismissBoxState(
+        positionalThreshold = { totalDistance ->
+            with(density) { 72.dp.toPx() }
+        },
         confirmValueChange = { true }
     )
 
@@ -252,6 +264,11 @@ fun TransactionItemCard(
             ) {
                 if (direction != SwipeToDismissBoxValue.Settled) {
                     Row(
+                        modifier = Modifier.onSizeChanged { size ->
+                            if (size.width > 0) {
+                                actionRowWidthPx = size.width.toFloat()
+                            }
+                        },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -290,6 +307,26 @@ fun TransactionItemCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("expense_card_${expense.id}")
+                .graphicsLayer {
+                    val rawOffset = try {
+                        dismissState.requireOffset()
+                    } catch (e: Exception) {
+                        0f
+                    }
+                    val maxAllowed = if (actionRowWidthPx > 0f) {
+                        actionRowWidthPx + horizontalPaddingPx + extraSlackPx
+                    } else {
+                        defaultMaxSlidePx
+                    }
+                    val desiredOffset = if (rawOffset > 0f) {
+                        if (rawOffset <= maxAllowed) rawOffset else maxAllowed + (rawOffset - maxAllowed) * 0.12f
+                    } else if (rawOffset < 0f) {
+                        if (rawOffset >= -maxAllowed) rawOffset else -maxAllowed + (rawOffset - (-maxAllowed)) * 0.12f
+                    } else {
+                        0f
+                    }
+                    translationX = desiredOffset - rawOffset
+                }
                 .clip(RoundedCornerShape(18.dp))
                 .combinedClickable(
                     onClick = { showDetailSheet = true },
