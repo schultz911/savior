@@ -59,6 +59,10 @@ class ExpensePreferences(context: Context) {
         get() = prefs.getString(KEY_OPENROUTER_MODEL, "google/gemini-3.5-flash-lite") ?: "google/gemini-3.5-flash-lite"
         set(value) = prefs.edit().putString(KEY_OPENROUTER_MODEL, value).apply()
 
+    var isAiCoreForceEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AICORE_FORCE_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_AICORE_FORCE_ENABLED, value).apply()
+
     fun getCategoryLimit(category: String): Double {
         val key = KEY_CATEGORY_LIMIT_PREFIX + category
         return java.lang.Double.longBitsToDouble(
@@ -200,6 +204,7 @@ class ExpensePreferences(context: Context) {
         private const val KEY_HAS_IMPORTED_SAMPLES = "key_has_imported_samples"
         private const val KEY_OPENROUTER_API_KEY = "key_openrouter_api_key"
         private const val KEY_OPENROUTER_MODEL = "key_openrouter_model"
+        private const val KEY_AICORE_FORCE_ENABLED = "key_aicore_force_enabled"
         private const val KEY_CATEGORY_LIMIT_PREFIX = "cat_limit_"
         private const val KEY_MERCHANT_CAT_PREFIX = "merchant_cat_"
         private const val KEY_BLACKLISTED_MERCHANTS = "key_blacklisted_merchants"

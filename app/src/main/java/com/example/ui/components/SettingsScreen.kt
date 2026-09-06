@@ -126,6 +126,8 @@ fun SettingsScreen(
     currentBudget: Double,
     currentApiKey: String,
     aiEngineTier: AiEngineTier = AiEngineTier.LOCAL_RULES,
+    isAiCoreForceEnabled: Boolean = false,
+    onToggleAiCoreForce: (Boolean) -> Unit = {},
     categoryLimits: Map<String, Double>,
     blacklistedMerchants: Set<String>,
     isNotificationActive: Boolean,
@@ -1536,6 +1538,61 @@ fun SettingsScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald)
                     ) {
                         Text("Save API Key")
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = GlassCardBorder)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // On-Device AICore (Gemini Nano) Switch & Diagnostics
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "On-Device AI (Gemini Nano / AICore)",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    color = SavioSlateDark
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                if (isAiCoreForceEnabled) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = SavioTransferIndigoBg
+                                    ) {
+                                        Text(
+                                            text = "FORCE ACTIVE",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                                            color = SavioTransferIndigo,
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = if (isAiCoreForceEnabled) {
+                                    "Force-enabled: Local NPU execution active for financial SMS (zero network egress)."
+                                } else {
+                                    "Private, zero-latency on-device intelligence via Android AICore / NPU."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SavioSlateMuted
+                            )
+                        }
+
+                        Switch(
+                            checked = isAiCoreForceEnabled,
+                            onCheckedChange = { onToggleAiCoreForce(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = SavioTransferIndigo
+                            ),
+                            modifier = Modifier.testTag("toggle_aicore_force")
+                        )
                     }
                 }
             }

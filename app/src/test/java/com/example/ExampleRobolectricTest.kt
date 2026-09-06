@@ -3,6 +3,7 @@ package com.example
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.ai.AiCoreCategorizer
+import com.example.data.ExpensePreferences
 import com.example.data.ExpenseType
 import com.example.sms.SmsParser
 import com.example.ui.AiEngineTier
@@ -671,6 +672,84 @@ class ExampleRobolectricTest {
       assertEquals(AiEngineTier.LOCAL_RULES, tierWithOffline)
     } finally {
       AiCoreCategorizer.testAvailabilityOverride = null
+    }
+  }
+
+  @Test
+  fun `test aicore force enable preference override`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val prefs = ExpensePreferences(context)
+    val origForce = prefs.isAiCoreForceEnabled
+    try {
+      prefs.isAiCoreForceEnabled = true
+      assertTrue(AiCoreCategorizer.isAiCoreAvailable(context))
+
+      prefs.isAiCoreForceEnabled = false
+      // Without override and in Robolectric default env, returns based on system/hardware
+      AiCoreCategorizer.testAvailabilityOverride = false
+      assertFalse(AiCoreCategorizer.isAiCoreAvailable(context))
+    } finally {
+      prefs.isAiCoreForceEnabled = origForce
+      AiCoreCategorizer.testAvailabilityOverride = null
+    }
+  }
+
+  @Test
+  fun `test real on-device semantic inference without test provider`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    try {
+      AiCoreCategorizer.testAvailabilityOverride = true
+      AiCoreCategorizer.testInferenceProvider = null // Ensure real production on-device engine executes!
+
+      val rawSms = "Rs 450.00 debited from A/c **1234 on 06-Sep at Swiggy."
+      val parsed = AiCoreCategorizer.parseSmsTransaction(context, rawSms, "HDFC")
+
+      assertNotNull(parsed)
+      assertEquals(450.00, parsed!!.amount, 0.01)
+      assertEquals("₹", parsed.currency)
+      assertEquals("Swiggy", parsed.merchant)
+      assertEquals("Food & Dining", parsed.category)
+      assertEquals(ExpenseType.MERCHANT, parsed.type)
+      assertTrue(parsed.isAiClassified)
+      assertTrue(parsed.isExpense)
+    } finally {
+      AiCoreCategorizer.testAvailabilityOverride = null
+      AiCoreCategorizer.testInferenceProvider = null
+    }
+  }
+
+  @Test
+  fun `test real on-device categorization without test provider`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    try {
+      AiCoreCategorizer.testAvailabilityOverride = true
+      AiCoreCategorizer.testInferenceProvider = null // Ensure real production on-device engine executes!
+
+      val result = AiCoreCategorizer.categorizeSms(context, "Paid at Blinkit Rs 320", "Blinkit")
+      assertEquals("Groceries", result.category)
+      assertTrue(result.isAiClassified)
+    } finally {
+      AiCoreCategorizer.testAvailabilityOverride = null
+      AiCoreCategorizer.testInferenceProvider = null
+    }
+  }
+
+  @Test
+  fun `test real on-device non-financial message suppression`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    try {
+      AiCoreCategorizer.testAvailabilityOverride = true
+      AiCoreCategorizer.testInferenceProvider = null // Ensure real production on-device engine executes!
+
+      val rawSms = "Your OTP is 987654 for login. Do not share."
+      val parsed = AiCoreCategorizer.parseSmsTransaction(context, rawSms, "HDFC")
+
+      assertNotNull(parsed)
+      assertFalse(parsed!!.isExpense)
+      assertEquals("otp", parsed.classification.lowercase())
+    } finally {
+      AiCoreCategorizer.testAvailabilityOverride = null
+      AiCoreCategorizer.testInferenceProvider = null
     }
   }
 }

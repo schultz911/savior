@@ -304,6 +304,7 @@ fun SpendTrackerScreen(
 
     val openRouterApiKey by viewModel.openRouterApiKey.collectAsStateWithLifecycle()
     val aiEngineTier by viewModel.aiEngineTier.collectAsStateWithLifecycle()
+    val isAiCoreForceEnabled by viewModel.isAiCoreForceEnabled.collectAsStateWithLifecycle()
     val categoryLimits by viewModel.categoryLimits.collectAsStateWithLifecycle()
 
     val isBiometricLockEnabled by viewModel.isBiometricLockEnabled.collectAsStateWithLifecycle()
@@ -747,6 +748,8 @@ fun SpendTrackerScreen(
                         currentBudget = monthlyBudget,
                         currentApiKey = openRouterApiKey,
                         aiEngineTier = aiEngineTier,
+                        isAiCoreForceEnabled = isAiCoreForceEnabled,
+                        onToggleAiCoreForce = { viewModel.toggleAiCoreForce(it) },
                         categoryLimits = categoryLimits,
                         blacklistedMerchants = blacklistedMerchants,
                         isNotificationActive = isNotificationActive,

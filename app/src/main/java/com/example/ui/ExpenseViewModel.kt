@@ -170,10 +170,21 @@ class ExpenseViewModel(
     private val _openRouterApiKey = MutableStateFlow(preferences.openRouterApiKey)
     val openRouterApiKey: StateFlow<String> = _openRouterApiKey.asStateFlow()
 
-    val aiEngineTier: StateFlow<AiEngineTier> = _openRouterApiKey.map { key ->
+    private val _isAiCoreForceEnabled = MutableStateFlow(preferences.isAiCoreForceEnabled)
+    val isAiCoreForceEnabled: StateFlow<Boolean> = _isAiCoreForceEnabled.asStateFlow()
+
+    fun toggleAiCoreForce(enabled: Boolean) {
+        preferences.isAiCoreForceEnabled = enabled
+        _isAiCoreForceEnabled.value = enabled
+    }
+
+    val aiEngineTier: StateFlow<AiEngineTier> = combine(
+        _openRouterApiKey,
+        _isAiCoreForceEnabled
+    ) { key, forceEnabled ->
         if (key.trim().isNotEmpty()) {
             AiEngineTier.CLOUD_OPENROUTER
-        } else if (AiCoreCategorizer.isAiCoreAvailable(getApplication())) {
+        } else if (forceEnabled || AiCoreCategorizer.isAiCoreAvailable(getApplication())) {
             AiEngineTier.ON_DEVICE_AICORE
         } else {
             AiEngineTier.LOCAL_RULES
@@ -183,7 +194,7 @@ class ExpenseViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = if (preferences.openRouterApiKey.trim().isNotEmpty()) {
             AiEngineTier.CLOUD_OPENROUTER
-        } else if (AiCoreCategorizer.isAiCoreAvailable(getApplication())) {
+        } else if (preferences.isAiCoreForceEnabled || AiCoreCategorizer.isAiCoreAvailable(getApplication())) {
             AiEngineTier.ON_DEVICE_AICORE
         } else {
             AiEngineTier.LOCAL_RULES

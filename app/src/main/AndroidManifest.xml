@@ -12,7 +12,16 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Android 11+ (API 30+) Package Visibility Queries for On-Device AICore & System AI -->
+    <queries>
+        <package android:name="com.google.android.aicore" />
+        <package android:name="com.google.android.apps.aicore" />
+        <package android:name="com.samsung.android.rubin.app" />
+        <package android:name="com.samsung.android.aicore" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+        </intent>
+    </queries>
 
     <application
         android:name=".SpendTrackerApplication"
