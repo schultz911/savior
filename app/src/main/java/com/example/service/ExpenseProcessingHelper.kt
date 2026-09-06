@@ -260,7 +260,15 @@ object ExpenseProcessingHelper {
         // 2. Check category limit and trigger 80% / overshot alerts
         checkCategoryLimitAlert(context, entity)
 
-        // 3. Update persistent notification
+        // 3. Proactive Velocity Pacing & Anomaly Guardrails
+        if (prefs.isVelocityAlertsEnabled) {
+            checkVelocityPacingAlert(context, entity)
+        }
+        if (prefs.isAnomalyAlertsEnabled) {
+            checkAnomalySpikeAlert(context, entity)
+        }
+
+        // 4. Update persistent notification
         if (prefs.isPersistentNotificationEnabled) {
             LiveExpenditureNotificationService.updateLiveExpenditure(context)
         }
@@ -286,5 +294,56 @@ object ExpenseProcessingHelper {
                 currency = prefs.currency
             )
         }
+    }
+
+    suspend fun checkVelocityPacingAlert(context: Context, expense: ExpenseEntity) = withContext(Dispatchers.IO) {
+        val app = context.applicationContext as? SpendTrackerApplication ?: return@withContext
+        val dao = app.database.expenseDao()
+        val prefs = app.preferences
+        val budget = prefs.monthlyBudget
+        if (budget <= 0.0) return@withContext
+
+        val monthExpenses = dao.getExpensesForMonthSync(expense.monthKey)
+        val blacklisted = prefs.getBlacklistedMerchants().map { it.trim().lowercase(java.util.Locale.US) }
+        var currentSpent = 0.0
+        for (exp in monthExpenses) {
+            val norm = exp.merchantOrRecipient.trim().lowercase(java.util.Locale.US)
+            if (blacklisted.any { norm.contains(it) }) continue
+            if (exp.type == com.example.data.ExpenseType.SELF || exp.category.equals("Self", ignoreCase = true) ||
+                exp.type == com.example.data.ExpenseType.CREDIT_CARD || exp.category.equals("Credit Card Bill", ignoreCase = true)
+            ) continue
+            currentSpent += (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
+        }
+
+        SpendAlertManager.checkAndNotifySpendVelocity(
+            context = context,
+            currentSpent = currentSpent,
+            monthlyBudget = budget,
+            currency = prefs.currency
+        )
+    }
+
+    suspend fun checkAnomalySpikeAlert(context: Context, expense: ExpenseEntity) = withContext(Dispatchers.IO) {
+        val app = context.applicationContext as? SpendTrackerApplication ?: return@withContext
+        val dao = app.database.expenseDao()
+        val prefs = app.preferences
+
+        val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+        val recentAmounts = dao.getRecentDebitAmounts(thirtyDaysAgo)
+        val median = if (recentAmounts.isEmpty()) 500.0 else {
+            val mid = recentAmounts.size / 2
+            if (recentAmounts.size % 2 == 0 && mid > 0) {
+                (recentAmounts[mid - 1] + recentAmounts[mid]) / 2.0
+            } else {
+                recentAmounts[mid]
+            }
+        }
+
+        SpendAlertManager.checkAndNotifyHighValueAnomaly(
+            context = context,
+            expense = expense,
+            medianAmount = median,
+            currency = prefs.currency
+        )
     }
 }

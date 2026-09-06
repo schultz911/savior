@@ -148,6 +148,11 @@ fun SettingsScreen(
     merchantRules: List<MerchantRuleEntity> = emptyList(),
     onAddMerchantRule: (pattern: String, category: String, alias: String) -> Unit = { _, _, _ -> },
     onDeleteMerchantRule: (Long) -> Unit = {},
+    isVelocityAlertsEnabled: Boolean = true,
+    onToggleVelocityAlerts: (Boolean) -> Unit = {},
+    isAnomalyAlertsEnabled: Boolean = true,
+    onToggleAnomalyAlerts: (Boolean) -> Unit = {},
+    trailingMedianSpend: Double = 500.0,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -425,6 +430,167 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Allow Unrestricted Background Execution")
                         }
+                    }
+                }
+            }
+        }
+
+        // Spend Velocity & Anomaly Guardrails Card
+        item {
+            Card(
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = GlassCardBg),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, GlassCardBorder, RoundedCornerShape(22.dp))
+                    .testTag("spend_guardrails_card")
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = SavioEmeraldContainer,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = SavioEmerald,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Velocity & Anomaly Guardrails",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = SavioSlateDark
+                                )
+                                Text(
+                                    text = "Proactive burn-rate alerts & spike anomaly detection",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = SavioSlateMuted
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Pacing Diagnostic Status Banner
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color.White.copy(alpha = 0.8f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Trailing 30-Day Typical Median",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                    color = SavioSlateMuted
+                                )
+                                Text(
+                                    text = "$currentCurrency${String.format(java.util.Locale.US, "%,.0f", trailingMedianSpend)} / debit",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = SavioSlateDark
+                                )
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = SavioEmeraldContainer,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder)
+                            ) {
+                                Text(
+                                    text = "SPIKE: >$currentCurrency${String.format(java.util.Locale.US, "%,.0f", (trailingMedianSpend * 4.0).coerceAtLeast(1500.0))}",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp
+                                    ),
+                                    color = SavioEmerald,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Velocity Alert Toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Proactive Spend Velocity Warnings",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = SavioSlateDark
+                            )
+                            Text(
+                                text = "Alerts when your daily burn pace runs >30% ahead of your monthly budget.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SavioSlateMuted
+                            )
+                        }
+                        Switch(
+                            checked = isVelocityAlertsEnabled,
+                            onCheckedChange = { onToggleVelocityAlerts(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = SavioEmerald
+                            )
+                        )
+                    }
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        thickness = 0.5.dp,
+                        color = GlassCardBorder
+                    )
+
+                    // Anomaly Alert Toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "High-Value Transaction Anomaly Alerts",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = SavioSlateDark
+                            )
+                            Text(
+                                text = "Flags unusually massive debits exceeding 4x your trailing median spend.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SavioSlateMuted
+                            )
+                        }
+                        Switch(
+                            checked = isAnomalyAlertsEnabled,
+                            onCheckedChange = { onToggleAnomalyAlerts(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = SavioEmerald
+                            )
+                        )
                     }
                 }
             }

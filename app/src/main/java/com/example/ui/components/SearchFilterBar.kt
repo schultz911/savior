@@ -75,6 +75,8 @@ fun SearchFilterBar(
     onSelectAmountRange: (AmountRange) -> Unit,
     onlyRecurring: Boolean,
     onToggleOnlyRecurring: (Boolean) -> Unit,
+    isGlobalSearch: Boolean = false,
+    onToggleGlobalSearch: (Boolean) -> Unit = {},
     onClearAllFilters: () -> Unit,
     currency: String,
     modifier: Modifier = Modifier
@@ -84,7 +86,8 @@ fun SearchFilterBar(
     val hasActiveFilters = searchQuery.isNotBlank() ||
             selectedCategory != null ||
             selectedAmountRange != AmountRange.ALL ||
-            onlyRecurring
+            onlyRecurring ||
+            isGlobalSearch
 
     Column(
         modifier = modifier
@@ -116,7 +119,7 @@ fun SearchFilterBar(
                 Box(modifier = Modifier.weight(1f)) {
                     if (searchQuery.isEmpty()) {
                         Text(
-                            text = "Search merchant, amount, category...",
+                            text = if (isGlobalSearch) "Search across all historical months..." else "Search merchant, amount, category...",
                             style = MaterialTheme.typography.bodyMedium,
                             color = SavioSlateMuted
                         )
@@ -149,6 +152,22 @@ fun SearchFilterBar(
                             contentDescription = "Clear Search",
                             tint = SavioSlateMuted,
                             modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                if (isGlobalSearch) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = SavioEmeraldContainer,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder),
+                        modifier = Modifier.padding(end = 6.dp)
+                    ) {
+                        Text(
+                            text = "🌐 All Time",
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                            color = SavioEmerald
                         )
                     }
                 }
@@ -245,6 +264,13 @@ fun SearchFilterBar(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Global Search Scope Pill
+                    FilterChip(
+                        label = if (isGlobalSearch) "🌐 All Months (Global)" else "📅 This Month",
+                        isSelected = isGlobalSearch,
+                        onClick = { onToggleGlobalSearch(!isGlobalSearch) }
+                    )
+
                     // Recurring Only Pill
                     FilterChip(
                         label = "🔁 Recurring Only",

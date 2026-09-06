@@ -93,6 +93,7 @@ import com.example.ui.theme.SavioTransferIndigo
 import com.example.ui.theme.SavioTransferIndigoBg
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -120,7 +121,18 @@ fun TransactionItemCard(
     val effectiveCurrency = if (currency.isNotBlank()) currency else expense.currency
     val formattedAmount = "-${effectiveCurrency}${numberFormatter.format(expense.amount)}"
 
-    val dateFormatter = remember { SimpleDateFormat("MMM dd, hh:mm a", Locale.US) }
+    val currentYear = remember { Calendar.getInstance().get(Calendar.YEAR) }
+    val expenseYear = remember(expense.timestamp) {
+        val c = Calendar.getInstance().apply { timeInMillis = expense.timestamp }
+        c.get(Calendar.YEAR)
+    }
+    val dateFormatter = remember(expenseYear, currentYear) {
+        if (expenseYear != currentYear) {
+            SimpleDateFormat("MMM dd, yyyy · hh:mm a", Locale.US)
+        } else {
+            SimpleDateFormat("MMM dd, hh:mm a", Locale.US)
+        }
+    }
     val formattedDate = dateFormatter.format(Date(expense.timestamp))
 
     val (typeColor, typeBg, _) = when (expense.type) {

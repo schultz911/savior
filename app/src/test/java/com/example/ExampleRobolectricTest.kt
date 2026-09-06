@@ -363,4 +363,48 @@ class ExampleRobolectricTest {
     assertEquals("com.example.savior.ACTION_ADD_SPEND", com.example.MainActivity.ACTION_ADD_SPEND)
     assertEquals("com.example.savior.ACTION_ADD_SPEND", com.example.service.LiveExpenditureNotificationService.ACTION_ADD_SPEND)
   }
+
+  @Test
+  fun `test velocity and anomaly guardrail preferences and recent debit query`() = kotlinx.coroutines.runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val prefs = com.example.data.ExpensePreferences(context)
+
+    // Test preferences default and toggle
+    assertTrue(prefs.isVelocityAlertsEnabled)
+    assertTrue(prefs.isAnomalyAlertsEnabled)
+    prefs.isVelocityAlertsEnabled = false
+    org.junit.Assert.assertFalse(prefs.isVelocityAlertsEnabled)
+    prefs.isVelocityAlertsEnabled = true
+
+    // Test database query for median calculation
+    val db = androidx.room.Room.inMemoryDatabaseBuilder(context, com.example.data.AppDatabase::class.java)
+      .allowMainThreadQueries()
+      .build()
+    val dao = db.expenseDao()
+
+    val now = System.currentTimeMillis()
+    dao.insertExpense(com.example.data.ExpenseEntity(amount = 200.0, category = "Food", timestamp = now - 1000))
+    dao.insertExpense(com.example.data.ExpenseEntity(amount = 500.0, category = "Shopping", timestamp = now - 2000))
+    dao.insertExpense(com.example.data.ExpenseEntity(amount = 100.0, category = "Transport", timestamp = now - 3000))
+    dao.insertExpense(com.example.data.ExpenseEntity(amount = 1000.0, category = "Self", type = ExpenseType.SELF, timestamp = now - 4000))
+    dao.insertExpense(com.example.data.ExpenseEntity(amount = 300.0, category = "Refund", isReversal = true, timestamp = now - 5000))
+
+    val debits = dao.getRecentDebitAmounts(now - 10000)
+    // Should exclude Self and Reversals, and be sorted ascending
+    assertEquals(3, debits.size)
+    assertEquals(100.0, debits[0], 0.01)
+    assertEquals(200.0, debits[1], 0.01)
+    assertEquals(500.0, debits[2], 0.01)
+
+    // Compute median
+    val median = debits[debits.size / 2]
+    assertEquals(200.0, median, 0.01)
+
+    // Verify SpendAlertManager methods execute safely
+    val exp = com.example.data.ExpenseEntity(id = 99L, amount = 2500.0, merchantOrRecipient = "Croma Electronics", timestamp = now)
+    com.example.service.SpendAlertManager.checkAndNotifyHighValueAnomaly(context, exp, median, "₹")
+    com.example.service.SpendAlertManager.checkAndNotifySpendVelocity(context, currentSpent = 15000.0, monthlyBudget = 20000.0, currency = "₹")
+
+    db.close()
+  }
 }

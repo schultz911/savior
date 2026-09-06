@@ -104,4 +104,14 @@ interface ExpenseDao {
 
     @Query("DELETE FROM expenses")
     suspend fun clearAll()
+
+    @Query("""
+        SELECT amount FROM expenses 
+        WHERE timestamp >= :sinceTimestamp 
+          AND isReversal = 0 
+          AND type != 'SELF' 
+          AND category NOT IN ('Self', 'Credit Card Bill')
+        ORDER BY amount ASC
+    """)
+    suspend fun getRecentDebitAmounts(sinceTimestamp: Long): List<Double>
 }

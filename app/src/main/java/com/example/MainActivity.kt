@@ -263,6 +263,10 @@ fun SpendTrackerScreen(
     val selectedAmountRange by viewModel.selectedAmountRange.collectAsStateWithLifecycle()
     val onlyRecurringFilter by viewModel.onlyRecurringFilter.collectAsStateWithLifecycle()
     val isSearchExpanded by viewModel.isSearchExpanded.collectAsStateWithLifecycle()
+    val isGlobalSearch by viewModel.isGlobalSearch.collectAsStateWithLifecycle()
+    val isVelocityAlertsEnabled by viewModel.isVelocityAlertsEnabled.collectAsStateWithLifecycle()
+    val isAnomalyAlertsEnabled by viewModel.isAnomalyAlertsEnabled.collectAsStateWithLifecycle()
+    val trailingMedianSpend by viewModel.trailingMedianSpend.collectAsStateWithLifecycle()
     val predictedRecurringBills by viewModel.predictedRecurringBills.collectAsStateWithLifecycle()
     val safeSpendPacing by viewModel.safeSpendPacing.collectAsStateWithLifecycle()
 
@@ -699,6 +703,11 @@ fun SpendTrackerScreen(
                         merchantRules = merchantRules,
                         onAddMerchantRule = { pattern, cat, alias -> viewModel.addMerchantRule(pattern, cat, alias) },
                         onDeleteMerchantRule = { id -> viewModel.deleteMerchantRule(id) },
+                        isVelocityAlertsEnabled = isVelocityAlertsEnabled,
+                        onToggleVelocityAlerts = { viewModel.toggleVelocityAlerts(it) },
+                        isAnomalyAlertsEnabled = isAnomalyAlertsEnabled,
+                        onToggleAnomalyAlerts = { viewModel.toggleAnomalyAlerts(it) },
+                        trailingMedianSpend = trailingMedianSpend,
                         onTriggerBackupExport = { passphrase ->
                             pendingBackupPassphrase = passphrase
                             AppSecurityManager.markAwaitingActivityResult()
@@ -867,6 +876,8 @@ fun SpendTrackerScreen(
                             onSelectAmountRange = { viewModel.setAmountRange(it) },
                             onlyRecurring = onlyRecurringFilter,
                             onToggleOnlyRecurring = { viewModel.setOnlyRecurringFilter(it) },
+                            isGlobalSearch = isGlobalSearch,
+                            onToggleGlobalSearch = { viewModel.toggleGlobalSearch(it) },
                             onClearAllFilters = { viewModel.clearAllFilters() },
                             currency = currency
                         )
@@ -917,14 +928,31 @@ fun SpendTrackerScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Transactions (${filteredExpenses.size})",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = SavioSlateDark
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = if (isGlobalSearch) "All-Time Results (${filteredExpenses.size})" else "Transactions (${filteredExpenses.size})",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = SavioSlateDark
+                                )
+                                if (isGlobalSearch) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = SavioEmeraldContainer,
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder)
+                                    ) {
+                                        Text(
+                                            text = "GLOBAL",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                                            color = SavioEmerald,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
 
                             Text(
-                                text = "Auto-synced from SMS",
+                                text = if (isGlobalSearch) "Across all recorded months" else "Auto-synced from SMS",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = SavioSlateMuted
                             )

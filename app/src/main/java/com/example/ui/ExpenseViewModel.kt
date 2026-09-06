@@ -116,6 +116,15 @@ class ExpenseViewModel(
     private val _selectedAccountFilter = MutableStateFlow<String?>(null)
     val selectedAccountFilter: StateFlow<String?> = _selectedAccountFilter.asStateFlow()
 
+    private val _isGlobalSearch = MutableStateFlow(false)
+    val isGlobalSearch: StateFlow<Boolean> = _isGlobalSearch.asStateFlow()
+
+    private val _isVelocityAlertsEnabled = MutableStateFlow(preferences.isVelocityAlertsEnabled)
+    val isVelocityAlertsEnabled: StateFlow<Boolean> = _isVelocityAlertsEnabled.asStateFlow()
+
+    private val _isAnomalyAlertsEnabled = MutableStateFlow(preferences.isAnomalyAlertsEnabled)
+    val isAnomalyAlertsEnabled: StateFlow<Boolean> = _isAnomalyAlertsEnabled.asStateFlow()
+
     private val _isSearchExpanded = MutableStateFlow(false)
     val isSearchExpanded: StateFlow<Boolean> = _isSearchExpanded.asStateFlow()
 
@@ -220,7 +229,9 @@ class ExpenseViewModel(
     }
 
     val filteredExpenses: StateFlow<List<ExpenseEntity>> = combine(
-        currentMonthExpenses,
+        combine(_isGlobalSearch, currentMonthExpenses, allExpenses) { isGlobal, monthExp, allExp ->
+            if (isGlobal) allExp else monthExp
+        },
         filterCriteria
     ) { expenses, criteria ->
         expenses.filter { item ->
@@ -236,7 +247,8 @@ class ExpenseViewModel(
                         item.accountInfo.contains(criteria.query, ignoreCase = true) ||
                         item.category.contains(criteria.query, ignoreCase = true) ||
                         item.rawBody.contains(criteria.query, ignoreCase = true) ||
-                        item.amount.toString().contains(criteria.query)
+                        item.amount.toString().contains(criteria.query) ||
+                        item.monthKey.contains(criteria.query, ignoreCase = true)
             }
             val matchesCategory = criteria.categoryFilter == null || item.category.equals(criteria.categoryFilter, ignoreCase = true)
             val matchesAmount = when (criteria.amountRange) {
@@ -254,6 +266,31 @@ class ExpenseViewModel(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
+    )
+
+    // Trailing 30-Day Median Transaction Spend for Anomaly Benchmarks
+    val trailingMedianSpend: StateFlow<Double> = allExpenses.map { list ->
+        val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+        val recent = list.filter {
+            it.timestamp >= thirtyDaysAgo &&
+            !it.isReversal &&
+            it.type != ExpenseType.SELF &&
+            !it.category.equals("Self", ignoreCase = true) &&
+            !it.category.equals("Credit Card Bill", ignoreCase = true)
+        }.map { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }.sorted()
+
+        if (recent.isEmpty()) 500.0 else {
+            val mid = recent.size / 2
+            if (recent.size % 2 == 0 && mid > 0) {
+                (recent[mid - 1] + recent[mid]) / 2.0
+            } else {
+                recent[mid]
+            }
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 500.0
     )
 
     // Predicted Recurring Commitments & Subscriptions Flow
@@ -936,6 +973,23 @@ class ExpenseViewModel(
         _selectedAmountRange.value = AmountRange.ALL
         _onlyRecurringFilter.value = false
         _selectedAccountFilter.value = null
+        _isGlobalSearch.value = false
+    }
+
+    fun toggleGlobalSearch(enabled: Boolean) {
+        _isGlobalSearch.value = enabled
+    }
+
+    fun toggleVelocityAlerts(enabled: Boolean) {
+        preferences.isVelocityAlertsEnabled = enabled
+        _isVelocityAlertsEnabled.value = enabled
+        _syncFeedback.value = if (enabled) "Proactive spend velocity alerts enabled" else "Velocity alerts disabled"
+    }
+
+    fun toggleAnomalyAlerts(enabled: Boolean) {
+        preferences.isAnomalyAlertsEnabled = enabled
+        _isAnomalyAlertsEnabled.value = enabled
+        _syncFeedback.value = if (enabled) "High-value spend anomaly alerts enabled" else "Anomaly alerts disabled"
     }
 
     fun toggleRecurring(expenseId: Long, isRecurring: Boolean) {
