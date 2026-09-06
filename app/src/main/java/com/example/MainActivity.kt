@@ -905,6 +905,7 @@ fun SpendTrackerScreen(
                             currency = currency,
                             categoryLimits = categoryLimits,
                             blacklistedMerchants = blacklistedMerchants,
+                            monthlyTotal = monthlyTotal,
                             onCategoryClick = { categoryName ->
                                 viewModel.setSearchQuery(categoryName)
                             }

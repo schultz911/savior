@@ -407,4 +407,60 @@ class ExampleRobolectricTest {
 
     db.close()
   }
+
+  @Test
+  fun `test spend breakup tally with net monthly expenditure considering refunds and reversals`() {
+    val exp1 = com.example.data.ExpenseEntity(
+      amount = 500.0,
+      category = "Food & Dining",
+      merchantOrRecipient = "Swiggy"
+    )
+    val exp2 = com.example.data.ExpenseEntity(
+      amount = 1000.0,
+      category = "Shopping",
+      merchantOrRecipient = "Amazon",
+      refundedAmount = 200.0 // Net 800.0
+    )
+    val refundExp = com.example.data.ExpenseEntity(
+      amount = 300.0,
+      category = "Shopping",
+      merchantOrRecipient = "Amazon",
+      isReversal = true // Net -300.0
+    )
+    val selfExp = com.example.data.ExpenseEntity(
+      amount = 5000.0,
+      category = "Self",
+      type = ExpenseType.SELF
+    )
+    val ccExp = com.example.data.ExpenseEntity(
+      amount = 10000.0,
+      category = "Credit Card Bill",
+      type = ExpenseType.CREDIT_CARD
+    )
+    val excludedExp = com.example.data.ExpenseEntity(
+      amount = 400.0,
+      category = "Groceries",
+      isExcluded = true
+    )
+
+    val all = listOf(exp1, exp2, refundExp, selfExp, ccExp, excludedExp)
+    val valid = all.filterNot { exp ->
+      val isSelf = exp.type == ExpenseType.SELF || exp.category.equals("Self", ignoreCase = true)
+      val isCc = exp.type == ExpenseType.CREDIT_CARD || exp.category.equals("Credit Card Bill", ignoreCase = true)
+      exp.isExcluded || isSelf || isCc
+    }
+
+    // Net spend calculation
+    val netMonthlyExpenditure = valid.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0)
+    assertEquals(1000.0, netMonthlyExpenditure, 0.01)
+
+    // Category grouping
+    val grouped = valid.groupBy { it.category }
+      .mapValues { (_, list) -> list.sumOf { it.effectiveSpendAmount } }
+      .filterValues { it > 0.0 }
+
+    assertEquals(500.0, grouped["Food & Dining"] ?: 0.0, 0.01)
+    assertEquals(500.0, grouped["Shopping"] ?: 0.0, 0.01)
+    assertEquals(1000.0, grouped.values.sum(), 0.01)
+  }
 }

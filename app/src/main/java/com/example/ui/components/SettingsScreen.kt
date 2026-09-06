@@ -301,7 +301,7 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Live Status Bar Spend Tracker",
+                                text = "Live Status Bar",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = SavioSlateDark
                             )
@@ -352,7 +352,7 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Column {
                                 Text(
-                                    text = "SMS Reliability & Doze Protection",
+                                    text = "SMS Doze Protection",
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                     color = SavioSlateDark
                                 )

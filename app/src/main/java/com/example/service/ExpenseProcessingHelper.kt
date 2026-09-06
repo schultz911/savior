@@ -118,7 +118,7 @@ object ExpenseProcessingHelper {
             type = effectiveType,
             merchantOrRecipient = effectiveMerchant,
             accountInfo = parsed.accountInfo,
-            category = "Refund",
+            category = if (matching != null && matching.category.isNotBlank() && !matching.category.equals("Refund", ignoreCase = true)) matching.category else "Refund",
             rawBody = parsed.rawText,
             sender = sender,
             timestamp = timestamp,

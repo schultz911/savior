@@ -89,6 +89,7 @@ fun SpendBreakupPieChartCard(
     currency: String,
     categoryLimits: Map<String, Double> = emptyMap(),
     blacklistedMerchants: Set<String> = emptySet(),
+    monthlyTotal: Double? = null,
     onCategoryClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -99,30 +100,50 @@ fun SpendBreakupPieChartCard(
             val isBlacklisted = norm.isNotBlank() && blacklistedMerchants.any { norm.contains(it, ignoreCase = true) || it.contains(norm, ignoreCase = true) }
             val isSelf = exp.type == com.example.data.ExpenseType.SELF || exp.category.equals("Self", ignoreCase = true)
             val isCreditCard = exp.type == com.example.data.ExpenseType.CREDIT_CARD || exp.category.equals("Credit Card Bill", ignoreCase = true)
-            exp.isExcluded || isBlacklisted || isSelf || isCreditCard || exp.isRefundOrReversal
+            exp.isExcluded || isBlacklisted || isSelf || isCreditCard
         }
     }
 
     if (validExpenses.isEmpty()) return
 
-    val totalSpent = validExpenses.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
+    val computedTotal = remember(validExpenses) {
+        validExpenses.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0)
+    }
+    val totalSpent = monthlyTotal ?: computedTotal
     if (totalSpent <= 0.0) return
 
-    // Group expenses by category using net spend amounts
-    val grouped = validExpenses.groupBy { it.category.ifBlank { "Uncategorized" } }
-        .mapValues { (_, list) -> list.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) } }
+    val merchantCategoryMap = remember(validExpenses) {
+        validExpenses
+            .filter { !it.isRefundOrReversal && it.category.isNotBlank() && !it.category.equals("Refund", ignoreCase = true) && !it.category.equals("Reimbursement", ignoreCase = true) }
+            .associate { it.merchantOrRecipient.trim().lowercase() to it.category }
+    }
+
+    // Group expenses by category using net spend amounts (debits minus refunds and reversals)
+    val grouped = remember(validExpenses, merchantCategoryMap) {
+        validExpenses.groupBy { exp ->
+            if (exp.isRefundOrReversal && (exp.category.isBlank() || exp.category.equals("Refund", ignoreCase = true) || exp.category.equals("Reimbursement", ignoreCase = true))) {
+                merchantCategoryMap[exp.merchantOrRecipient.trim().lowercase()] ?: exp.category.ifBlank { "Uncategorized" }
+            } else {
+                exp.category.ifBlank { "Uncategorized" }
+            }
+        }
+        .mapValues { (_, list) -> list.sumOf { it.effectiveSpendAmount } }
         .filterValues { it > 0.0 }
         .toList()
         .sortedByDescending { it.second }
+    }
 
-    val slices = remember(grouped, totalSpent, categoryLimits) {
+    val categoriesTotal = remember(grouped) { grouped.sumOf { it.second } }
+    val sliceBaseTotal = if (categoriesTotal > 0.0) categoriesTotal else totalSpent
+
+    val slices = remember(grouped, sliceBaseTotal, categoryLimits) {
         grouped.mapIndexed { index, (cat, amt) ->
             val color = if (cat.equals("Uncategorized", ignoreCase = true)) {
                 Color(0xFF94A3B8)
             } else {
                 PiePalette[index % PiePalette.size]
             }
-            val pct = ((amt / totalSpent) * 100f).toFloat()
+            val pct = ((amt / sliceBaseTotal) * 100f).toFloat()
             val limit = categoryLimits[cat] ?: 0.0
             CategorySpendSlice(
                 category = cat,

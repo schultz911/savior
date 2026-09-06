@@ -245,7 +245,7 @@ fun ExpenditureHeroCard(
 
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
-                                    text = if (monthlySavings >= 0) "Amount Saved Live" else "Overspent Deficit",
+                                    text = if (monthlySavings >= 0) "Amount Saved" else "Overspent Deficit",
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
                                     color = SavioSlateMuted
                                 )

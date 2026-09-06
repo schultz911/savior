@@ -1204,7 +1204,7 @@ private fun TransactionDetailBottomSheet(
                 Text(
                     text = if (expense.isFullyRefunded) "Refunded / Settled (100% Excluded - Edit)"
                            else if (expense.isPartiallyRefunded) "Settled: -${expense.currency}${NumberFormat.getNumberInstance(Locale.US).format(expense.refundedAmount)} (Edit)"
-                           else "Log Refund / Split Settlement",
+                           else "Log Refund or Settlement",
                     color = if (expense.refundedAmount > 0) SavioEmerald else SavioSlateDark,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 12.5.sp

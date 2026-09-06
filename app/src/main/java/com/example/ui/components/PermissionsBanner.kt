@@ -85,7 +85,7 @@ fun PermissionsBanner(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (hasSmsPermissions && hasNotificationPermission) {
-                            "SMS & Status Bar Active"
+                            "SMS Listener Active"
                         } else {
                             "Enable Live SMS Sync"
                         },

@@ -39,6 +39,16 @@
 
 ## 3. Approved and Implemented
 
+- **[Spend Breakup Tallying & UI Text Refinements] (Executed & Validated)**:
+  - **Spend Breakup & Net Monthly Expenditure Tallying**: Refactored `SpendBreakupPieChartCard` to include refund and reversal transactions in `validExpenses`, computing `totalSpent` using `it.effectiveSpendAmount` and synchronizing with `monthlyTotal`. Grouped category spends now subtract refund/reversal amounts per category, preventing total mismatches and preventing refunds from appearing as positive spend slices while maintaining exact 100% pie chart slice normalization.
+  - **Category Wise Analytics Netting**: Updated `CalendarAnalyticsTab.CategoryWiseBarGraph` to calculate category totals using `it.effectiveSpendAmount`, accurately deducting refunds/reversals from category spends.
+  - **Auto-Category Association for Incoming Refunds**: In `ExpenseProcessingHelper`, when an incoming refund SMS matches an existing debit transaction, it automatically associates with that debit's category instead of defaulting to generic "Refund".
+  - **Dashboard UI Strings**: Updated `"Amount Saved Live"` -> `"Amount Saved"` in `ExpenditureHeroCard.kt`, and `"SMS & Status Bar Active"` -> `"SMS Listener Active"` in `PermissionsBanner.kt`.
+  - **Transaction Modal UI String**: Updated `"Log Refund / Split Settlement"` -> `"Log Refund or Settlement"` in `TransactionItemCard.kt`.
+  - **Settings Page UI Strings**: Updated `"Live Status Bar Spend Tracker"` -> `"Live Status Bar"`, and `"SMS Reliability & Doze Protection"` -> `"SMS Doze Protection"` in `SettingsScreen.kt`.
+  - **Automated Regression Testing**: Added unit test `test spend breakup tally with net monthly expenditure considering refunds and reversals` in `ExampleRobolectricTest.kt`. Full test suite passing (`33 actionable tasks, 0 regressions`).
+  - **Updated Release Binaries**: Built release APK and updated `savior-1.0.0.apk` and `savio-1.0.0.apk`.
+
 - **[Refunds, Reversals, & Slide Action Precision Optimization] (Executed & Validated)**:
   - **Accurate Cash Flow Spend Adjustment**: Updated `ExpenseEntity.effectiveSpendAmount` (`-amount` on refund/reversals), `monthlyTotal`, `spendsTotal`, `safeSpendPacing`, `dailyBurnDownData`, `instrumentSummaries`, `LiveExpenditureNotificationService`, and `WeeklySpendDigestWorker` to deduct refund/reversal amounts from total expenditure calculations.
   - **Category Spend Breakup Sanitization**: Explicitly filtered out `isRefundOrReversal` in `SpendBreakupPieChartCard` and `CalendarAnalyticsTab.CategoryWiseBarGraph`, ensuring refunds never appear as spend slices.

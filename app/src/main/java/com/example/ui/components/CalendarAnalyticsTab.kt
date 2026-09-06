@@ -1118,19 +1118,17 @@ fun CategoryWiseBarGraph(
     val prevCategoryTotals = remember(prevMonthExpenses) {
         val nonExcluded = prevMonthExpenses.filter {
             !it.isExcluded &&
-            !it.isRefundOrReversal &&
             !it.category.equals("Self", ignoreCase = true) &&
             !it.category.equals("Credit Card Bill", ignoreCase = true)
         }
         val targetList = nonExcluded
         targetList.groupBy { it.category.ifBlank { "General Spend" } }
-            .mapValues { (_, list) -> list.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) } }
+            .mapValues { (_, list) -> list.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0) }
     }
 
     val categoryList = remember(expenses) {
         val nonExcluded = expenses.filter {
             !it.isExcluded &&
-            !it.isRefundOrReversal &&
             !it.category.equals("Self", ignoreCase = true) &&
             !it.category.equals("Credit Card Bill", ignoreCase = true)
         }
@@ -1139,10 +1137,11 @@ fun CategoryWiseBarGraph(
             .map { (cat, list) ->
                 CategorySpendBarItem(
                     category = cat,
-                    amount = list.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) },
+                    amount = list.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0),
                     count = list.size
                 )
             }
+            .filter { it.amount > 0.0 }
             .sortedByDescending { it.amount }
     }
 
