@@ -55,7 +55,7 @@ data class ExpenseEntity(
         get() = isReversal || category.equals("Refund", ignoreCase = true) || category.equals("Reimbursement", ignoreCase = true)
 
     val effectiveSpendAmount: Double
-        get() = if (isRefundOrReversal) -(amount - refundedAmount).coerceAtLeast(0.0) else (amount - refundedAmount).coerceAtLeast(0.0)
+        get() = if (isRefundOrReversal) -amount else (amount - refundedAmount).coerceAtLeast(0.0)
 
     companion object {
         fun formatMonthKey(epochMillis: Long): String {

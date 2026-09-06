@@ -57,14 +57,20 @@ class WeeklySpendDigestWorker(
             val blacklisted = app.preferences.getBlacklistedMerchants().map { it.trim().lowercase(Locale.US) }
             val validExpenses = recentExpenses.filter {
                 !it.isExcluded &&
-                !it.isReversal &&
                 it.type != ExpenseType.SELF &&
                 !it.category.equals("Self", ignoreCase = true) &&
                 !it.category.equals("Credit Card Bill", ignoreCase = true) &&
                 !blacklisted.any { b -> it.merchantOrRecipient.trim().lowercase(Locale.US).contains(b) }
             }
 
-            val totalWeeklySpend = validExpenses.sumOf { it.netAmount }
+            var totalWeeklySpend = 0.0
+            for (exp in validExpenses) {
+                if (exp.isRefundOrReversal) {
+                    totalWeeklySpend = (totalWeeklySpend - exp.amount).coerceAtLeast(0.0)
+                } else {
+                    totalWeeklySpend += (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
+                }
+            }
 
             val currency = app.preferences.currency
             val numberFormatter = NumberFormat.getNumberInstance(Locale.US).apply {
@@ -72,12 +78,12 @@ class WeeklySpendDigestWorker(
                 maximumFractionDigits = 0
             }
 
-            // Group by category to find top spending category
-            val topCategoryGroup = validExpenses.groupBy { it.category }
-                .maxByOrNull { entry -> entry.value.sumOf { it.netAmount } }
+            // Group by category to find top spending category (excluding refunds)
+            val topCategoryGroup = validExpenses.filter { !it.isRefundOrReversal }.groupBy { it.category }
+                .maxByOrNull { entry -> entry.value.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) } }
 
             val topCategoryName = topCategoryGroup?.key ?: "General"
-            val topCategoryAmount = topCategoryGroup?.value?.sumOf { it.netAmount } ?: 0.0
+            val topCategoryAmount = topCategoryGroup?.value?.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) } ?: 0.0
 
             val cal = Calendar.getInstance()
             val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)

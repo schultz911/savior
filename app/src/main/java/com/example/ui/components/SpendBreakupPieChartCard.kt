@@ -99,18 +99,19 @@ fun SpendBreakupPieChartCard(
             val isBlacklisted = norm.isNotBlank() && blacklistedMerchants.any { norm.contains(it, ignoreCase = true) || it.contains(norm, ignoreCase = true) }
             val isSelf = exp.type == com.example.data.ExpenseType.SELF || exp.category.equals("Self", ignoreCase = true)
             val isCreditCard = exp.type == com.example.data.ExpenseType.CREDIT_CARD || exp.category.equals("Credit Card Bill", ignoreCase = true)
-            exp.isExcluded || isBlacklisted || isSelf || isCreditCard
+            exp.isExcluded || isBlacklisted || isSelf || isCreditCard || exp.isRefundOrReversal
         }
     }
 
     if (validExpenses.isEmpty()) return
 
-    val totalSpent = validExpenses.sumOf { it.amount }
+    val totalSpent = validExpenses.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
     if (totalSpent <= 0.0) return
 
-    // Group expenses by category
+    // Group expenses by category using net spend amounts
     val grouped = validExpenses.groupBy { it.category.ifBlank { "Uncategorized" } }
-        .mapValues { (_, list) -> list.sumOf { it.amount } }
+        .mapValues { (_, list) -> list.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) } }
+        .filterValues { it > 0.0 }
         .toList()
         .sortedByDescending { it.second }
 

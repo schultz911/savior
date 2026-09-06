@@ -39,6 +39,12 @@
 
 ## 3. Approved and Implemented
 
+- **[Refunds, Reversals, & Slide Action Precision Optimization] (Executed & Validated)**:
+  - **Accurate Cash Flow Spend Adjustment**: Updated `ExpenseEntity.effectiveSpendAmount` (`-amount` on refund/reversals), `monthlyTotal`, `spendsTotal`, `safeSpendPacing`, `dailyBurnDownData`, `instrumentSummaries`, `LiveExpenditureNotificationService`, and `WeeklySpendDigestWorker` to deduct refund/reversal amounts from total expenditure calculations.
+  - **Category Spend Breakup Sanitization**: Explicitly filtered out `isRefundOrReversal` in `SpendBreakupPieChartCard` and `CalendarAnalyticsTab.CategoryWiseBarGraph`, ensuring refunds never appear as spend slices.
+  - **Bidirectional Slide Action Gesture State Fix**: Resolved gesture state capture bug using `rememberUpdatedState` and `key(expense.id, expense.isRecurring, expense.isExcluded)`, guaranteeing that swipe actions (StartToEnd for recurring, EndToStart for spend exclusion) reliably toggle on/off every swipe without sticking. Responsive positional threshold set to `minOf(48.dp, 25%)`.
+  - **Transaction Details UI Streamlining**: Updated detail sheet blacklist button text to `"Blacklist"` / `"Unblacklist"`, and replaced the large exclude box button with clean, clickable red text directly below the log refund button.
+  - Assembled production `v1.0.0` stable release binaries: `savior-1.0.0.apk` and `savio-1.0.0.apk`.
 - **[Transaction-Level Spend Exclusion Decoupled from Merchant Blacklist] (Executed & Validated)**:
   - Slide action (EndToStart) strictly toggles single transaction exclusion (`expense.isExcluded`), preventing accidental whole-merchant blacklisting.
   - Merchant blacklisting remains exclusively accessible via the dedicated "Blacklist Merchant" button inside Transaction Details and the Settings page.

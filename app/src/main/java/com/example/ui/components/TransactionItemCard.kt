@@ -69,9 +69,11 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -153,24 +155,32 @@ fun TransactionItemCard(
     val extraSlackPx = with(density) { 20.dp.toPx() }
     val defaultMaxSlidePx = with(density) { 165.dp.toPx() }
 
-    val dismissState = rememberSwipeToDismissBoxState(
-        positionalThreshold = { with(density) { 72.dp.toPx() } },
-        confirmValueChange = { targetValue ->
-            when (targetValue) {
-                SwipeToDismissBoxValue.StartToEnd -> {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onToggleRecurring?.invoke(expense.id, !expense.isRecurring)
-                    false
+    val currentExpense by rememberUpdatedState(expense)
+    val currentOnToggleRecurring by rememberUpdatedState(onToggleRecurring)
+    val currentOnToggleExclude by rememberUpdatedState(onToggleExclude)
+
+    val dismissState = key(expense.id, expense.isRecurring, expense.isExcluded) {
+        rememberSwipeToDismissBoxState(
+            positionalThreshold = { totalDistance ->
+                minOf(with(density) { 48.dp.toPx() }, totalDistance * 0.25f)
+            },
+            confirmValueChange = { targetValue ->
+                when (targetValue) {
+                    SwipeToDismissBoxValue.StartToEnd -> {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        currentOnToggleRecurring?.invoke(currentExpense.id, !currentExpense.isRecurring)
+                        false
+                    }
+                    SwipeToDismissBoxValue.EndToStart -> {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        currentOnToggleExclude?.invoke(currentExpense.id, !currentExpense.isExcluded)
+                        false
+                    }
+                    else -> false
                 }
-                SwipeToDismissBoxValue.EndToStart -> {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onToggleExclude?.invoke(expense.id, !expense.isExcluded)
-                    false
-                }
-                else -> false
             }
-        }
-    )
+        )
+    }
 
     val numberFormatter = remember {
         NumberFormat.getNumberInstance(Locale.US).apply {
@@ -1202,32 +1212,23 @@ private fun TransactionDetailBottomSheet(
             }
 
             if (onToggleExclude != null) {
-                OutlinedButton(
-                    onClick = onToggleExclude,
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(44.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        if (expense.isExcluded) SavioEmerald else SavioBlacklistRed.copy(alpha = 0.5f)
-                    ),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (expense.isExcluded) SavioEmeraldContainer else SavioBlacklistBg
-                    )
+                        .clickable { onToggleExclude() }
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = if (expense.isExcluded) Icons.Default.CheckCircle else Icons.Default.Block,
-                        contentDescription = null,
-                        tint = if (expense.isExcluded) SavioEmerald else SavioBlacklistRed,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (expense.isExcluded) "Include Transaction in Spend" else "Exclude this Transaction from Spend",
-                        color = if (expense.isExcluded) SavioEmerald else SavioBlacklistRed,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 12.5.sp
+                        text = if (expense.isExcluded) "Transaction excluded from spend (Tap to include)" else "Exclude transaction from spend",
+                        color = SavioBlacklistRed,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            textDecoration = TextDecoration.Underline
+                        )
                     )
                 }
             }
@@ -1275,9 +1276,9 @@ private fun TransactionDetailBottomSheet(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (isBlacklisted) "Unblacklist Merchant" else "Blacklist Merchant",
+                        text = if (isBlacklisted) "Unblacklist" else "Blacklist",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
+                        fontSize = 13.sp,
                         color = Color.White
                     )
                 }

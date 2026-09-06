@@ -104,51 +104,29 @@ object ExpenseProcessingHelper {
         )
 
         val preferredCurrency = prefs.currency.ifEmpty { parsed.currency }
-        val resultExpense: ExpenseEntity?
-
-        if (matching != null) {
-            Log.d(TAG, "Reconciling refund of ${parsed.amount} against existing expense id=${matching.id} (${matching.merchantOrRecipient})")
-            dao.applyRefund(matching.id, parsed.amount)
-            val updated = dao.getExpenseById(matching.id)
-            if (updated != null && updated.amount <= updated.refundedAmount) {
-                dao.updateIsReversal(matching.id, true)
-            }
-            // Persist marker entry for incoming refund SMS so repeated inbox sync passes are deduplicated
-            val marker = ExpenseEntity(
-                amount = parsed.amount,
-                currency = preferredCurrency,
-                type = matching.type,
-                merchantOrRecipient = matching.merchantOrRecipient,
-                accountInfo = parsed.accountInfo,
-                category = "Refund",
-                rawBody = parsed.rawText,
-                sender = sender,
-                timestamp = timestamp,
-                refundedAmount = parsed.amount,
-                isReversal = true
-            )
-            dao.insertExpense(marker)
-            resultExpense = updated
-        } else {
-            // Standalone refund/reimbursement/settlement: inserted with refundedAmount = 0.0, isReversal = true
-            // so that it reduces total spends across the app unless blacklisted
-            Log.d(TAG, "No matching recent debit found for refund ${parsed.amount} from '${parsed.title}'. Recording standalone reversal.")
-            val refundEntity = ExpenseEntity(
-                amount = parsed.amount,
-                currency = preferredCurrency,
-                type = com.example.data.ExpenseType.MERCHANT,
-                merchantOrRecipient = if (parsed.title.isNotBlank() && !parsed.title.equals("Merchant / Payee", ignoreCase = true)) parsed.title else "Refund / Reversal",
-                accountInfo = parsed.accountInfo,
-                category = "Refund",
-                rawBody = parsed.rawText,
-                sender = sender,
-                timestamp = timestamp,
-                refundedAmount = 0.0,
-                isReversal = true
-            )
-            val id = dao.insertExpense(refundEntity)
-            resultExpense = refundEntity.copy(id = id)
+        val effectiveMerchant = when {
+            matching != null -> matching.merchantOrRecipient
+            parsed.title.isNotBlank() && !parsed.title.equals("Merchant / Payee", ignoreCase = true) -> parsed.title
+            else -> "Refund / Reversal"
         }
+        val effectiveType = matching?.type ?: com.example.data.ExpenseType.MERCHANT
+
+        Log.d(TAG, "Recording refund transaction of ${parsed.amount} from '$effectiveMerchant'")
+        val refundEntity = ExpenseEntity(
+            amount = parsed.amount,
+            currency = preferredCurrency,
+            type = effectiveType,
+            merchantOrRecipient = effectiveMerchant,
+            accountInfo = parsed.accountInfo,
+            category = "Refund",
+            rawBody = parsed.rawText,
+            sender = sender,
+            timestamp = timestamp,
+            refundedAmount = 0.0,
+            isReversal = true
+        )
+        val id = dao.insertExpense(refundEntity)
+        val resultExpense = refundEntity.copy(id = id)
 
         if (!isBatchSync && prefs.isPersistentNotificationEnabled) {
             LiveExpenditureNotificationService.updateLiveExpenditure(context)

@@ -140,8 +140,8 @@ class LiveExpenditureNotificationService : Service() {
                     } else if (isCreditCard) {
                         creditCardsSum += netAmount
                     } else if (exp.isRefundOrReversal) {
-                        spendsSum = (spendsSum - netAmount).coerceAtLeast(0.0)
-                        totalSpend = (totalSpend - netAmount).coerceAtLeast(0.0)
+                        spendsSum = (spendsSum - exp.amount).coerceAtLeast(0.0)
+                        totalSpend = (totalSpend - exp.amount).coerceAtLeast(0.0)
                     } else if (exp.type == ExpenseType.P2P) {
                         transfersSum += netAmount
                         totalSpend += netAmount

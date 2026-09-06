@@ -337,13 +337,13 @@ class ExpenseViewModel(
             if (blacklisted.any { norm.contains(it.lowercase(Locale.US)) }) continue
             if (isSelf(exp) || isCreditCard(exp)) continue
 
-            val net = (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
             if (exp.isRefundOrReversal) {
-                currentSpent = (currentSpent - net).coerceAtLeast(0.0)
+                currentSpent = (currentSpent - exp.amount).coerceAtLeast(0.0)
                 if (exp.timestamp >= startOfToday) {
-                    todaySpent = (todaySpent - net).coerceAtLeast(0.0)
+                    todaySpent = (todaySpent - exp.amount).coerceAtLeast(0.0)
                 }
             } else {
+                val net = (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
                 currentSpent += net
                 if (exp.timestamp >= startOfToday) {
                     todaySpent += net
@@ -392,7 +392,7 @@ class ExpenseViewModel(
         var total = 0.0
         for (it in validList) {
             if (it.isRefundOrReversal) {
-                total -= (it.amount - it.refundedAmount).coerceAtLeast(0.0)
+                total -= it.amount
             } else {
                 total += (it.amount - it.refundedAmount).coerceAtLeast(0.0)
             }
@@ -426,7 +426,7 @@ class ExpenseViewModel(
         var total = 0.0
         for (it in validList) {
             if (it.isRefundOrReversal) {
-                total -= (it.amount - it.refundedAmount).coerceAtLeast(0.0)
+                total -= it.amount
             } else {
                 total += (it.amount - it.refundedAmount).coerceAtLeast(0.0)
             }
@@ -559,14 +559,14 @@ class ExpenseViewModel(
         val valid = expenses.filter {
             !it.isExcluded && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) && !isSelf(it)
         }
-        val netMonthTotal = valid.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
+        val netMonthTotal = valid.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0)
         val grouped = valid.groupBy {
             val acc = it.accountInfo.trim()
             if (acc.isNotBlank()) acc else "Other / Cash"
         }
 
         grouped.map { (account, list) ->
-            val total = list.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
+            val total = list.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0)
             val type = InstrumentType.fromAccountInfo(account)
             val pct = if (netMonthTotal > 0) (total / netMonthTotal) * 100.0 else 0.0
             InstrumentSpendSummary(
@@ -711,6 +711,7 @@ class ExpenseViewModel(
             repository.updateIsExcluded(id, isExcluded)
             val msg = if (isExcluded) "Transaction excluded from spend." else "Transaction included in spend."
             _syncFeedback.value = msg
+            LiveExpenditureNotificationService.updateLiveExpenditure(getApplication())
         }
     }
 
