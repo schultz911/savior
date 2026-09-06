@@ -147,13 +147,6 @@ class ExpensePreferences(context: Context) {
         get() = prefs.getInt(KEY_LOCK_TIMEOUT, 0)
         set(value) = prefs.edit().putInt(KEY_LOCK_TIMEOUT, value).apply()
 
-    fun isMerchantBlacklisted(merchant: String): Boolean {
-        val norm = merchant.trim()
-        if (norm.isBlank()) return false
-        val set = getBlacklistedMerchants()
-        return set.any { it.equals(norm, ignoreCase = true) }
-    }
-
     private fun normalizeMerchantKey(merchant: String): String {
         return merchant.trim().lowercase()
     }

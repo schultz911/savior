@@ -113,6 +113,7 @@ class LiveExpenditureNotificationService : Service() {
                 val currency = prefs.currency
                 val budget = prefs.monthlyBudget
                 val blacklisted = prefs.getBlacklistedMerchants()
+                val normalizedBlacklist = blacklisted.map { it.trim().lowercase(Locale.US) }
 
                 var totalSpend = 0.0
                 var transfersSum = 0.0
@@ -124,8 +125,8 @@ class LiveExpenditureNotificationService : Service() {
                     if (exp.isExcluded) {
                         continue // Excluded transactions are omitted from total spend calculations
                     }
-                    val normMerchant = exp.merchantOrRecipient.trim().lowercase()
-                    if (blacklisted.any { normMerchant.contains(it.lowercase()) || it.lowercase().contains(normMerchant) }) {
+                    val normMerchant = exp.merchantOrRecipient.trim().lowercase(Locale.US)
+                    if (normalizedBlacklist.any { normMerchant.contains(it) || it.contains(normMerchant) }) {
                         continue // Blacklisted merchants are simply ignored and not considered
                     }
 
@@ -160,11 +161,10 @@ class LiveExpenditureNotificationService : Service() {
                 val daysRemaining = (daysInMonth - currentDay + 1).coerceAtLeast(1)
 
                 // Scoped query: trailing 180-day window for recurring cadence detection (covers monthly, bi-monthly, quarterly)
-                // Plus any manually-marked recurring items that may fall outside the window
+                // Plus any manually-marked recurring items across all history
                 val recurringCutoff = System.currentTimeMillis() - 180L * 24 * 60 * 60 * 1000
                 val recentExpenses = dao.getExpensesSinceSync(recurringCutoff)
-                val manualRecurring = dao.getExpensesForMonthSync(currentMonthKey)
-                    .filter { it.isRecurring && it.timestamp < recurringCutoff }
+                val manualRecurring = dao.getRecurringExpensesSync()
                 val scopedExpenses = (recentExpenses + manualRecurring).distinctBy { it.id }
                 val ignoredMerchants = prefs.getIgnoredRecurringMerchants()
                 val recurringCommitments = RecurringDetectionEngine.detectRecurringBills(scopedExpenses, currentMonthKey, ignoredMerchants)

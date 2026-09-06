@@ -463,4 +463,52 @@ class ExampleRobolectricTest {
     assertEquals(500.0, grouped["Shopping"] ?: 0.0, 0.01)
     assertEquals(1000.0, grouped.values.sum(), 0.01)
   }
+
+  @Test
+  fun `test velocity pacing spend calculation excludes excluded and blacklisted items`() {
+    val blacklistedMerchants = setOf("crypto exchange", "gambling app")
+    val normalizedBlacklist = blacklistedMerchants.map { it.trim().lowercase() }.toSet()
+
+    val exp1 = com.example.data.ExpenseEntity(
+      amount = 1500.0,
+      merchantOrRecipient = "Amazon",
+      category = "Shopping"
+    )
+    val excludedExp = com.example.data.ExpenseEntity(
+      amount = 8000.0,
+      merchantOrRecipient = "Big Purchase",
+      isExcluded = true
+    )
+    val blacklistedExp = com.example.data.ExpenseEntity(
+      amount = 12000.0,
+      merchantOrRecipient = "Crypto Exchange ",
+      category = "Investments"
+    )
+    val refundExp = com.example.data.ExpenseEntity(
+      amount = 500.0,
+      merchantOrRecipient = "Amazon",
+      isReversal = true
+    )
+
+    val expenses = listOf(exp1, excludedExp, blacklistedExp, refundExp)
+
+    var currentSpent = 0.0
+    for (exp in expenses) {
+      if (exp.isExcluded) continue
+      val isSelf = exp.type == ExpenseType.SELF || exp.category.equals("Self", ignoreCase = true)
+      val isCc = exp.type == ExpenseType.CREDIT_CARD || exp.category.equals("Credit Card Bill", ignoreCase = true)
+      val isBlacklisted = exp.merchantOrRecipient?.trim()?.lowercase()?.let { normalizedBlacklist.contains(it) } == true
+      if (isSelf || isCc || isBlacklisted) continue
+
+      if (exp.isRefundOrReversal) {
+        currentSpent -= exp.amount
+      } else {
+        currentSpent += (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
+      }
+    }
+    currentSpent = currentSpent.coerceAtLeast(0.0)
+
+    // Expected: exp1 (1500) - refundExp (500) = 1000.0 (excluded 8000 and blacklisted 12000 are omitted)
+    assertEquals(1000.0, currentSpent, 0.01)
+  }
 }

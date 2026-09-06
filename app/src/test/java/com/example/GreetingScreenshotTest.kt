@@ -27,7 +27,6 @@ class GreetingScreenshotTest {
         ExpenditureHeroCard(
           monthDisplay = "September 2026",
           totalExpenditure = 1425.80,
-          debitsTotal = 850.00,
           transfersTotal = 250.00,
           spendsTotal = 325.80,
           currency = "$",

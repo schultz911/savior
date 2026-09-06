@@ -102,13 +102,4 @@ object RecurringDetectionEngine {
                 .thenBy { it.typicalDayOfMonth }
         )
     }
-
-    fun getUpcomingCommitmentsTotal(
-        allExpenses: List<ExpenseEntity>,
-        currentMonthKey: String = ExpenseEntity.formatMonthKey(System.currentTimeMillis()),
-        ignoredMerchants: Set<String> = emptySet()
-    ): Double {
-        val bills = detectRecurringBills(allExpenses, currentMonthKey, ignoredMerchants)
-        return bills.filter { !it.isPaidThisMonth }.sumOf { it.expectedAmount }
-    }
 }

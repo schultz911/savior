@@ -158,7 +158,7 @@ fun CalendarAnalyticsTab(
         }
     }
 
-    val monthsForYear = remember(selectedYear, allExpenses, currentMonthExpenses, monthlySalary, last12Months) {
+    val monthsForYear = remember(selectedYear, allExpenses, currentMonthExpenses, monthlySalary, last12Months, isBlacklistedMerchant) {
         val sdfShort = SimpleDateFormat("MMM", Locale.US)
         val sdfFull = SimpleDateFormat("MMM yyyy", Locale.US)
         val cal = Calendar.getInstance()
@@ -182,6 +182,7 @@ fun CalendarAnalyticsTab(
                 val totalSpent = if (expensesForM.isNotEmpty()) {
                     expensesForM.filter {
                         !it.isExcluded &&
+                        (isBlacklistedMerchant == null || !isBlacklistedMerchant(it.merchantOrRecipient)) &&
                         !it.category.equals("Self", ignoreCase = true) &&
                         !it.category.equals("Credit Card Bill", ignoreCase = true)
                     }.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0)
@@ -212,10 +213,11 @@ fun CalendarAnalyticsTab(
         monthsForYear.firstOrNull { it.monthKey == selectedMonthKey }
     }
 
-    val selectedTotalSpend = remember(selectedMonthExpenses, currentSelectedAnalytics) {
+    val selectedTotalSpend = remember(selectedMonthExpenses, currentSelectedAnalytics, isBlacklistedMerchant) {
         currentSelectedAnalytics?.totalSpent
             ?: selectedMonthExpenses.filter {
                 !it.isExcluded &&
+                (isBlacklistedMerchant == null || !isBlacklistedMerchant(it.merchantOrRecipient)) &&
                 !it.category.equals("Self", ignoreCase = true) &&
                 !it.category.equals("Credit Card Bill", ignoreCase = true)
             }.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0)
@@ -252,10 +254,11 @@ fun CalendarAnalyticsTab(
         } else emptyList()
     }
 
-    val prevTotalSpend = remember(prevMonthExpenses, last12Months, prevMonthKey) {
+    val prevTotalSpend = remember(prevMonthExpenses, last12Months, prevMonthKey, isBlacklistedMerchant) {
         if (prevMonthExpenses.isNotEmpty()) {
             prevMonthExpenses.filter {
                 !it.isExcluded &&
+                (isBlacklistedMerchant == null || !isBlacklistedMerchant(it.merchantOrRecipient)) &&
                 !it.category.equals("Self", ignoreCase = true) &&
                 !it.category.equals("Credit Card Bill", ignoreCase = true)
             }.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0)
@@ -686,7 +689,8 @@ fun CalendarAnalyticsTab(
                         expenses = selectedMonthExpenses,
                         currency = currency,
                         prevMonthExpenses = prevMonthExpenses,
-                        prevMonthShortLabel = prevMonthShortLabel
+                        prevMonthShortLabel = prevMonthShortLabel,
+                        isBlacklistedMerchant = isBlacklistedMerchant
                     )
                 }
             }
@@ -1106,7 +1110,8 @@ fun CategoryWiseBarGraph(
     currency: String,
     modifier: Modifier = Modifier,
     prevMonthExpenses: List<ExpenseEntity> = emptyList(),
-    prevMonthShortLabel: String = ""
+    prevMonthShortLabel: String = "",
+    isBlacklistedMerchant: ((String) -> Boolean)? = null
 ) {
     val numberFormatter = remember {
         NumberFormat.getNumberInstance(Locale.US).apply {
@@ -1115,9 +1120,10 @@ fun CategoryWiseBarGraph(
         }
     }
 
-    val prevCategoryTotals = remember(prevMonthExpenses) {
+    val prevCategoryTotals = remember(prevMonthExpenses, isBlacklistedMerchant) {
         val nonExcluded = prevMonthExpenses.filter {
             !it.isExcluded &&
+            (isBlacklistedMerchant == null || !isBlacklistedMerchant(it.merchantOrRecipient)) &&
             !it.category.equals("Self", ignoreCase = true) &&
             !it.category.equals("Credit Card Bill", ignoreCase = true)
         }
@@ -1126,9 +1132,10 @@ fun CategoryWiseBarGraph(
             .mapValues { (_, list) -> list.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0) }
     }
 
-    val categoryList = remember(expenses) {
+    val categoryList = remember(expenses, isBlacklistedMerchant) {
         val nonExcluded = expenses.filter {
             !it.isExcluded &&
+            (isBlacklistedMerchant == null || !isBlacklistedMerchant(it.merchantOrRecipient)) &&
             !it.category.equals("Self", ignoreCase = true) &&
             !it.category.equals("Credit Card Bill", ignoreCase = true)
         }

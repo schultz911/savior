@@ -1,7 +1,6 @@
 package com.example
 
 import android.app.Application
-import android.content.Context
 import com.example.data.AppDatabase
 import com.example.data.ExpensePreferences
 import com.example.data.ExpenseRepository
@@ -49,7 +48,5 @@ class SpendTrackerApplication : Application() {
     companion object {
         lateinit var instance: SpendTrackerApplication
             private set
-
-        fun getAppContext(): Context = instance.applicationContext
     }
 }

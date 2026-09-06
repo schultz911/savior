@@ -13,6 +13,7 @@ import com.example.data.ExpenseType
 import com.example.service.LiveExpenditureNotificationService
 import com.example.sms.SampleSmsData
 import com.example.ui.models.MonthAnalytics
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -290,7 +292,7 @@ class ExpenseViewModel(
                 recent[mid]
             }
         }
-    }.stateIn(
+    }.flowOn(Dispatchers.Default).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 500.0
@@ -303,7 +305,7 @@ class ExpenseViewModel(
         _ignoredRecurringMerchants
     ) { allList, monthKey, ignored ->
         RecurringDetectionEngine.detectRecurringBills(allList, monthKey, ignored)
-    }.stateIn(
+    }.flowOn(Dispatchers.Default).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
@@ -333,8 +335,7 @@ class ExpenseViewModel(
 
         for (exp in expenses) {
             if (exp.isExcluded) continue
-            val norm = exp.merchantOrRecipient.trim().lowercase(Locale.US)
-            if (blacklisted.any { norm.contains(it.lowercase(Locale.US)) }) continue
+            if (isBlacklistedMerchant(exp.merchantOrRecipient, blacklisted)) continue
             if (isSelf(exp) || isCreditCard(exp)) continue
 
             if (exp.isRefundOrReversal) {
@@ -373,7 +374,7 @@ class ExpenseViewModel(
             remainingDiscretionary = remainingDiscretionary,
             upcomingRecurringTotal = upcomingRecurring
         )
-    }.stateIn(
+    }.flowOn(Dispatchers.Default).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = SafeSpendPacing()
@@ -403,8 +404,6 @@ class ExpenseViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0.0
     )
-
-    val debitsTotal: StateFlow<Double> = MutableStateFlow(0.0).asStateFlow()
 
     val transfersTotal: StateFlow<Double> = combine(
         currentMonthExpenses,
@@ -545,7 +544,7 @@ class ExpenseViewModel(
             isOverPaced = overPaced,
             currentBurnRatePerDay = burnRate
         )
-    }.stateIn(
+    }.flowOn(Dispatchers.Default).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = DailyBurnDownData()
@@ -577,7 +576,7 @@ class ExpenseViewModel(
                 percentageOfTotal = pct
             )
         }.sortedByDescending { it.totalSpent }
-    }.stateIn(
+    }.flowOn(Dispatchers.Default).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
@@ -590,7 +589,7 @@ class ExpenseViewModel(
         _blacklistedMerchants
     ) { allExpensesList, salary, blacklisted ->
         computeLast12MonthsAnalytics(allExpensesList, salary, blacklisted)
-    }.stateIn(
+    }.flowOn(Dispatchers.Default).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
@@ -770,17 +769,15 @@ class ExpenseViewModel(
         _syncFeedback.value = null
     }
 
-    fun parseAndAddMessage(rawBody: String, sender: String = "BankSMS"): Boolean {
-        var success = false
+    fun parseAndAddMessage(rawBody: String, sender: String = "BankSMS") {
         viewModelScope.launch {
-            success = repository.parseAndAddMessage(rawBody, sender)
+            val success = repository.parseAndAddMessage(rawBody, sender)
             if (success) {
                 _syncFeedback.value = "Message parsed & added live!"
             } else {
                 _syncFeedback.value = "Could not detect debit/spend in this message."
             }
         }
-        return success
     }
 
     fun simulateSample(sample: SampleSmsData.SampleSms) {

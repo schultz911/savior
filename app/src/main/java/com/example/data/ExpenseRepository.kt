@@ -200,10 +200,4 @@ class ExpenseRepository(
             }
         }
     }
-
-    suspend fun importSampleList(samples: List<SampleSmsData.SampleSms>) = withContext(Dispatchers.IO) {
-        for (s in samples) {
-            parseAndAddMessage(s.body, s.sender)
-        }
-    }
 }

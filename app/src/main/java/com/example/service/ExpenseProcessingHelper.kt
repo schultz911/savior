@@ -327,12 +327,18 @@ object ExpenseProcessingHelper {
         val blacklisted = prefs.getBlacklistedMerchants().map { it.trim().lowercase(java.util.Locale.US) }
         var currentSpent = 0.0
         for (exp in monthExpenses) {
+            if (exp.isExcluded) continue
             val norm = exp.merchantOrRecipient.trim().lowercase(java.util.Locale.US)
-            if (blacklisted.any { norm.contains(it) }) continue
+            if (blacklisted.any { norm.contains(it) || it.contains(norm) }) continue
             if (exp.type == com.example.data.ExpenseType.SELF || exp.category.equals("Self", ignoreCase = true) ||
                 exp.type == com.example.data.ExpenseType.CREDIT_CARD || exp.category.equals("Credit Card Bill", ignoreCase = true)
             ) continue
-            currentSpent += (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
+
+            if (exp.isRefundOrReversal) {
+                currentSpent = (currentSpent - exp.amount).coerceAtLeast(0.0)
+            } else {
+                currentSpent += (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
+            }
         }
 
         SpendAlertManager.checkAndNotifySpendVelocity(
