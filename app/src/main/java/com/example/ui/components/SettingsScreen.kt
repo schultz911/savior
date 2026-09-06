@@ -1551,27 +1551,11 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "On-Device AI (Gemini Nano / AICore)",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    color = SavioSlateDark
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                if (isAiCoreForceEnabled) {
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = SavioTransferIndigoBg
-                                    ) {
-                                        Text(
-                                            text = "FORCE ACTIVE",
-                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
-                                            color = SavioTransferIndigo,
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-                            }
+                            Text(
+                                text = "On-Device AI (Gemini Nano / AICore)",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = SavioSlateDark
+                            )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = if (isAiCoreForceEnabled) {

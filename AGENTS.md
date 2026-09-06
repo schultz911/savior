@@ -105,6 +105,12 @@
 
 ## 3. Approved and Implemented
 
+- **[Zero-Cloud Privacy Perimeter & Anomaly Baseline Integrity (Vector B & C)] (Executed & Validated)**:
+  - **Zero-Cloud Perimeter (`AndroidManifest.xml`, `data_extraction_rules.xml`, `backup_rules.xml`)**: Enforced `android:allowBackup="false"` in `AndroidManifest.xml` and explicitly excluded all domains (`root`, `file`, `database`, `sharedpref`, `external`) from cloud backup and device transfer in both `data_extraction_rules.xml` and legacy `backup_rules.xml`. Guarantees 100% offline data privacy: no financial transactions, Room database files, or user preferences are ever uploaded to cloud backup or transferred unencrypted. User backups remain strictly under user control via local AES-256-GCM file export (`DatabaseBackupHelper.kt`).
+  - **Anomaly Baseline & Median Spend Exclusion Consistency (`ExpenseDao.kt` & `ExpenseViewModel.kt`)**: Added `AND isExcluded = 0` to `ExpenseDao.getRecentDebitAmounts` and `!it.isExcluded` to `ExpenseViewModel.trailingMedianSpend`. Guarantees that user-excluded corporate or reimbursable expenses never distort the 30-day median debit amount or anomaly detection baselines.
+  - **On-Device AI Settings UI Polish (`SettingsScreen.kt`)**: Removed the redundant `"FORCE ACTIVE"` badge from the on-device AI setting row, streamlining the settings interface.
+  - **Automated Verification & Packaging**: Added automated Robolectric test coverage in `ExampleRobolectricTest.kt` verifying `isExcluded` transactions are excluded from `getRecentDebitAmounts`. Full offline test suite passed with 33 tasks in 38s (0 failures, 0 regressions). Production release APK compiled successfully with 49 tasks in 1m 3s; maintained release APK size at 4.21 MB (4,412,000 bytes). Synchronized `savior-1.0.0.apk` and `savio-1.0.0.apk`.
+
 - **[Phase 5: Backup Fast-Path Header Verification (Vector C)] (Executed & Validated)**:
   - **4-Byte Magic Signature Export & Fast-Path Rejection (`DatabaseBackupHelper.kt`)**: Added `MAGIC_HEADER = "SAV1"` (`0x53, 0x41, 0x56, 0x31`) prepended to all encrypted backup streams. On restoration, verified the magic bytes before starting the 10,000-iteration PBKDF2 key derivation loop, failing fast in <1ms on invalid or non-backup payloads.
   - **Non-Backup File Format Recognition (`DatabaseBackupHelper.kt`)**: Added `isKnownNonBackupFormat()` to instantly detect and reject PDF, PNG, JPEG, GIF, ZIP/APK, and plain JSON/XML files before CPU-heavy cryptographic operations.

@@ -109,6 +109,7 @@ interface ExpenseDao {
         SELECT amount FROM expenses 
         WHERE timestamp >= :sinceTimestamp 
           AND isReversal = 0 
+          AND isExcluded = 0 
           AND type != 'SELF' 
           AND category NOT IN ('Self', 'Credit Card Bill')
         ORDER BY amount ASC

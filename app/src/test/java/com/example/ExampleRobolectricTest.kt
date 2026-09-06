@@ -487,9 +487,10 @@ class ExampleRobolectricTest {
     dao.insertExpense(com.example.data.ExpenseEntity(amount = 100.0, category = "Transport", timestamp = now - 3000))
     dao.insertExpense(com.example.data.ExpenseEntity(amount = 1000.0, category = "Self", type = ExpenseType.SELF, timestamp = now - 4000))
     dao.insertExpense(com.example.data.ExpenseEntity(amount = 300.0, category = "Refund", isReversal = true, timestamp = now - 5000))
+    dao.insertExpense(com.example.data.ExpenseEntity(amount = 50000.0, category = "Work Reimbursement", isExcluded = true, timestamp = now - 6000))
 
     val debits = dao.getRecentDebitAmounts(now - 10000)
-    // Should exclude Self and Reversals, and be sorted ascending
+    // Should exclude Self, Reversals, and Excluded items, and be sorted ascending
     assertEquals(3, debits.size)
     assertEquals(100.0, debits[0], 0.01)
     assertEquals(200.0, debits[1], 0.01)

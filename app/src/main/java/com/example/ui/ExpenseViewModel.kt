@@ -318,6 +318,7 @@ class ExpenseViewModel(
         val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
         val recent = list.filter {
             it.timestamp >= thirtyDaysAgo &&
+            !it.isExcluded &&
             !it.isReversal &&
             it.type != ExpenseType.SELF &&
             !it.category.equals("Self", ignoreCase = true) &&
