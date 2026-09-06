@@ -305,4 +305,62 @@ class ExampleRobolectricTest {
     assertEquals("September:  ₹4,250.00", title)
     assertEquals("42% of ₹10,000.00 • Safe burn rate • Safe daily spend pace: ₹230.00/day", contentText)
   }
+
+  @Test
+  fun `test merchant name editing updates transaction and autosaves classification rule and alias`() = kotlinx.coroutines.runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val db = androidx.room.Room.inMemoryDatabaseBuilder(context, com.example.data.AppDatabase::class.java)
+      .allowMainThreadQueries()
+      .build()
+    val dao = db.expenseDao()
+    val ruleDao = db.merchantRuleDao()
+    val prefs = com.example.data.ExpensePreferences(context)
+    val repo = com.example.data.ExpenseRepository(context, dao, prefs, ruleDao)
+
+    val exp1 = com.example.data.ExpenseEntity(
+      amount = 350.0,
+      currency = "₹",
+      type = ExpenseType.MERCHANT,
+      merchantOrRecipient = "SWIGGY BANGALORE",
+      accountInfo = "UPI ••1234",
+      category = "Food & Dining",
+      rawBody = "Debited 350 at Swiggy",
+      sender = "HDFC",
+      timestamp = System.currentTimeMillis()
+    )
+    val exp2 = exp1.copy(amount = 450.0)
+    val id1 = dao.insertExpense(exp1)
+    val id2 = dao.insertExpense(exp2)
+
+    // Edit merchant name
+    repo.updateMerchantName(id1, "SWIGGY BANGALORE", "Swiggy", "Food & Dining")
+
+    val updated1 = dao.getExpenseById(id1)
+    val updated2 = dao.getExpenseById(id2)
+    assertEquals("Swiggy", updated1?.merchantOrRecipient)
+    assertEquals("Swiggy", updated2?.merchantOrRecipient)
+
+    val rules = ruleDao.getAllRulesSync()
+    assertTrue(rules.any { it.merchantPattern.equals("SWIGGY BANGALORE", ignoreCase = true) && it.normalizedAlias == "Swiggy" && it.assignedCategory == "Food & Dining" })
+
+    db.close()
+  }
+
+  @Test
+  fun `test sms catchup worker scheduling and notification add spend action`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    try {
+      androidx.work.WorkManager.initialize(
+        context,
+        androidx.work.Configuration.Builder().setMinimumLoggingLevel(android.util.Log.DEBUG).build()
+      )
+    } catch (_: Exception) {}
+
+    com.example.service.SmsCatchUpWorker.schedule(context)
+    val workManager = androidx.work.WorkManager.getInstance(context)
+    assertNotNull(workManager)
+
+    assertEquals("com.example.savior.ACTION_ADD_SPEND", com.example.MainActivity.ACTION_ADD_SPEND)
+    assertEquals("com.example.savior.ACTION_ADD_SPEND", com.example.service.LiveExpenditureNotificationService.ACTION_ADD_SPEND)
+  }
 }

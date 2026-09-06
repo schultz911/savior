@@ -223,7 +223,8 @@ class LiveExpenditureNotificationService : Service() {
         )
 
         val addExpenseIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            action = ACTION_ADD_SPEND
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(MainActivity.EXTRA_SHOW_MANUAL_ADD, true)
         }
         val pendingAddExpenseIntent = PendingIntent.getActivity(
@@ -324,6 +325,7 @@ class LiveExpenditureNotificationService : Service() {
         const val ACTION_START = "com.example.action.START_TRACKER"
         const val ACTION_SYNC = "com.example.action.SYNC_EXPENDITURE"
         const val ACTION_STOP = "com.example.action.STOP_TRACKER"
+        const val ACTION_ADD_SPEND = "com.example.savior.ACTION_ADD_SPEND"
 
         fun createNotificationChannel(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

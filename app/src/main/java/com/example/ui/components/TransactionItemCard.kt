@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.Flight
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -45,8 +47,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -100,6 +105,7 @@ fun TransactionItemCard(
     onToggleBlacklist: ((String) -> Unit)? = null,
     onToggleRecurring: ((Long, Boolean) -> Unit)? = null,
     onOpenMerchantSheet: ((String) -> Unit)? = null,
+    onEditMerchant: ((id: Long, oldMerchant: String, newMerchant: String, category: String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var showDetailSheet by remember { mutableStateOf(false) }
@@ -388,7 +394,8 @@ fun TransactionItemCard(
             onDelete = {
                 onDelete(expense.id)
                 showDetailSheet = false
-            }
+            },
+            onEditMerchant = onEditMerchant
         )
     }
 }
@@ -408,11 +415,14 @@ private fun TransactionDetailBottomSheet(
     onToggleBlacklist: () -> Unit,
     onToggleRecurring: (() -> Unit)? = null,
     onOpenMerchantSheet: (() -> Unit)? = null,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEditMerchant: ((id: Long, oldMerchant: String, newMerchant: String, category: String) -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val clipboardManager = LocalClipboardManager.current
     var copiedToClipboard by remember { mutableStateOf(false) }
+    var showEditMerchantDialog by remember { mutableStateOf(false) }
+    var editedMerchantName by remember(expense.merchantOrRecipient) { mutableStateOf(expense.merchantOrRecipient) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -488,15 +498,43 @@ private fun TransactionDetailBottomSheet(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    Text(
-                        text = expense.merchantOrRecipient,
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 21.sp,
-                            textDecoration = if (isBlacklisted) TextDecoration.LineThrough else TextDecoration.None
-                        ),
-                        color = if (isBlacklisted) SavioBlacklistMuted else SavioSlateDark
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = expense.merchantOrRecipient,
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 21.sp,
+                                textDecoration = if (isBlacklisted) TextDecoration.LineThrough else TextDecoration.None
+                            ),
+                            color = if (isBlacklisted) SavioBlacklistMuted else SavioSlateDark
+                        )
+                        if (onEditMerchant != null) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = CircleShape,
+                                color = SavioEmeraldContainer,
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        editedMerchantName = expense.merchantOrRecipient
+                                        showEditMerchantDialog = true
+                                    }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = "Edit Merchant Name",
+                                        tint = SavioEmerald,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(4.dp))
 
@@ -764,6 +802,68 @@ private fun TransactionDetailBottomSheet(
             }
 
             Spacer(modifier = Modifier.height(28.dp))
+        }
+
+        if (showEditMerchantDialog) {
+            AlertDialog(
+                onDismissRequest = { showEditMerchantDialog = false },
+                title = {
+                    Text(
+                        text = "Edit Merchant Name",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = SavioSlateDark
+                    )
+                },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "Renaming this merchant will update this transaction, match past transactions, and save an automatic classification and alias rule for future SMS from '${expense.merchantOrRecipient}'.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SavioSlateMuted
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        OutlinedTextField(
+                            value = editedMerchantName,
+                            onValueChange = { editedMerchantName = it },
+                            label = { Text("Merchant Name") },
+                            placeholder = { Text("e.g. Swiggy") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = SavioEmerald,
+                                unfocusedBorderColor = GlassCardBorder
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (editedMerchantName.isNotBlank()) {
+                                onEditMerchant?.invoke(
+                                    expense.id,
+                                    expense.merchantOrRecipient,
+                                    editedMerchantName.trim(),
+                                    expense.category
+                                )
+                                showEditMerchantDialog = false
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Save & Apply Rule")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEditMerchantDialog = false }) {
+                        Text("Cancel", color = SavioSlateMuted)
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = Color.White
+            )
         }
     }
 }

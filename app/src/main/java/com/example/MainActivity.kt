@@ -156,8 +156,8 @@ class MainActivity : FragmentActivity() {
 
                 SpendTrackerScreen(
                     viewModel = viewModel,
-                    initialShowManualAdd = initialShowManualAdd,
-                    initialAssignExpenseId = initialAssignExpenseId
+                    manualAddTrigger = manualAddTrigger,
+                    initialAssignExpenseId = assignCategoryExpenseIdState
                 )
             }
         }
@@ -188,19 +188,24 @@ class MainActivity : FragmentActivity() {
         AppSecurityManager.onAppBackgrounded()
     }
 
-    private var initialShowManualAdd: Boolean = false
-    private var initialAssignExpenseId: Long? = null
+    private var manualAddTrigger by mutableStateOf(0L)
+    private var assignCategoryExpenseIdState by mutableStateOf<Long?>(null)
 
     private fun handleIntent(intent: android.content.Intent?) {
         if (intent != null) {
-            initialShowManualAdd = intent.getBooleanExtra(EXTRA_SHOW_MANUAL_ADD, false)
+            if (intent.action == ACTION_ADD_SPEND ||
+                intent.action == LiveExpenditureNotificationService.ACTION_ADD_SPEND ||
+                intent.getBooleanExtra(EXTRA_SHOW_MANUAL_ADD, false)) {
+                manualAddTrigger = System.currentTimeMillis()
+            }
             if (intent.hasExtra(EXTRA_ASSIGN_CATEGORY_EXPENSE_ID)) {
-                initialAssignExpenseId = intent.getLongExtra(EXTRA_ASSIGN_CATEGORY_EXPENSE_ID, -1L)
+                assignCategoryExpenseIdState = intent.getLongExtra(EXTRA_ASSIGN_CATEGORY_EXPENSE_ID, -1L)
             }
         }
     }
 
     companion object {
+        const val ACTION_ADD_SPEND = "com.example.savior.ACTION_ADD_SPEND"
         const val EXTRA_SHOW_MANUAL_ADD = "extra_show_manual_add"
         const val EXTRA_ASSIGN_CATEGORY_EXPENSE_ID = "extra_assign_category_expense_id"
         const val EXTRA_NAVIGATE_TAB = "extra_navigate_tab"
@@ -212,7 +217,7 @@ class MainActivity : FragmentActivity() {
 @Composable
 fun SpendTrackerScreen(
     viewModel: ExpenseViewModel,
-    initialShowManualAdd: Boolean = false,
+    manualAddTrigger: Long = 0L,
     initialAssignExpenseId: Long? = null,
     modifier: Modifier = Modifier
 ) {
@@ -364,8 +369,15 @@ fun SpendTrackerScreen(
     }
 
     var showTestSmsSheet by remember { mutableStateOf(false) }
-    var showManualAddDialog by remember { mutableStateOf(initialShowManualAdd) }
+    var showManualAddDialog by remember { mutableStateOf(false) }
     var assignCategoryTargetExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
+
+    LaunchedEffect(manualAddTrigger) {
+        if (manualAddTrigger > 0L) {
+            showManualAddDialog = true
+            viewModel.setTab(SavioScreenTab.DASHBOARD)
+        }
+    }
 
     // Check if initialAssignExpenseId is provided from notification
     LaunchedEffect(initialAssignExpenseId, currentMonthExpenses) {
@@ -770,7 +782,10 @@ fun SpendTrackerScreen(
                         onSelectAccount = { viewModel.selectAccountFilter(it) },
                         onSelectMonth = { viewModel.selectMonth(it) },
                         onNavigateToDashboard = { viewModel.setTab(SavioScreenTab.DASHBOARD) },
-                        onDeleteMonth = { viewModel.deleteMonthData(it) }
+                        onDeleteMonth = { viewModel.deleteMonthData(it) },
+                        onEditMerchant = { id, oldM, newM, cat ->
+                            viewModel.updateMerchantName(id, oldM, newM, cat)
+                        }
                     )
                 }
             }
@@ -977,6 +992,9 @@ fun SpendTrackerScreen(
                                 },
                                 onOpenMerchantSheet = { merchant ->
                                     selectedMerchantForSheet = merchant
+                                },
+                                onEditMerchant = { id, oldM, newM, cat ->
+                                    viewModel.updateMerchantName(id, oldM, newM, cat)
                                 }
                             )
                         }

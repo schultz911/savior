@@ -29,6 +29,9 @@ class SpendTrackerApplication : Application() {
         // Initialize Notification Channels
         LiveExpenditureNotificationService.createNotificationChannel(this)
 
+        // Schedule Background SMS Reliability Watchdog (Doze Protection)
+        com.example.service.SmsCatchUpWorker.schedule(this)
+
         // If persistent notification is enabled, ensure it's started/synced
         if (preferences.isPersistentNotificationEnabled) {
             try {

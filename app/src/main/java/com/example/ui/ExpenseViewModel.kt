@@ -815,6 +815,13 @@ class ExpenseViewModel(
         }
     }
 
+    fun updateMerchantName(expenseId: Long, oldMerchant: String, newMerchant: String, category: String) {
+        viewModelScope.launch {
+            repository.updateMerchantName(expenseId, oldMerchant, newMerchant, category)
+            _syncFeedback.value = "Merchant updated to '$newMerchant' and auto-rule saved"
+        }
+    }
+
     fun selectAccountFilter(account: String?) {
         _selectedAccountFilter.value = if (_selectedAccountFilter.value == account) null else account
     }

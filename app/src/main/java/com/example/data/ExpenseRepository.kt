@@ -34,6 +34,40 @@ class ExpenseRepository(
         merchantRuleDao?.getAllRulesSync() ?: emptyList()
     }
 
+    suspend fun updateMerchantName(
+        id: Long,
+        oldMerchant: String,
+        newMerchant: String,
+        category: String
+    ) = withContext(Dispatchers.IO) {
+        val cleanNew = newMerchant.trim()
+        val cleanOld = oldMerchant.trim()
+        if (cleanNew.isBlank()) return@withContext
+
+        // 1. Update Room records
+        expenseDao.updateMerchantName(id, cleanNew)
+        if (cleanOld.isNotBlank() && !cleanOld.equals(cleanNew, ignoreCase = true)) {
+            expenseDao.updateMerchantNameForMatching(cleanOld, cleanNew)
+
+            // 2. Autosave deterministic rule and alias in merchant_rules table
+            merchantRuleDao?.insertRule(
+                MerchantRuleEntity(
+                    merchantPattern = cleanOld,
+                    assignedCategory = category,
+                    normalizedAlias = cleanNew,
+                    isRegex = false,
+                    createdAt = System.currentTimeMillis()
+                )
+            )
+            // 3. Save to merchant preferences
+            preferences.saveMerchantCategory(cleanNew, category)
+        }
+
+        if (preferences.isPersistentNotificationEnabled) {
+            LiveExpenditureNotificationService.updateLiveExpenditure(context)
+        }
+    }
+
     suspend fun applyRefund(id: Long, refundAmount: Double) = withContext(Dispatchers.IO) {
         expenseDao.applyRefund(id, refundAmount)
         if (preferences.isPersistentNotificationEnabled) {

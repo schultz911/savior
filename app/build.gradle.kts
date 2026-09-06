@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.spendtracker.spndtr"
     minSdk = 24
     targetSdk = 36
-    versionCode = 8
-    versionName = "1.1.0"
+    versionCode = 10
+    versionName = "1.3.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -100,6 +100,7 @@ dependencies {
   // implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
+  implementation(libs.androidx.work.runtime.ktx)
   // implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)

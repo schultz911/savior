@@ -47,6 +47,13 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
+import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.ui.platform.LocalContext
@@ -72,12 +79,14 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -142,7 +151,27 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var isIgnoringBattery by remember {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        mutableStateOf(pm?.isIgnoringBatteryOptimizations(context.packageName) ?: false)
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+                isIgnoringBattery = pm?.isIgnoringBatteryOptimizations(context.packageName) ?: false
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     var isCategoryLimitsExpanded by remember { mutableStateOf(false) }
+    var isRulesExpanded by remember { mutableStateOf(false) }
 
     var newRulePatternInput by remember { mutableStateOf("") }
     var newRuleCategoryInput by remember { mutableStateOf("Food & Dining") }
@@ -293,6 +322,110 @@ fun SettingsScreen(
                             checkedTrackColor = SavioEmerald
                         )
                     )
+                }
+            }
+        }
+
+        // 2. Background SMS Reliability & OEM Doze Protection Card
+        item {
+            Card(
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = GlassCardBg),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, GlassCardBorder, RoundedCornerShape(22.dp))
+                    .testTag("battery_optimization_card")
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isIgnoringBattery) SavioEmeraldContainer else Color(0xFFFEF3C7),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = if (isIgnoringBattery) Icons.Default.BatteryChargingFull else Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = if (isIgnoringBattery) SavioEmerald else Color(0xFFD97706),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "SMS Reliability & Doze Protection",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = SavioSlateDark
+                                )
+                                Text(
+                                    text = if (isIgnoringBattery) "Unrestricted Background Execution" else "Optimized (May delay SMS detection)",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = if (isIgnoringBattery) SavioEmerald else Color(0xFFD97706),
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isIgnoringBattery) SavioEmerald.copy(alpha = 0.12f) else Color(0xFFFEF3C7),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isIgnoringBattery) SavioEmerald.copy(alpha = 0.3f) else Color(0xFFF59E0B).copy(alpha = 0.4f)
+                            )
+                        ) {
+                            Text(
+                                text = if (isIgnoringBattery) "ACTIVE" else "RESTRICTED",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp
+                                ),
+                                color = if (isIgnoringBattery) SavioEmerald else Color(0xFFB45309),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Aggressive OEM battery optimizations (MIUI, OxygenOS, ColorOS, OneUI) can freeze background SMS receivers and periodic sync workers when your device is asleep. Disabling battery optimizations ensures 100% instant transaction capture.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SavioSlateMuted
+                    )
+
+                    if (!isIgnoringBattery) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                try {
+                                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                        data = Uri.parse("package:${context.packageName}")
+                                    }
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    try {
+                                        val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                        context.startActivity(fallback)
+                                    } catch (_: Exception) {}
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald)
+                        ) {
+                            Icon(imageVector = Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Allow Unrestricted Background Execution")
+                        }
+                    }
                 }
             }
         }
@@ -765,83 +898,102 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // List of Active Rules
-                    Text(
-                        text = "Active Rules (${merchantRules.size})",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = SavioSlateDark
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    // List of Active Rules (Collapsible)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isRulesExpanded = !isRulesExpanded }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Active Rules (${merchantRules.size})",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = SavioSlateDark
+                        )
+                        Icon(
+                            imageVector = if (isRulesExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = if (isRulesExpanded) "Collapse rules" else "Expand rules",
+                            tint = SavioSlateDark,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
 
-                    if (merchantRules.isEmpty()) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = GlassBackground,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "No auto-rules active. Add a rule above or check 'Save as auto-rule' when categorizing a spend.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = SavioSlateMuted,
-                                modifier = Modifier.padding(12.dp)
-                            )
-                        }
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            merchantRules.forEach { rule ->
+                    AnimatedVisibility(visible = isRulesExpanded) {
+                        Column {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            if (merchantRules.isEmpty()) {
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
-                                    color = Color.White.copy(alpha = 0.6f),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder),
+                                    color = GlassBackground,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(
-                                                    text = rule.merchantPattern,
-                                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                                    color = SavioSlateDark
-                                                )
-                                                if (rule.normalizedAlias.isNotBlank() && rule.normalizedAlias != rule.merchantPattern) {
-                                                    Spacer(modifier = Modifier.width(6.dp))
-                                                    Text(
-                                                        text = "➔ \"${rule.normalizedAlias}\"",
-                                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                                                        color = SavioEmerald
+                                    Text(
+                                        text = "No auto-rules active. Add a rule above or check 'Save as auto-rule' when categorizing a spend.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = SavioSlateMuted,
+                                        modifier = Modifier.padding(12.dp)
+                                    )
+                                }
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    merchantRules.forEach { rule ->
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = Color.White.copy(alpha = 0.6f),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Text(
+                                                            text = rule.merchantPattern,
+                                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                            color = SavioSlateDark
+                                                        )
+                                                        if (rule.normalizedAlias.isNotBlank() && rule.normalizedAlias != rule.merchantPattern) {
+                                                            Spacer(modifier = Modifier.width(6.dp))
+                                                            Text(
+                                                                text = "➔ \"${rule.normalizedAlias}\"",
+                                                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                                                color = SavioEmerald
+                                                            )
+                                                        }
+                                                    }
+                                                    Surface(
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        color = SavioEmeraldContainer,
+                                                        modifier = Modifier.padding(top = 4.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = rule.assignedCategory,
+                                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                                                            color = SavioEmerald,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+
+                                                IconButton(
+                                                    onClick = { onDeleteMerchantRule(rule.id) },
+                                                    modifier = Modifier.size(28.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Close,
+                                                        contentDescription = "Delete rule",
+                                                        tint = SavioSlateMuted,
+                                                        modifier = Modifier.size(16.dp)
                                                     )
                                                 }
                                             }
-                                            Surface(
-                                                shape = RoundedCornerShape(6.dp),
-                                                color = SavioEmeraldContainer,
-                                                modifier = Modifier.padding(top = 4.dp)
-                                            ) {
-                                                Text(
-                                                    text = rule.assignedCategory,
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
-                                                    color = SavioEmerald,
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                )
-                                            }
-                                        }
-
-                                        IconButton(
-                                            onClick = { onDeleteMerchantRule(rule.id) },
-                                            modifier = Modifier.size(28.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Close,
-                                                contentDescription = "Delete rule",
-                                                tint = SavioSlateMuted,
-                                                modifier = Modifier.size(16.dp)
-                                            )
                                         }
                                     }
                                 }
@@ -895,7 +1047,8 @@ fun SettingsScreen(
                         OutlinedTextField(
                             value = newBlacklistInput,
                             onValueChange = { newBlacklistInput = it },
-                            placeholder = { Text("Enter merchant name to blacklist") },
+                            label = { Text("Enter merchant name") },
+                            placeholder = { Text("Enter merchant name") },
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.weight(1f),
                             singleLine = true,

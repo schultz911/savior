@@ -118,6 +118,7 @@ fun CalendarAnalyticsTab(
     onSelectMonth: (String) -> Unit,
     onNavigateToDashboard: () -> Unit = {},
     onDeleteMonth: ((String) -> Unit)? = null,
+    onEditMerchant: ((id: Long, oldMerchant: String, newMerchant: String, category: String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val numberFormatter = remember {
@@ -788,7 +789,8 @@ fun CalendarAnalyticsTab(
                 TransactionItemCard(
                     expense = expense,
                     currency = currency,
-                    onDelete = {} // view-through in analytics
+                    onDelete = {}, // view-through in analytics
+                    onEditMerchant = onEditMerchant
                 )
             }
         }
@@ -842,8 +844,6 @@ fun TwelveMonthStackedBarGraph(
         (currentSalary / maxChartVal).toFloat().coerceIn(0.08f, 0.95f)
     }
 
-    var inspectedMonth by remember { mutableStateOf<MonthAnalytics?>(null) }
-
     Column(modifier = modifier.fillMaxWidth()) {
         if (months.isEmpty()) {
             Surface(
@@ -874,65 +874,6 @@ fun TwelveMonthStackedBarGraph(
                 }
             }
         } else {
-            // Active inspector banner when user taps any column
-            inspectedMonth?.let { item ->
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = SavioEmeraldContainer,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = item.monthLabel,
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                color = SavioSlateDark
-                            )
-                            Text(
-                                text = "Salary: $currency${numberFormat.format(item.salary)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = SavioSlateMuted
-                            )
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "Spent",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = SavioSpendRose
-                                )
-                                Text(
-                                    text = "$currency${numberFormat.format(item.totalSpent)}",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = SavioSpendRose
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "Saved",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = SavioSavingsGreen
-                                )
-                                Text(
-                                    text = "$currency${numberFormat.format(item.savedAmount.coerceAtLeast(0.0))}",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = SavioSavingsGreen
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
             // Month columns with dotted salary line
             Box(
                 modifier = Modifier.fillMaxWidth(),
@@ -969,7 +910,6 @@ fun TwelveMonthStackedBarGraph(
                             modifier = Modifier
                                 .combinedClickable(
                                     onClick = {
-                                        inspectedMonth = monthData
                                         onSelectMonth(monthData.monthKey)
                                         onBarSelect(monthData.monthKey)
                                     },
@@ -1121,9 +1061,6 @@ fun TwelveMonthStackedBarGraph(
                         onClick = {
                             val keyToDelete = targetMonth.monthKey
                             monthPendingDeletion = null
-                            if (inspectedMonth?.monthKey == keyToDelete) {
-                                inspectedMonth = null
-                            }
                             onDeleteMonth?.invoke(keyToDelete)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = SavioSpendRose)
