@@ -35,7 +35,7 @@ import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Receipt
-import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -307,21 +307,12 @@ fun CalendarAnalyticsTab(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = SavioEmeraldContainer,
-                                border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder),
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Insights,
-                                        contentDescription = "Analytics",
-                                        tint = SavioEmerald,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Insights,
+                                contentDescription = "Analytics",
+                                tint = SavioEmerald,
+                                modifier = Modifier.size(24.dp)
+                            )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
@@ -652,15 +643,14 @@ fun CalendarAnalyticsTab(
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = SavioEmeraldContainer,
-                                border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder),
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(38.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
-                                        imageVector = Icons.Default.ReceiptLong,
+                                        imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
                                         contentDescription = "Category Breakdown",
                                         tint = SavioEmerald,
-                                        modifier = Modifier.size(22.dp)
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
                             }

@@ -942,7 +942,7 @@ fun SpendTrackerScreen(
                                         border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder)
                                     ) {
                                         Text(
-                                            text = "GLOBAL",
+                                            text = "ALL-TIME",
                                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
                                             color = SavioEmerald,
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)

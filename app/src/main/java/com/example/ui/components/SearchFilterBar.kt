@@ -26,7 +26,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.FilterList
@@ -122,7 +121,7 @@ fun SearchFilterBar(
                 Box(modifier = Modifier.weight(1f)) {
                     if (searchQuery.isEmpty()) {
                         Text(
-                            text = if (isGlobalSearch) "Search across all months..." else "Search merchant, amount, category...",
+                            text = if (isGlobalSearch) "Search all-time spends..." else "Search merchant, amount, category...",
                             style = MaterialTheme.typography.bodyMedium,
                             color = SavioSlateMuted
                         )
@@ -252,12 +251,12 @@ fun SearchFilterBar(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Global Search Scope Pill
+                    // All-Time Search Scope Pill
                     FilterChip(
-                        label = if (isGlobalSearch) "All Months (Global)" else "This Month",
+                        label = "All-time",
                         isSelected = isGlobalSearch,
                         onClick = { onToggleGlobalSearch(!isGlobalSearch) },
-                        icon = if (isGlobalSearch) Icons.Default.Public else Icons.Default.CalendarMonth
+                        icon = Icons.Default.Public
                     )
 
                     // Recurring Only Pill
