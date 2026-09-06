@@ -1,12 +1,15 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -23,11 +26,13 @@ import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.EventBusy
 import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.Flight
@@ -50,21 +55,28 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -97,6 +109,14 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+private data class SwipeActionStyle(
+    val bgColor: Color,
+    val icon: ImageVector,
+    val text: String,
+    val tint: Color
+)
+
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionItemCard(
     expense: ExpenseEntity,
@@ -111,6 +131,27 @@ fun TransactionItemCard(
     modifier: Modifier = Modifier
 ) {
     var showDetailSheet by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
+    val coroutineScope = rememberCoroutineScope()
+
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onToggleRecurring?.invoke(expense.id, !expense.isRecurring)
+                    false
+                }
+                SwipeToDismissBoxValue.EndToStart -> {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onToggleBlacklist?.invoke(expense.merchantOrRecipient)
+                    false
+                }
+                SwipeToDismissBoxValue.Settled -> false
+            }
+        }
+    )
 
     val numberFormatter = remember {
         NumberFormat.getNumberInstance(Locale.US).apply {
@@ -144,16 +185,125 @@ fun TransactionItemCard(
 
     val categoryIcon = getCategoryIcon(expense.category)
 
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .testTag("expense_card_${expense.id}")
-            .clickable { showDetailSheet = true },
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = GlassCardBg),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder)
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = onToggleRecurring != null,
+        enableDismissFromEndToStart = onToggleBlacklist != null,
+        backgroundContent = {
+            val direction = dismissState.dismissDirection
+            val alignment = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
+                SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
+                else -> Alignment.Center
+            }
+            val style = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    if (expense.isRecurring) {
+                        SwipeActionStyle(
+                            bgColor = Color(0xFFFEF2F2),
+                            icon = Icons.Default.EventBusy,
+                            text = "Unmark Recurring",
+                            tint = SavioSpendRose
+                        )
+                    } else {
+                        SwipeActionStyle(
+                            bgColor = Color(0xFFEFF6FF),
+                            icon = Icons.Default.EventRepeat,
+                            text = "Mark Recurring",
+                            tint = Color(0xFF2563EB)
+                        )
+                    }
+                }
+                SwipeToDismissBoxValue.EndToStart -> {
+                    if (isBlacklisted) {
+                        SwipeActionStyle(
+                            bgColor = SavioEmeraldContainer,
+                            icon = Icons.Default.CheckCircle,
+                            text = "Include in Budget",
+                            tint = SavioEmerald
+                        )
+                    } else {
+                        SwipeActionStyle(
+                            bgColor = SavioBlacklistBg,
+                            icon = Icons.Default.Block,
+                            text = "Exclude from Budget",
+                            tint = SavioBlacklistRed
+                        )
+                    }
+                }
+                else -> SwipeActionStyle(
+                    bgColor = Color.Transparent,
+                    icon = Icons.Default.Check,
+                    text = "",
+                    tint = Color.Transparent
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(style.bgColor)
+                    .padding(horizontal = 20.dp),
+                contentAlignment = alignment
+            ) {
+                if (direction != SwipeToDismissBoxValue.Settled) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (alignment == Alignment.CenterStart) {
+                            Icon(
+                                imageVector = style.icon,
+                                contentDescription = null,
+                                tint = style.tint,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = style.text,
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = style.tint
+                            )
+                        } else {
+                            Text(
+                                text = style.text,
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = style.tint
+                            )
+                            Icon(
+                                imageVector = style.icon,
+                                contentDescription = null,
+                                tint = style.tint,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        modifier = modifier.fillMaxWidth()
     ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("expense_card_${expense.id}")
+                .clip(RoundedCornerShape(18.dp))
+                .combinedClickable(
+                    onClick = { showDetailSheet = true },
+                    onDoubleClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onAssignCategory?.invoke(expense)
+                    },
+                    onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showDeleteConfirmDialog = true
+                    }
+                ),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = GlassCardBg),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder)
+        ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -403,6 +553,89 @@ fun TransactionItemCard(
                 }
             }
         }
+    }
+    }
+
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.DeleteOutline,
+                    contentDescription = null,
+                    tint = SavioSpendRose,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Delete Transaction?",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = SavioSlateDark
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Are you sure you want to permanently delete this transaction record?",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = SavioSlateBody
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = SavioSpendRoseBg,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = expense.merchantOrRecipient,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = SavioSlateDark,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = formattedDate,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = SavioSlateMuted
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = formattedAmount,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
+                                color = SavioSpendRose
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        onDelete(expense.id)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SavioSpendRose)
+                ) {
+                    Text("Delete", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Cancel", color = SavioSlateDark)
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp)
+        )
     }
 
     if (showDetailSheet) {

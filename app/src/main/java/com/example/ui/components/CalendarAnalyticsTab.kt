@@ -119,6 +119,11 @@ fun CalendarAnalyticsTab(
     onNavigateToDashboard: () -> Unit = {},
     onDeleteMonth: ((String) -> Unit)? = null,
     onEditMerchant: ((id: Long, oldMerchant: String, newMerchant: String, category: String) -> Unit)? = null,
+    onDeleteExpense: ((Long) -> Unit)? = null,
+    onAssignCategory: ((ExpenseEntity) -> Unit)? = null,
+    onToggleBlacklist: ((String) -> Unit)? = null,
+    onToggleRecurring: ((Long, Boolean) -> Unit)? = null,
+    isBlacklistedMerchant: ((String) -> Boolean)? = null,
     modifier: Modifier = Modifier
 ) {
     val numberFormatter = remember {
@@ -771,7 +776,11 @@ fun CalendarAnalyticsTab(
                 TransactionItemCard(
                     expense = expense,
                     currency = currency,
-                    onDelete = {}, // view-through in analytics
+                    isBlacklisted = isBlacklistedMerchant?.invoke(expense.merchantOrRecipient) ?: false,
+                    onDelete = { onDeleteExpense?.invoke(it) },
+                    onAssignCategory = onAssignCategory,
+                    onToggleBlacklist = onToggleBlacklist,
+                    onToggleRecurring = onToggleRecurring,
                     onEditMerchant = onEditMerchant
                 )
             }

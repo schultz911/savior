@@ -134,6 +134,9 @@ import com.example.ui.components.BiometricLockOverlay
 import com.example.ui.components.MerchantDetailSheet
 import com.example.ui.components.SearchFilterBar
 import com.example.ai.OpenRouterCategorizer
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 
 class MainActivity : FragmentActivity() {
 
@@ -143,6 +146,7 @@ class MainActivity : FragmentActivity() {
 
         val app = application as SpendTrackerApplication
         handleIntent(intent)
+        setupDynamicShortcuts()
 
         setContent {
             MyApplicationTheme {
@@ -157,6 +161,7 @@ class MainActivity : FragmentActivity() {
                 SpendTrackerScreen(
                     viewModel = viewModel,
                     manualAddTrigger = manualAddTrigger,
+                    syncTrigger = syncTrigger,
                     initialAssignExpenseId = assignCategoryExpenseIdState
                 )
             }
@@ -189,14 +194,20 @@ class MainActivity : FragmentActivity() {
     }
 
     private var manualAddTrigger by mutableStateOf(0L)
+    private var syncTrigger by mutableStateOf(0L)
     private var assignCategoryExpenseIdState by mutableStateOf<Long?>(null)
 
     private fun handleIntent(intent: android.content.Intent?) {
         if (intent != null) {
             if (intent.action == ACTION_ADD_SPEND ||
+                intent.action == ACTION_ADD_CASH ||
                 intent.action == LiveExpenditureNotificationService.ACTION_ADD_SPEND ||
                 intent.getBooleanExtra(EXTRA_SHOW_MANUAL_ADD, false)) {
                 manualAddTrigger = System.currentTimeMillis()
+            }
+            if (intent.action == ACTION_SYNC_SMS ||
+                intent.getBooleanExtra(EXTRA_TRIGGER_SYNC, false)) {
+                syncTrigger = System.currentTimeMillis()
             }
             if (intent.hasExtra(EXTRA_ASSIGN_CATEGORY_EXPENSE_ID)) {
                 assignCategoryExpenseIdState = intent.getLongExtra(EXTRA_ASSIGN_CATEGORY_EXPENSE_ID, -1L)
@@ -204,8 +215,41 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    private fun setupDynamicShortcuts() {
+        try {
+            val addCashShortcut = ShortcutInfoCompat.Builder(this, "shortcut_add_cash")
+                .setShortLabel(getString(R.string.shortcut_add_cash_short))
+                .setLongLabel(getString(R.string.shortcut_add_cash_long))
+                .setIcon(IconCompat.createWithResource(this, R.drawable.ic_shortcut_cash))
+                .setIntent(android.content.Intent(this, MainActivity::class.java).apply {
+                    action = ACTION_ADD_CASH
+                    putExtra(EXTRA_SHOW_MANUAL_ADD, true)
+                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                })
+                .build()
+
+            val syncSmsShortcut = ShortcutInfoCompat.Builder(this, "shortcut_sync_sms")
+                .setShortLabel(getString(R.string.shortcut_sync_sms_short))
+                .setLongLabel(getString(R.string.shortcut_sync_sms_long))
+                .setIcon(IconCompat.createWithResource(this, R.drawable.ic_shortcut_sync))
+                .setIntent(android.content.Intent(this, MainActivity::class.java).apply {
+                    action = ACTION_SYNC_SMS
+                    putExtra(EXTRA_TRIGGER_SYNC, true)
+                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                })
+                .build()
+
+            ShortcutManagerCompat.setDynamicShortcuts(this, listOf(addCashShortcut, syncSmsShortcut))
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Failed to setup dynamic shortcuts", e)
+        }
+    }
+
     companion object {
         const val ACTION_ADD_SPEND = "com.example.savior.ACTION_ADD_SPEND"
+        const val ACTION_ADD_CASH = "com.example.savior.ACTION_ADD_CASH"
+        const val ACTION_SYNC_SMS = "com.example.savior.ACTION_SYNC_SMS"
+        const val EXTRA_TRIGGER_SYNC = "extra_trigger_sync"
         const val EXTRA_SHOW_MANUAL_ADD = "extra_show_manual_add"
         const val EXTRA_ASSIGN_CATEGORY_EXPENSE_ID = "extra_assign_category_expense_id"
         const val EXTRA_NAVIGATE_TAB = "extra_navigate_tab"
@@ -218,6 +262,7 @@ class MainActivity : FragmentActivity() {
 fun SpendTrackerScreen(
     viewModel: ExpenseViewModel,
     manualAddTrigger: Long = 0L,
+    syncTrigger: Long = 0L,
     initialAssignExpenseId: Long? = null,
     modifier: Modifier = Modifier
 ) {
@@ -380,6 +425,12 @@ fun SpendTrackerScreen(
         if (manualAddTrigger > 0L) {
             showManualAddDialog = true
             viewModel.setTab(SavioScreenTab.DASHBOARD)
+        }
+    }
+
+    LaunchedEffect(syncTrigger) {
+        if (syncTrigger > 0L) {
+            viewModel.syncSmsInbox()
         }
     }
 
@@ -794,7 +845,12 @@ fun SpendTrackerScreen(
                         onDeleteMonth = { viewModel.deleteMonthData(it) },
                         onEditMerchant = { id, oldM, newM, cat ->
                             viewModel.updateMerchantName(id, oldM, newM, cat)
-                        }
+                        },
+                        onDeleteExpense = { viewModel.deleteExpense(it) },
+                        onAssignCategory = { target -> assignCategoryTargetExpense = target },
+                        onToggleBlacklist = { merchant -> viewModel.toggleBlacklistMerchant(merchant) },
+                        onToggleRecurring = { id, isRec -> viewModel.toggleRecurring(id, isRec) },
+                        isBlacklistedMerchant = { viewModel.isBlacklistedMerchant(it, blacklistedMerchants) }
                     )
                 }
             }

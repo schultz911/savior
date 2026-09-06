@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">Savio₹</string>
+    <string name="shortcut_add_cash_short">Log Cash</string>
+    <string name="shortcut_add_cash_long">1-Tap Cash Spend</string>
+    <string name="shortcut_sync_sms_short">Sync SMS</string>
+    <string name="shortcut_sync_sms_long">Sync SMS Inbox</string>
 </resources>

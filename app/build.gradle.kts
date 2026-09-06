@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.spendtracker.spndtr"
     minSdk = 24
     targetSdk = 36
-    versionCode = 11
-    versionName = "1.4.0"
+    versionCode = 12
+    versionName = "1.5.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

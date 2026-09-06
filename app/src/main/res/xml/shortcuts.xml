@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="shortcut_add_cash"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_cash"
+        android:shortcutShortLabel="@string/shortcut_add_cash_short"
+        android:shortcutLongLabel="@string/shortcut_add_cash_long">
+        <intent
+            android:action="com.example.savior.ACTION_ADD_CASH"
+            android:targetPackage="com.aistudio.spendtracker.spndtr"
+            android:targetClass="com.example.MainActivity">
+            <extra android:name="extra_show_manual_add" android:value="true" />
+        </intent>
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="shortcut_sync_sms"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_sync"
+        android:shortcutShortLabel="@string/shortcut_sync_sms_short"
+        android:shortcutLongLabel="@string/shortcut_sync_sms_long">
+        <intent
+            android:action="com.example.savior.ACTION_SYNC_SMS"
+            android:targetPackage="com.aistudio.spendtracker.spndtr"
+            android:targetClass="com.example.MainActivity">
+            <extra android:name="extra_trigger_sync" android:value="true" />
+        </intent>
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+</shortcuts>
