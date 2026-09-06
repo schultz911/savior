@@ -125,8 +125,6 @@ class WeeklySpendDigestWorker(
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            SpendAlertManager.createNotificationChannels(applicationContext)
-
             val notif = NotificationCompat.Builder(applicationContext, SpendAlertManager.CHANNEL_ALERTS)
                 .setSmallIcon(R.drawable.ic_stat_rupee)
                 .setContentTitle(title)

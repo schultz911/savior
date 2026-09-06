@@ -401,7 +401,7 @@ class ExpenseViewModel(
             }
         }
         total.coerceAtLeast(0.0)
-    }.stateIn(
+    }.flowOn(Dispatchers.Default).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0.0
@@ -413,7 +413,7 @@ class ExpenseViewModel(
     ) { list, blacklisted ->
         list.filter { !it.isExcluded && isTransfer(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
             .sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
-    }.stateIn(
+    }.flowOn(Dispatchers.Default).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0.0
@@ -433,7 +433,7 @@ class ExpenseViewModel(
             }
         }
         total.coerceAtLeast(0.0)
-    }.stateIn(
+    }.flowOn(Dispatchers.Default).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0.0
@@ -445,7 +445,7 @@ class ExpenseViewModel(
     ) { list, blacklisted ->
         list.filter { !it.isExcluded && isCreditCard(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
             .sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
-    }.stateIn(
+    }.flowOn(Dispatchers.Default).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0.0
@@ -457,7 +457,7 @@ class ExpenseViewModel(
     ) { list, blacklisted ->
         list.filter { !it.isExcluded && isSelf(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
             .sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
-    }.stateIn(
+    }.flowOn(Dispatchers.Default).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0.0

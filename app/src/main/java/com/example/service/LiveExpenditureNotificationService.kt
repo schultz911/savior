@@ -71,6 +71,7 @@ class LiveExpenditureNotificationService : Service() {
             } catch (ne: Exception) {
                 ne.printStackTrace()
             }
+            stopSelf()
         }
     }
 
@@ -318,12 +319,8 @@ class LiveExpenditureNotificationService : Service() {
         return bitmap
     }
 
-    private fun formatCurrency(amount: Double, currency: String): String {
-        val formatter = NumberFormat.getNumberInstance(Locale.US).apply {
-            minimumFractionDigits = 2
-            maximumFractionDigits = 2
-        }
-        return "$currency${formatter.format(amount)}"
+    private fun formatCurrency(amount: Double, currency: String): String = synchronized(currencyFormatter) {
+        "$currency${currencyFormatter.format(amount)}"
     }
 
     override fun onDestroy() {
@@ -332,6 +329,11 @@ class LiveExpenditureNotificationService : Service() {
     }
 
     companion object {
+        private val currencyFormatter = NumberFormat.getNumberInstance(Locale.US).apply {
+            minimumFractionDigits = 2
+            maximumFractionDigits = 2
+        }
+
         const val CHANNEL_ID = "live_expenditure_channel_v5"
         const val NOTIFICATION_ID = 1001
         const val ACTION_START = "com.example.action.START_TRACKER"

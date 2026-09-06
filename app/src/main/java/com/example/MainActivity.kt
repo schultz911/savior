@@ -100,7 +100,6 @@ import com.example.ui.ExpenseViewModel
 import com.example.ui.SavioScreenTab
 import com.example.ui.components.AssignCategoryDialog
 import com.example.ui.components.CalendarAnalyticsTab
-import com.example.ui.components.DailyBurnDownChart
 import com.example.ui.components.ExpenditureHeroCard
 import com.example.ui.components.ManualAddExpenseDialog
 import com.example.ui.components.MonthSelector
@@ -113,7 +112,6 @@ import com.example.ui.components.TransactionItemCard
 import com.example.ui.theme.GlassBackground
 import com.example.ui.theme.GlassCardBg
 import com.example.ui.theme.GlassCardBorder
-import com.example.ui.theme.GlassSurface
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.SavioEmerald
 import com.example.ui.theme.SavioEmeraldBorder

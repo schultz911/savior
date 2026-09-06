@@ -191,17 +191,27 @@ object SpendAlertManager {
         }
     }
 
+    @Volatile
+    private var cachedLargeIcon: Bitmap? = null
+
     fun getNotificationLargeIcon(context: Context): Bitmap {
-        val drawable = ContextCompat.getDrawable(context, R.drawable.ic_savio_logo)
-        if (drawable != null) {
-            val size = (context.resources.displayMetrics.density * 64).toInt().coerceAtLeast(96)
-            val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
-            drawable.setBounds(0, 0, canvas.width, canvas.height)
-            drawable.draw(canvas)
+        cachedLargeIcon?.let { return it }
+        synchronized(this) {
+            cachedLargeIcon?.let { return it }
+            val drawable = ContextCompat.getDrawable(context, R.drawable.ic_savio_logo)
+            val bitmap = if (drawable != null) {
+                val size = (context.resources.displayMetrics.density * 64).toInt().coerceAtLeast(96)
+                val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bmp)
+                drawable.setBounds(0, 0, canvas.width, canvas.height)
+                drawable.draw(canvas)
+                bmp
+            } else {
+                BitmapFactory.decodeResource(context.resources, R.mipmap.ic_savio_launcher)
+            }
+            cachedLargeIcon = bitmap
             return bitmap
         }
-        return BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)
     }
 
     private val currencyFormatter = NumberFormat.getNumberInstance(Locale.US).apply {

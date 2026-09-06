@@ -266,26 +266,29 @@ object ExpenseProcessingHelper {
         val insertedId = dao.insertExpense(entity)
         val insertedExpense = entity.copy(id = insertedId)
 
-        // 1. If unrecognized, trigger push notification asking user to assign category
-        if (isUnrecognized) {
-            SpendAlertManager.notifyUnrecognizedSpend(
-                context = context,
-                expenseId = insertedId,
-                merchant = entity.merchantOrRecipient,
-                amount = entity.amount,
-                currency = entity.currency
-            )
-        }
+        // Real-time alerts and guardrail checks (suppressed during batch sync to prevent notification storms & redundant I/O)
+        if (!isBatchSync) {
+            // 1. If unrecognized, trigger push notification asking user to assign category
+            if (isUnrecognized) {
+                SpendAlertManager.notifyUnrecognizedSpend(
+                    context = context,
+                    expenseId = insertedId,
+                    merchant = entity.merchantOrRecipient,
+                    amount = entity.amount,
+                    currency = entity.currency
+                )
+            }
 
-        // 2. Check category limit and trigger 80% / overshot alerts
-        checkCategoryLimitAlert(context, entity)
+            // 2. Check category limit and trigger 80% / overshot alerts
+            checkCategoryLimitAlert(context, entity)
 
-        // 3. Proactive Velocity Pacing & Anomaly Guardrails
-        if (prefs.isVelocityAlertsEnabled) {
-            checkVelocityPacingAlert(context, entity)
-        }
-        if (prefs.isAnomalyAlertsEnabled) {
-            checkAnomalySpikeAlert(context, entity)
+            // 3. Proactive Velocity Pacing & Anomaly Guardrails
+            if (prefs.isVelocityAlertsEnabled) {
+                checkVelocityPacingAlert(context, entity)
+            }
+            if (prefs.isAnomalyAlertsEnabled) {
+                checkAnomalySpikeAlert(context, entity)
+            }
         }
 
         // 4. Update persistent notification (deferred during batch sync)
