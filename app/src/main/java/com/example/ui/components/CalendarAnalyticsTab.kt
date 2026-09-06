@@ -640,20 +640,12 @@ fun CalendarAnalyticsTab(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = SavioEmeraldContainer,
-                                modifier = Modifier.size(38.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
-                                        contentDescription = "Category Breakdown",
-                                        tint = SavioEmerald,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
+                                contentDescription = "Category Breakdown",
+                                tint = SavioEmerald,
+                                modifier = Modifier.size(20.dp)
+                            )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
