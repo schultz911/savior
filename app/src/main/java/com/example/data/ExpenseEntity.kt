@@ -38,7 +38,9 @@ data class ExpenseEntity(
     @ColumnInfo(name = "refundedAmount", defaultValue = "0.0")
     val refundedAmount: Double = 0.0,
     @ColumnInfo(name = "isReversal", defaultValue = "0")
-    val isReversal: Boolean = false
+    val isReversal: Boolean = false,
+    @ColumnInfo(name = "isExcluded", defaultValue = "0")
+    val isExcluded: Boolean = false
 ) {
     val netAmount: Double
         get() = (amount - refundedAmount).coerceAtLeast(0.0)
@@ -48,6 +50,12 @@ data class ExpenseEntity(
 
     val isPartiallyRefunded: Boolean
         get() = refundedAmount > 0.0 && refundedAmount < amount
+
+    val isRefundOrReversal: Boolean
+        get() = isReversal || category.equals("Refund", ignoreCase = true) || category.equals("Reimbursement", ignoreCase = true)
+
+    val effectiveSpendAmount: Double
+        get() = if (isRefundOrReversal) -(amount - refundedAmount).coerceAtLeast(0.0) else (amount - refundedAmount).coerceAtLeast(0.0)
 
     companion object {
         fun formatMonthKey(epochMillis: Long): String {

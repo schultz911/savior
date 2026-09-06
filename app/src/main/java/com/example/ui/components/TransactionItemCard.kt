@@ -25,7 +25,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.automirrored.filled.CallSplit
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Category
+import com.example.sms.SmsParser
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material.icons.filled.Check
@@ -132,6 +134,7 @@ fun TransactionItemCard(
     onDelete: (Long) -> Unit,
     onAssignCategory: ((ExpenseEntity) -> Unit)? = null,
     onToggleBlacklist: ((String) -> Unit)? = null,
+    onToggleExclude: ((Long, Boolean) -> Unit)? = null,
     onToggleRecurring: ((Long, Boolean) -> Unit)? = null,
     onOpenMerchantSheet: ((String) -> Unit)? = null,
     onEditMerchant: ((id: Long, oldMerchant: String, newMerchant: String, category: String) -> Unit)? = null,
@@ -151,27 +154,23 @@ fun TransactionItemCard(
     val defaultMaxSlidePx = with(density) { 165.dp.toPx() }
 
     val dismissState = rememberSwipeToDismissBoxState(
-        positionalThreshold = { totalDistance ->
-            with(density) { 72.dp.toPx() }
-        },
-        confirmValueChange = { true }
-    )
-
-    LaunchedEffect(dismissState.currentValue) {
-        when (dismissState.currentValue) {
-            SwipeToDismissBoxValue.StartToEnd -> {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onToggleRecurring?.invoke(expense.id, !expense.isRecurring)
-                dismissState.reset()
+        positionalThreshold = { with(density) { 72.dp.toPx() } },
+        confirmValueChange = { targetValue ->
+            when (targetValue) {
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onToggleRecurring?.invoke(expense.id, !expense.isRecurring)
+                    false
+                }
+                SwipeToDismissBoxValue.EndToStart -> {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onToggleExclude?.invoke(expense.id, !expense.isExcluded)
+                    false
+                }
+                else -> false
             }
-            SwipeToDismissBoxValue.EndToStart -> {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onToggleBlacklist?.invoke(expense.merchantOrRecipient)
-                dismissState.reset()
-            }
-            SwipeToDismissBoxValue.Settled -> {}
         }
-    }
+    )
 
     val numberFormatter = remember {
         NumberFormat.getNumberInstance(Locale.US).apply {
@@ -180,7 +179,12 @@ fun TransactionItemCard(
         }
     }
     val effectiveCurrency = if (currency.isNotBlank()) currency else expense.currency
-    val formattedAmount = "-${effectiveCurrency}${numberFormatter.format(expense.amount)}"
+    val isCreditReversal = expense.isRefundOrReversal
+    val formattedAmount = if (isCreditReversal) {
+        "+${effectiveCurrency}${numberFormatter.format(expense.amount)}"
+    } else {
+        "-${effectiveCurrency}${numberFormatter.format(expense.amount)}"
+    }
 
     val currentYear = remember { Calendar.getInstance().get(Calendar.YEAR) }
     val expenseYear = remember(expense.timestamp) {
@@ -196,7 +200,9 @@ fun TransactionItemCard(
     }
     val formattedDate = dateFormatter.format(Date(expense.timestamp))
 
-    val (typeColor, typeBg, _) = when (expense.type) {
+    val (typeColor, typeBg, _) = if (isCreditReversal) {
+        Triple(SavioEmerald, SavioEmeraldContainer, Icons.Default.CheckCircle)
+    } else when (expense.type) {
         ExpenseType.P2P -> Triple(SavioTransferIndigo, SavioTransferIndigoBg, Icons.Default.SwapHoriz)
         ExpenseType.SELF -> Triple(SavioEmerald, SavioEmeraldContainer, Icons.Default.AccountBalance)
         ExpenseType.CREDIT_CARD -> Triple(Color(0xFF7C3AED), Color(0xFFF5F3FF), Icons.Default.CreditCard)
@@ -208,7 +214,7 @@ fun TransactionItemCard(
     SwipeToDismissBox(
         state = dismissState,
         enableDismissFromStartToEnd = onToggleRecurring != null,
-        enableDismissFromEndToStart = onToggleBlacklist != null,
+        enableDismissFromEndToStart = onToggleExclude != null,
         backgroundContent = {
             val direction = dismissState.dismissDirection
             val alignment = when (direction) {
@@ -235,18 +241,18 @@ fun TransactionItemCard(
                     }
                 }
                 SwipeToDismissBoxValue.EndToStart -> {
-                    if (isBlacklisted) {
+                    if (expense.isExcluded) {
                         SwipeActionStyle(
                             bgColor = SavioEmeraldContainer,
                             icon = Icons.Default.CheckCircle,
-                            text = "Include in Budget",
+                            text = "Include in Spend",
                             tint = SavioEmerald
                         )
                     } else {
                         SwipeActionStyle(
                             bgColor = SavioBlacklistBg,
                             icon = Icons.Default.Block,
-                            text = "Exclude from Budget",
+                            text = "Exclude from Spend",
                             tint = SavioBlacklistRed
                         )
                     }
@@ -355,18 +361,20 @@ fun TransactionItemCard(
                 .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val isIgnored = expense.isExcluded || isBlacklisted
+
             // Category / Type Avatar
             Box(
                 modifier = Modifier
                     .size(46.dp)
                     .clip(CircleShape)
-                    .background(if (isBlacklisted) SavioBlacklistBg else typeBg),
+                    .background(if (isIgnored) SavioBlacklistBg else typeBg),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = if (isBlacklisted) Icons.Default.Block else categoryIcon,
+                    imageVector = if (isIgnored) Icons.Default.Block else categoryIcon,
                     contentDescription = expense.category,
-                    tint = if (isBlacklisted) SavioBlacklistRed else typeColor,
+                    tint = if (isIgnored) SavioBlacklistRed else typeColor,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -381,24 +389,40 @@ fun TransactionItemCard(
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
-                            textDecoration = if (isBlacklisted) TextDecoration.LineThrough else TextDecoration.None
+                            textDecoration = if (isIgnored) TextDecoration.LineThrough else TextDecoration.None
                         ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = if (isBlacklisted) SavioBlacklistMuted else SavioSlateDark,
+                        color = if (isIgnored) SavioBlacklistMuted else SavioSlateDark,
                         modifier = Modifier.weight(1f, fill = false)
                     )
 
                     Spacer(modifier = Modifier.width(6.dp))
 
-                    if (isBlacklisted) {
+                    if (expense.isExcluded) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = SavioBlacklistBg,
                             border = androidx.compose.foundation.BorderStroke(1.dp, SavioBlacklistRed.copy(alpha = 0.4f))
                         ) {
                             Text(
-                                text = "Ignored",
+                                text = "Excluded",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 9.sp
+                                ),
+                                color = SavioBlacklistRed,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else if (isBlacklisted) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = SavioBlacklistBg,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, SavioBlacklistRed.copy(alpha = 0.4f))
+                        ) {
+                            Text(
+                                text = "Blacklisted",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 9.sp
@@ -492,9 +516,9 @@ fun TransactionItemCard(
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
-                            textDecoration = if (isBlacklisted) TextDecoration.LineThrough else TextDecoration.None
+                            textDecoration = if (isIgnored) TextDecoration.LineThrough else TextDecoration.None
                         ),
-                        color = if (isBlacklisted) SavioBlacklistMuted else typeColor
+                        color = if (isIgnored) SavioBlacklistMuted else typeColor
                     )
                     Text(
                         text = "(${effectiveCurrency}${numberFormatter.format(expense.refundedAmount)} refunded)",
@@ -511,9 +535,9 @@ fun TransactionItemCard(
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
-                            textDecoration = if (isBlacklisted) TextDecoration.LineThrough else TextDecoration.None
+                            textDecoration = if (isIgnored) TextDecoration.LineThrough else TextDecoration.None
                         ),
-                        color = if (isBlacklisted) SavioBlacklistMuted else typeColor
+                        color = if (isIgnored) SavioBlacklistMuted else typeColor
                     )
                 }
 
@@ -703,6 +727,9 @@ fun TransactionItemCard(
                 onToggleBlacklist?.invoke(expense.merchantOrRecipient)
                 showDetailSheet = false
             },
+            onToggleExclude = {
+                onToggleExclude?.invoke(expense.id, !expense.isExcluded)
+            },
             onToggleRecurring = {
                 onToggleRecurring?.invoke(expense.id, !expense.isRecurring)
             },
@@ -746,6 +773,7 @@ private fun TransactionDetailBottomSheet(
     onDismiss: () -> Unit,
     onChangeCategory: () -> Unit,
     onToggleBlacklist: () -> Unit,
+    onToggleExclude: (() -> Unit)? = null,
     onToggleRecurring: (() -> Unit)? = null,
     onOpenMerchantSheet: (() -> Unit)? = null,
     onDelete: () -> Unit,
@@ -758,6 +786,14 @@ private fun TransactionDetailBottomSheet(
     var showEditMerchantDialog by remember { mutableStateOf(false) }
     var editedMerchantName by remember(expense.merchantOrRecipient) { mutableStateOf(expense.merchantOrRecipient) }
     var isRecurringState by remember(expense.id, expense.isRecurring) { mutableStateOf(expense.isRecurring) }
+    val originalParsedMerchant = remember(expense.rawBody) {
+        if (expense.rawBody.isNotBlank()) {
+            SmsParser.parse(expense.rawBody)?.title
+        } else null
+    }
+    val canUndoMerchant = originalParsedMerchant != null &&
+        originalParsedMerchant.isNotBlank() &&
+        !originalParsedMerchant.equals(expense.merchantOrRecipient, ignoreCase = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -800,13 +836,15 @@ private fun TransactionDetailBottomSheet(
 
             Spacer(modifier = Modifier.height(14.dp))
 
+            val isIgnored = expense.isExcluded || isBlacklisted
+
             // Main Hero Banner Card
             Surface(
                 shape = RoundedCornerShape(20.dp),
-                color = if (isBlacklisted) SavioBlacklistBg else typeBg.copy(alpha = 0.6f),
+                color = if (isIgnored) SavioBlacklistBg else typeBg.copy(alpha = 0.6f),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
-                    if (isBlacklisted) SavioBlacklistRed.copy(alpha = 0.3f) else typeColor.copy(alpha = 0.2f)
+                    if (isIgnored) SavioBlacklistRed.copy(alpha = 0.3f) else typeColor.copy(alpha = 0.2f)
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -820,13 +858,13 @@ private fun TransactionDetailBottomSheet(
                         modifier = Modifier
                             .size(54.dp)
                             .clip(CircleShape)
-                            .background(if (isBlacklisted) SavioBlacklistBg else typeBg),
+                            .background(if (isIgnored) SavioBlacklistBg else typeBg),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (isBlacklisted) Icons.Default.Block else categoryIcon,
+                            imageVector = if (isIgnored) Icons.Default.Block else categoryIcon,
                             contentDescription = null,
-                            tint = if (isBlacklisted) SavioBlacklistRed else typeColor,
+                            tint = if (isIgnored) SavioBlacklistRed else typeColor,
                             modifier = Modifier.size(28.dp)
                         )
                     }
@@ -843,12 +881,12 @@ private fun TransactionDetailBottomSheet(
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 21.sp,
-                                textDecoration = if (isBlacklisted) TextDecoration.LineThrough else TextDecoration.None,
+                                textDecoration = if (isIgnored) TextDecoration.LineThrough else TextDecoration.None,
                                 textAlign = TextAlign.Center
                             ),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
-                            color = if (isBlacklisted) SavioBlacklistMuted else SavioSlateDark,
+                            color = if (isIgnored) SavioBlacklistMuted else SavioSlateDark,
                             modifier = Modifier.weight(1f, fill = false)
                         )
                         if (onEditMerchant != null) {
@@ -873,6 +911,32 @@ private fun TransactionDetailBottomSheet(
                                     )
                                 }
                             }
+
+                            if (canUndoMerchant) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(0xFFF1F5F9),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder),
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .clickable {
+                                            val targetName = originalParsedMerchant!!
+                                            editedMerchantName = targetName
+                                            onEditMerchant(expense.id, expense.merchantOrRecipient, targetName, expense.category)
+                                        }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.Undo,
+                                            contentDescription = "Undo to Original Merchant Name ($originalParsedMerchant)",
+                                            tint = SavioSlateDark,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -883,9 +947,9 @@ private fun TransactionDetailBottomSheet(
                         style = MaterialTheme.typography.headlineMedium.copy(
                             fontWeight = FontWeight.Black,
                             fontSize = 28.sp,
-                            textDecoration = if (isBlacklisted) TextDecoration.LineThrough else TextDecoration.None
+                            textDecoration = if (isIgnored) TextDecoration.LineThrough else TextDecoration.None
                         ),
-                        color = if (isBlacklisted) SavioBlacklistMuted else typeColor
+                        color = if (isIgnored) SavioBlacklistMuted else typeColor
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -931,14 +995,27 @@ private fun TransactionDetailBottomSheet(
                             }
                         }
 
-                        if (isBlacklisted) {
+                        if (expense.isExcluded) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = SavioBlacklistBg,
                                 border = androidx.compose.foundation.BorderStroke(1.dp, SavioBlacklistRed.copy(alpha = 0.4f))
                             ) {
                                 Text(
-                                    text = "Excluded from Total",
+                                    text = "Excluded from Spend",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = SavioBlacklistRed,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                        } else if (isBlacklisted) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = SavioBlacklistBg,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, SavioBlacklistRed.copy(alpha = 0.4f))
+                            ) {
+                                Text(
+                                    text = "Blacklisted Merchant",
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                     color = SavioBlacklistRed,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
@@ -1124,6 +1201,37 @@ private fun TransactionDetailBottomSheet(
                 )
             }
 
+            if (onToggleExclude != null) {
+                OutlinedButton(
+                    onClick = onToggleExclude,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (expense.isExcluded) SavioEmerald else SavioBlacklistRed.copy(alpha = 0.5f)
+                    ),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (expense.isExcluded) SavioEmeraldContainer else SavioBlacklistBg
+                    )
+                ) {
+                    Icon(
+                        imageVector = if (expense.isExcluded) Icons.Default.CheckCircle else Icons.Default.Block,
+                        contentDescription = null,
+                        tint = if (expense.isExcluded) SavioEmerald else SavioBlacklistRed,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (expense.isExcluded) "Include Transaction in Spend" else "Exclude this Transaction from Spend",
+                        color = if (expense.isExcluded) SavioEmerald else SavioBlacklistRed,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.5.sp
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(10.dp))
 
             // Action Buttons Row
@@ -1167,9 +1275,9 @@ private fun TransactionDetailBottomSheet(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (isBlacklisted) "Unblacklist" else "Blacklist",
+                        text = if (isBlacklisted) "Unblacklist Merchant" else "Blacklist Merchant",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         color = Color.White
                     )
                 }
@@ -1245,8 +1353,19 @@ private fun TransactionDetailBottomSheet(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showEditMerchantDialog = false }) {
-                        Text("Cancel", color = SavioSlateMuted)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (canUndoMerchant) {
+                            TextButton(
+                                onClick = {
+                                    editedMerchantName = originalParsedMerchant!!
+                                }
+                            ) {
+                                Text("Reset to Original", color = SavioEmerald)
+                            }
+                        }
+                        TextButton(onClick = { showEditMerchantDialog = false }) {
+                            Text("Cancel", color = SavioSlateMuted)
+                        }
                     }
                 },
                 shape = RoundedCornerShape(20.dp),

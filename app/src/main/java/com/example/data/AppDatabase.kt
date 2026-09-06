@@ -8,7 +8,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [ExpenseEntity::class, MerchantRuleEntity::class], version = 3, exportSchema = false)
+@Database(entities = [ExpenseEntity::class, MerchantRuleEntity::class], version = 4, exportSchema = false)
 @TypeConverters(ExpenseTypeConverter::class)
 abstract class AppDatabase : RoomDatabase() {
 
@@ -43,6 +43,12 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE expenses ADD COLUMN isExcluded INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -50,7 +56,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "spend_tracker_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

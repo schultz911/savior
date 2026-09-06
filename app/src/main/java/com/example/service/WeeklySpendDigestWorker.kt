@@ -56,6 +56,7 @@ class WeeklySpendDigestWorker(
 
             val blacklisted = app.preferences.getBlacklistedMerchants().map { it.trim().lowercase(Locale.US) }
             val validExpenses = recentExpenses.filter {
+                !it.isExcluded &&
                 !it.isReversal &&
                 it.type != ExpenseType.SELF &&
                 !it.category.equals("Self", ignoreCase = true) &&

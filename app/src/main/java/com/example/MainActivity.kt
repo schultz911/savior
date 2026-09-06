@@ -851,6 +851,7 @@ fun SpendTrackerScreen(
                         onDeleteExpense = { viewModel.deleteExpense(it) },
                         onAssignCategory = { target -> assignCategoryTargetExpense = target },
                         onToggleBlacklist = { merchant -> viewModel.toggleBlacklistMerchant(merchant) },
+                        onToggleExclude = { id, isEx -> viewModel.toggleExcludeExpense(id, isEx) },
                         onToggleRecurring = { id, isRec -> viewModel.toggleRecurring(id, isRec) },
                         isBlacklistedMerchant = { viewModel.isBlacklistedMerchant(it, blacklistedMerchants) },
                         onUpdateRefundSettlement = { id, amount -> viewModel.updateRefundSettlement(id, amount) }
@@ -966,13 +967,21 @@ fun SpendTrackerScreen(
                                     label = {
                                         Text(
                                             text = filter.label,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                                         )
                                     },
                                     shape = RoundedCornerShape(12.dp),
                                     colors = FilterChipDefaults.filterChipColors(
+                                        containerColor = Color.White,
+                                        labelColor = SavioSlateBody,
                                         selectedContainerColor = filterColor.copy(alpha = 0.15f),
                                         selectedLabelColor = filterColor
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        enabled = true,
+                                        selected = isSelected,
+                                        borderColor = GlassCardBorder,
+                                        selectedBorderColor = filterColor.copy(alpha = 0.35f)
                                     ),
                                     modifier = Modifier.testTag("filter_${filter.name}")
                                 )
@@ -1073,6 +1082,9 @@ fun SpendTrackerScreen(
                                 },
                                 onToggleBlacklist = { merchant ->
                                     viewModel.toggleBlacklistMerchant(merchant)
+                                },
+                                onToggleExclude = { id, isEx ->
+                                    viewModel.toggleExcludeExpense(id, isEx)
                                 },
                                 onToggleRecurring = { id, isRec ->
                                     viewModel.toggleRecurring(id, isRec)

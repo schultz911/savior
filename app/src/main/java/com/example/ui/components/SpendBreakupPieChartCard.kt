@@ -99,7 +99,7 @@ fun SpendBreakupPieChartCard(
             val isBlacklisted = norm.isNotBlank() && blacklistedMerchants.any { norm.contains(it, ignoreCase = true) || it.contains(norm, ignoreCase = true) }
             val isSelf = exp.type == com.example.data.ExpenseType.SELF || exp.category.equals("Self", ignoreCase = true)
             val isCreditCard = exp.type == com.example.data.ExpenseType.CREDIT_CARD || exp.category.equals("Credit Card Bill", ignoreCase = true)
-            isBlacklisted || isSelf || isCreditCard
+            exp.isExcluded || isBlacklisted || isSelf || isCreditCard
         }
     }
 

@@ -92,6 +92,13 @@ class ExpenseRepository(
         expenseDao.updateIsRecurring(id, isRecurring)
     }
 
+    suspend fun updateIsExcluded(id: Long, isExcluded: Boolean) = withContext(Dispatchers.IO) {
+        expenseDao.updateIsExcluded(id, isExcluded)
+        if (preferences.isPersistentNotificationEnabled) {
+            LiveExpenditureNotificationService.updateLiveExpenditure(context)
+        }
+    }
+
     suspend fun updateIsRecurringForMerchant(merchant: String, isRecurring: Boolean) = withContext(Dispatchers.IO) {
         expenseDao.updateIsRecurringForMerchant(merchant, isRecurring)
     }

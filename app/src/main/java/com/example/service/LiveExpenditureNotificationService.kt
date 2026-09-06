@@ -121,6 +121,9 @@ class LiveExpenditureNotificationService : Service() {
                 var selfSum = 0.0
 
                 for (exp in currentMonthExpenses) {
+                    if (exp.isExcluded) {
+                        continue // Excluded transactions are omitted from total spend calculations
+                    }
                     val normMerchant = exp.merchantOrRecipient.trim().lowercase()
                     if (blacklisted.any { normMerchant.contains(it.lowercase()) || it.lowercase().contains(normMerchant) }) {
                         continue // Blacklisted merchants are simply ignored and not considered
@@ -136,6 +139,9 @@ class LiveExpenditureNotificationService : Service() {
                         selfSum += netAmount
                     } else if (isCreditCard) {
                         creditCardsSum += netAmount
+                    } else if (exp.isRefundOrReversal) {
+                        spendsSum = (spendsSum - netAmount).coerceAtLeast(0.0)
+                        totalSpend = (totalSpend - netAmount).coerceAtLeast(0.0)
                     } else if (exp.type == ExpenseType.P2P) {
                         transfersSum += netAmount
                         totalSpend += netAmount

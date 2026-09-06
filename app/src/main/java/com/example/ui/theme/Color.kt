@@ -10,8 +10,8 @@ import androidx.compose.ui.graphics.Color
 val GlassBackground = Color(0xFFF8FAFC)           // Ultra-light clean slate canvas
 val GlassBackgroundMesh = Color(0xFFF1F5F9)       // Soft mesh tint
 val GlassSurface = Color(0xFFFFFFFF)              // Pure white base
-val GlassSurfaceTranslucent = Color(0xE6FFFFFF)   // 90% opacity frosted glass
-val GlassCardBg = Color(0xF2FFFFFF)              // 95% opacity frosted card
+val GlassSurfaceTranslucent = Color(0xFFFFFFFF)   // Pure white surface
+val GlassCardBg = Color(0xFFFFFFFF)              // Pure white card base for seamless contrast
 val GlassCardBorder = Color(0x66E2E8F0)          // Soft translucent glass border
 val GlassCardBorderSubtle = Color(0x33CBD5E1)    // Ultra subtle border
 val GlassPillBg = Color(0x14059669)              // Soft emerald tinted pill

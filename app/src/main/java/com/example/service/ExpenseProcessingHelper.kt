@@ -86,6 +86,13 @@ object ExpenseProcessingHelper {
         val dao = app.database.expenseDao()
         val prefs = app.preferences
 
+        // Deduplication check: skip if this refund message has already been processed
+        val exists = dao.existsByContent(sender, timestamp, parsed.amount)
+        if (exists) {
+            Log.d(TAG, "Duplicate refund SMS detected, skipping insertion: sender=$sender, time=$timestamp, amount=${parsed.amount}")
+            return@withContext null
+        }
+
         // Look back up to 30 days for a matching debit transaction
         val lookbackMillis = 30L * 24 * 60 * 60 * 1000
         val minTimestamp = timestamp - lookbackMillis
@@ -106,9 +113,25 @@ object ExpenseProcessingHelper {
             if (updated != null && updated.amount <= updated.refundedAmount) {
                 dao.updateIsReversal(matching.id, true)
             }
+            // Persist marker entry for incoming refund SMS so repeated inbox sync passes are deduplicated
+            val marker = ExpenseEntity(
+                amount = parsed.amount,
+                currency = preferredCurrency,
+                type = matching.type,
+                merchantOrRecipient = matching.merchantOrRecipient,
+                accountInfo = parsed.accountInfo,
+                category = "Refund",
+                rawBody = parsed.rawText,
+                sender = sender,
+                timestamp = timestamp,
+                refundedAmount = parsed.amount,
+                isReversal = true
+            )
+            dao.insertExpense(marker)
             resultExpense = updated
         } else {
-            // Standalone refund record inserted with netAmount = 0
+            // Standalone refund/reimbursement/settlement: inserted with refundedAmount = 0.0, isReversal = true
+            // so that it reduces total spends across the app unless blacklisted
             Log.d(TAG, "No matching recent debit found for refund ${parsed.amount} from '${parsed.title}'. Recording standalone reversal.")
             val refundEntity = ExpenseEntity(
                 amount = parsed.amount,
@@ -120,7 +143,7 @@ object ExpenseProcessingHelper {
                 rawBody = parsed.rawText,
                 sender = sender,
                 timestamp = timestamp,
-                refundedAmount = parsed.amount,
+                refundedAmount = 0.0,
                 isReversal = true
             )
             val id = dao.insertExpense(refundEntity)

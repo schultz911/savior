@@ -332,14 +332,22 @@ class ExpenseViewModel(
         var todaySpent = 0.0
 
         for (exp in expenses) {
+            if (exp.isExcluded) continue
             val norm = exp.merchantOrRecipient.trim().lowercase(Locale.US)
             if (blacklisted.any { norm.contains(it.lowercase(Locale.US)) }) continue
             if (isSelf(exp) || isCreditCard(exp)) continue
 
             val net = (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
-            currentSpent += net
-            if (exp.timestamp >= startOfToday) {
-                todaySpent += net
+            if (exp.isRefundOrReversal) {
+                currentSpent = (currentSpent - net).coerceAtLeast(0.0)
+                if (exp.timestamp >= startOfToday) {
+                    todaySpent = (todaySpent - net).coerceAtLeast(0.0)
+                }
+            } else {
+                currentSpent += net
+                if (exp.timestamp >= startOfToday) {
+                    todaySpent += net
+                }
             }
         }
 
@@ -376,11 +384,20 @@ class ExpenseViewModel(
         _blacklistedMerchants
     ) { list, blacklisted ->
         val validList = list.filter {
+            !it.isExcluded &&
             !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) &&
             !isSelf(it) &&
             !isCreditCard(it)
         }
-        validList.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
+        var total = 0.0
+        for (it in validList) {
+            if (it.isRefundOrReversal) {
+                total -= (it.amount - it.refundedAmount).coerceAtLeast(0.0)
+            } else {
+                total += (it.amount - it.refundedAmount).coerceAtLeast(0.0)
+            }
+        }
+        total.coerceAtLeast(0.0)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -393,7 +410,7 @@ class ExpenseViewModel(
         currentMonthExpenses,
         _blacklistedMerchants
     ) { list, blacklisted ->
-        list.filter { isTransfer(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
+        list.filter { !it.isExcluded && isTransfer(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
             .sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
     }.stateIn(
         scope = viewModelScope,
@@ -405,8 +422,16 @@ class ExpenseViewModel(
         currentMonthExpenses,
         _blacklistedMerchants
     ) { list, blacklisted ->
-        list.filter { isMerchantSpend(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
-            .sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
+        val validList = list.filter { !it.isExcluded && isMerchantSpend(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
+        var total = 0.0
+        for (it in validList) {
+            if (it.isRefundOrReversal) {
+                total -= (it.amount - it.refundedAmount).coerceAtLeast(0.0)
+            } else {
+                total += (it.amount - it.refundedAmount).coerceAtLeast(0.0)
+            }
+        }
+        total.coerceAtLeast(0.0)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -417,7 +442,7 @@ class ExpenseViewModel(
         currentMonthExpenses,
         _blacklistedMerchants
     ) { list, blacklisted ->
-        list.filter { isCreditCard(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
+        list.filter { !it.isExcluded && isCreditCard(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
             .sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
     }.stateIn(
         scope = viewModelScope,
@@ -429,7 +454,7 @@ class ExpenseViewModel(
         currentMonthExpenses,
         _blacklistedMerchants
     ) { list, blacklisted ->
-        list.filter { isSelf(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
+        list.filter { !it.isExcluded && isSelf(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
             .sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
     }.stateIn(
         scope = viewModelScope,
@@ -482,10 +507,10 @@ class ExpenseViewModel(
 
         val daySpendMap = mutableMapOf<Int, Double>()
         for (exp in expenses) {
-            if (isBlacklistedMerchant(exp.merchantOrRecipient, blacklisted) || isSelf(exp) || isCreditCard(exp)) continue
+            if (exp.isExcluded || isBlacklistedMerchant(exp.merchantOrRecipient, blacklisted) || isSelf(exp) || isCreditCard(exp)) continue
             val expCal = Calendar.getInstance().apply { timeInMillis = exp.timestamp }
             val day = expCal.get(Calendar.DAY_OF_MONTH)
-            val netAmt = (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
+            val netAmt = exp.effectiveSpendAmount
             daySpendMap[day] = (daySpendMap[day] ?: 0.0) + netAmt
         }
 
@@ -532,7 +557,7 @@ class ExpenseViewModel(
         _blacklistedMerchants
     ) { expenses, blacklisted ->
         val valid = expenses.filter {
-            !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) && !isSelf(it)
+            !it.isExcluded && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) && !isSelf(it)
         }
         val netMonthTotal = valid.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
         val grouped = valid.groupBy {
@@ -587,11 +612,12 @@ class ExpenseViewModel(
 
         for (exp in expenses) {
             hasDataMonthKeys.add(exp.monthKey)
+            if (exp.isExcluded) continue
             val norm = exp.merchantOrRecipient.trim().lowercase(Locale.US)
             if (norm.isNotBlank() && normalizedBlacklist.contains(norm)) continue
             if (isSelf(exp) || isCreditCard(exp)) continue
 
-            val net = (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
+            val net = exp.effectiveSpendAmount
             spendByMonth[exp.monthKey] = (spendByMonth[exp.monthKey] ?: 0.0) + net
         }
 
@@ -645,19 +671,14 @@ class ExpenseViewModel(
         .map { set -> set.map { it.trim().lowercase(Locale.US) }.filter { it.isNotBlank() }.toSet() }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = preferences.getBlacklistedMerchants().map { it.trim().lowercase(Locale.US) }.filter { it.isNotBlank() }.toSet()
         )
 
     fun isBlacklistedMerchant(merchant: String, blacklisted: Set<String> = _blacklistedMerchants.value): Boolean {
         val norm = merchant.trim().lowercase(Locale.US)
         if (norm.isBlank()) return false
-        val normalized = if (blacklisted === _blacklistedMerchants.value) {
-            normalizedBlacklistedMerchants.value
-        } else {
-            blacklisted.map { it.trim().lowercase(Locale.US) }.toSet()
-        }
-        return normalized.contains(norm)
+        return blacklisted.any { it.trim().equals(norm, ignoreCase = true) }
     }
 
     fun blacklistMerchant(merchant: String) {
@@ -666,6 +687,7 @@ class ExpenseViewModel(
         preferences.blacklistMerchant(norm)
         _blacklistedMerchants.value = preferences.getBlacklistedMerchants()
         _syncFeedback.value = "Merchant '$norm' blacklisted. Spends deducted."
+        LiveExpenditureNotificationService.updateLiveExpenditure(getApplication())
     }
 
     fun unblacklistMerchant(merchant: String) {
@@ -673,6 +695,7 @@ class ExpenseViewModel(
         preferences.unblacklistMerchant(norm)
         _blacklistedMerchants.value = preferences.getBlacklistedMerchants()
         _syncFeedback.value = "Merchant '$norm' removed from blacklist."
+        LiveExpenditureNotificationService.updateLiveExpenditure(getApplication())
     }
 
     fun toggleBlacklistMerchant(merchant: String) {
@@ -680,6 +703,14 @@ class ExpenseViewModel(
             unblacklistMerchant(merchant)
         } else {
             blacklistMerchant(merchant)
+        }
+    }
+
+    fun toggleExcludeExpense(id: Long, isExcluded: Boolean) {
+        viewModelScope.launch {
+            repository.updateIsExcluded(id, isExcluded)
+            val msg = if (isExcluded) "Transaction excluded from spend." else "Transaction included in spend."
+            _syncFeedback.value = msg
         }
     }
 

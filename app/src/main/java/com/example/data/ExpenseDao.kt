@@ -87,6 +87,9 @@ interface ExpenseDao {
     @Query("UPDATE expenses SET isRecurring = :isRecurring WHERE id = :id")
     suspend fun updateIsRecurring(id: Long, isRecurring: Boolean)
 
+    @Query("UPDATE expenses SET isExcluded = :isExcluded WHERE id = :id")
+    suspend fun updateIsExcluded(id: Long, isExcluded: Boolean)
+
     @Query("UPDATE expenses SET isRecurring = :isRecurring WHERE LOWER(TRIM(merchantOrRecipient)) = LOWER(TRIM(:merchant))")
     suspend fun updateIsRecurringForMerchant(merchant: String, isRecurring: Boolean)
 

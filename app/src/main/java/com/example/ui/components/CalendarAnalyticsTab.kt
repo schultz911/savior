@@ -122,6 +122,7 @@ fun CalendarAnalyticsTab(
     onDeleteExpense: ((Long) -> Unit)? = null,
     onAssignCategory: ((ExpenseEntity) -> Unit)? = null,
     onToggleBlacklist: ((String) -> Unit)? = null,
+    onToggleExclude: ((Long, Boolean) -> Unit)? = null,
     onToggleRecurring: ((Long, Boolean) -> Unit)? = null,
     isBlacklistedMerchant: ((String) -> Boolean)? = null,
     onUpdateRefundSettlement: ((Long, Double) -> Unit)? = null,
@@ -180,9 +181,10 @@ fun CalendarAnalyticsTab(
             } else {
                 val totalSpent = if (expensesForM.isNotEmpty()) {
                     expensesForM.filter {
+                        !it.isExcluded &&
                         !it.category.equals("Self", ignoreCase = true) &&
                         !it.category.equals("Credit Card Bill", ignoreCase = true)
-                    }.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
+                    }.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0)
                 } else {
                     cached?.totalSpent ?: 0.0
                 }
@@ -213,9 +215,10 @@ fun CalendarAnalyticsTab(
     val selectedTotalSpend = remember(selectedMonthExpenses, currentSelectedAnalytics) {
         currentSelectedAnalytics?.totalSpent
             ?: selectedMonthExpenses.filter {
+                !it.isExcluded &&
                 !it.category.equals("Self", ignoreCase = true) &&
                 !it.category.equals("Credit Card Bill", ignoreCase = true)
-            }.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
+            }.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0)
     }
     val selectedSavings = monthlySalary - selectedTotalSpend
 
@@ -252,9 +255,10 @@ fun CalendarAnalyticsTab(
     val prevTotalSpend = remember(prevMonthExpenses, last12Months, prevMonthKey) {
         if (prevMonthExpenses.isNotEmpty()) {
             prevMonthExpenses.filter {
+                !it.isExcluded &&
                 !it.category.equals("Self", ignoreCase = true) &&
                 !it.category.equals("Credit Card Bill", ignoreCase = true)
-            }.sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
+            }.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0)
         } else {
             last12Months.firstOrNull { it.monthKey == prevMonthKey }?.totalSpent ?: 0.0
         }
@@ -391,13 +395,21 @@ fun CalendarAnalyticsTab(
                                     label = {
                                         Text(
                                             text = yr.toString(),
-                                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+                                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium
                                         )
                                     },
                                     shape = RoundedCornerShape(12.dp),
                                     colors = FilterChipDefaults.filterChipColors(
+                                        containerColor = Color.White,
+                                        labelColor = SavioSlateDark,
                                         selectedContainerColor = SavioEmerald,
                                         selectedLabelColor = Color.White
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        enabled = true,
+                                        selected = isSel,
+                                        borderColor = GlassCardBorder,
+                                        selectedBorderColor = SavioEmerald
                                     )
                                 )
                             }
@@ -730,13 +742,21 @@ fun CalendarAnalyticsTab(
                             label = {
                                 Text(
                                     text = filter.label,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                                 )
                             },
                             shape = RoundedCornerShape(12.dp),
                             colors = FilterChipDefaults.filterChipColors(
+                                containerColor = Color.White,
+                                labelColor = SavioSlateBody,
                                 selectedContainerColor = filterColor.copy(alpha = 0.15f),
                                 selectedLabelColor = filterColor
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = isSelected,
+                                borderColor = GlassCardBorder,
+                                selectedBorderColor = filterColor.copy(alpha = 0.35f)
                             ),
                             modifier = Modifier.testTag("analytics_filter_${filter.name}")
                         )
@@ -780,6 +800,7 @@ fun CalendarAnalyticsTab(
                     onDelete = { onDeleteExpense?.invoke(it) },
                     onAssignCategory = onAssignCategory,
                     onToggleBlacklist = onToggleBlacklist,
+                    onToggleExclude = onToggleExclude,
                     onToggleRecurring = onToggleRecurring,
                     onEditMerchant = onEditMerchant,
                     onUpdateRefundSettlement = onUpdateRefundSettlement
@@ -1096,6 +1117,7 @@ fun CategoryWiseBarGraph(
 
     val prevCategoryTotals = remember(prevMonthExpenses) {
         val nonExcluded = prevMonthExpenses.filter {
+            !it.isExcluded &&
             !it.category.equals("Self", ignoreCase = true) &&
             !it.category.equals("Credit Card Bill", ignoreCase = true)
         }
@@ -1106,6 +1128,7 @@ fun CategoryWiseBarGraph(
 
     val categoryList = remember(expenses) {
         val nonExcluded = expenses.filter {
+            !it.isExcluded &&
             !it.category.equals("Self", ignoreCase = true) &&
             !it.category.equals("Credit Card Bill", ignoreCase = true)
         }

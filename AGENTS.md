@@ -39,6 +39,12 @@
 
 ## 3. Approved and Implemented
 
+- **[Transaction-Level Spend Exclusion Decoupled from Merchant Blacklist] (Executed & Validated)**:
+  - Slide action (EndToStart) strictly toggles single transaction exclusion (`expense.isExcluded`), preventing accidental whole-merchant blacklisting.
+  - Merchant blacklisting remains exclusively accessible via the dedicated "Blacklist Merchant" button inside Transaction Details and the Settings page.
+  - Room Database Migration 3->4 implemented (`ALTER TABLE expenses ADD COLUMN isExcluded INTEGER NOT NULL DEFAULT 0`) and backup/restore JSON serialization updated.
+  - Excluded transactions dynamically omitted across `monthlyTotal`, `spendsTotal`, `transfersTotal`, `creditCardsTotal`, `selfTotal`, `safeSpendPacing`, `dailyBurnDownData`, `instrumentSummaries`, `LiveExpenditureNotificationService`, `WeeklySpendDigestWorker`, and `SpendBreakupPieChartCard`.
+  - Compiled and verified release `v1.0.0` binaries: `savior-1.0.0.apk` and `savio-1.0.0.apk`.
 - **[Phase 3: Network Egress & Production Hardening] (Executed & Validated)**:
   - Local AI Categorization Caching: Persisted OpenRouter Gemini categorization results directly to `prefs.saveMerchantCategory(effectiveMerchant, finalCategory)` and auto-rules in `ruleDao.insertRule()`, eliminating redundant network roundtrips for repeat merchants (>90% API egress and token savings).
   - Mobile Network Latency & Timeout Hardening: Tuned `OkHttpClient` connect, read, and write timeouts from 30s to 15s in `OpenRouterClient.kt`, preventing background SMS sync thread starvation under poor cellular reception.

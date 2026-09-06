@@ -102,6 +102,7 @@ object DatabaseBackupHelper {
                         put("isRecurring", exp.isRecurring)
                         put("refundedAmount", exp.refundedAmount)
                         put("isReversal", exp.isReversal)
+                        put("isExcluded", exp.isExcluded)
                     }
                     expensesArray.put(obj)
                 }
@@ -244,7 +245,8 @@ object DatabaseBackupHelper {
                     monthKey = obj.optString("monthKey", ExpenseEntity.formatMonthKey(obj.getLong("timestamp"))),
                     isRecurring = obj.optBoolean("isRecurring", false),
                     refundedAmount = obj.optDouble("refundedAmount", 0.0),
-                    isReversal = obj.optBoolean("isReversal", false)
+                    isReversal = obj.optBoolean("isReversal", false),
+                    isExcluded = obj.optBoolean("isExcluded", false)
                 )
                 entitiesToInsert.add(entity)
             }
