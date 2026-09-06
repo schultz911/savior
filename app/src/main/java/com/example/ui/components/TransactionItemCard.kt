@@ -68,6 +68,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -499,6 +500,7 @@ private fun TransactionDetailBottomSheet(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
@@ -507,9 +509,13 @@ private fun TransactionDetailBottomSheet(
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 21.sp,
-                                textDecoration = if (isBlacklisted) TextDecoration.LineThrough else TextDecoration.None
+                                textDecoration = if (isBlacklisted) TextDecoration.LineThrough else TextDecoration.None,
+                                textAlign = TextAlign.Center
                             ),
-                            color = if (isBlacklisted) SavioBlacklistMuted else SavioSlateDark
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (isBlacklisted) SavioBlacklistMuted else SavioSlateDark,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
                         if (onEditMerchant != null) {
                             Spacer(modifier = Modifier.width(6.dp))
