@@ -18,9 +18,6 @@
         <package android:name="com.google.android.apps.aicore" />
         <package android:name="com.samsung.android.rubin.app" />
         <package android:name="com.samsung.android.aicore" />
-        <intent>
-            <action android:name="android.intent.action.MAIN" />
-        </intent>
     </queries>
 
     <application

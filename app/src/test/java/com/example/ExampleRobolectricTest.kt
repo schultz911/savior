@@ -160,10 +160,105 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `test backup helper generates valid filename`() {
+  fun `test backup helper generates valid filename and magic header`() = kotlinx.coroutines.runBlocking {
     val fileName = com.example.util.DatabaseBackupHelper.generateDefaultFileName()
     assertTrue(fileName.startsWith("savior_encrypted_backup_"))
     assertTrue(fileName.endsWith(".savior"))
+
+    val magicHeader = com.example.util.DatabaseBackupHelper.MAGIC_HEADER
+    assertEquals("SAV1", String(magicHeader, Charsets.US_ASCII))
+  }
+
+  @Test
+  fun `test backup helper export writes SAV1 magic header and restores correctly`() = kotlinx.coroutines.runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val db = androidx.room.Room.inMemoryDatabaseBuilder(context, com.example.data.AppDatabase::class.java)
+      .allowMainThreadQueries()
+      .build()
+    val dao = db.expenseDao()
+    val ruleDao = db.merchantRuleDao()
+    val prefs = com.example.data.ExpensePreferences(context)
+
+    dao.insertExpense(
+      com.example.data.ExpenseEntity(
+        amount = 199.0,
+        currency = "₹",
+        type = ExpenseType.MERCHANT,
+        merchantOrRecipient = "NETFLIX",
+        accountInfo = "Card ••9999",
+        category = "Entertainment",
+        rawBody = "Charged 199 at Netflix",
+        sender = "BANK",
+        timestamp = System.currentTimeMillis(),
+        monthKey = "2026-09"
+      )
+    )
+
+    val outStream = java.io.ByteArrayOutputStream()
+    val backupResult = com.example.util.DatabaseBackupHelper.createEncryptedBackup(
+      dao = dao,
+      preferences = prefs,
+      passphrase = "SecretPassword123!",
+      outputStream = outStream,
+      ruleDao = ruleDao
+    )
+    assertTrue(backupResult.isSuccess)
+    assertEquals(1, backupResult.getOrNull())
+
+    val backupBytes = outStream.toByteArray()
+    assertTrue(backupBytes.size > 4)
+    assertEquals("SAV1", String(backupBytes.copyOfRange(0, 4), Charsets.US_ASCII))
+
+    // Restore into a fresh db
+    val freshDb = androidx.room.Room.inMemoryDatabaseBuilder(context, com.example.data.AppDatabase::class.java)
+      .allowMainThreadQueries()
+      .build()
+    val freshDao = freshDb.expenseDao()
+    val freshRuleDao = freshDb.merchantRuleDao()
+
+    val inStream = java.io.ByteArrayInputStream(backupBytes)
+    val restoreResult = com.example.util.DatabaseBackupHelper.restoreEncryptedBackup(
+      inputStream = inStream,
+      passphrase = "SecretPassword123!",
+      dao = freshDao,
+      preferences = prefs,
+      ruleDao = freshRuleDao
+    )
+    assertTrue(restoreResult.isSuccess)
+    val restoredExpenses = freshDao.getAllExpensesSync()
+    assertEquals(1, restoredExpenses.size)
+    assertEquals("NETFLIX", restoredExpenses[0].merchantOrRecipient)
+  }
+
+  @Test
+  fun `test backup helper restore fast fails without PBKDF2 delay on invalid non-backup files`() = kotlinx.coroutines.runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val db = androidx.room.Room.inMemoryDatabaseBuilder(context, com.example.data.AppDatabase::class.java)
+      .allowMainThreadQueries()
+      .build()
+    val dao = db.expenseDao()
+    val prefs = com.example.data.ExpensePreferences(context)
+
+    // Invalid non-backup content (JSON structure, PDF header, or corrupted arbitrary bytes)
+    val invalidPayloads = listOf(
+      "{\"version\": 2, \"corrupt\": true}".toByteArray(Charsets.UTF_8),
+      "%PDF-1.5-invalid-backup-stream-bytes-data".toByteArray(Charsets.UTF_8),
+      byteArrayOf(0x00, 0x01, 0x02, 0x03, 0x04, 0x05) // too small
+    )
+
+    for (payload in invalidPayloads) {
+      val start = System.currentTimeMillis()
+      val result = com.example.util.DatabaseBackupHelper.restoreEncryptedBackup(
+        inputStream = java.io.ByteArrayInputStream(payload),
+        passphrase = "test_passphrase",
+        dao = dao,
+        preferences = prefs,
+        allowLegacyWithoutHeader = false
+      )
+      val elapsed = System.currentTimeMillis() - start
+      assertTrue(result.isFailure)
+      assertTrue("Fast-fail should reject corrupt/invalid payload in <100ms without PBKDF2 burn, took ${elapsed}ms", elapsed < 100)
+    }
   }
 
   @Test

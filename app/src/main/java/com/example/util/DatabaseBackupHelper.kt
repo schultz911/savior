@@ -37,6 +37,7 @@ object DatabaseBackupHelper {
     private const val KEY_LENGTH_BITS = 256
     const val BACKUP_VERSION = 2
     const val DEFAULT_SNAPSHOT_PASSPHRASE = "Savio_Vault_Snapshot_Local_Secure_Key"
+    val MAGIC_HEADER = byteArrayOf(0x53, 0x41, 0x56, 0x31) // "SAV1"
 
     fun generateDefaultFileName(): String {
         val dateStr = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
@@ -127,8 +128,9 @@ object DatabaseBackupHelper {
             cipher.init(Cipher.ENCRYPT_MODE, secretKey, GCMParameterSpec(TAG_LENGTH_BITS, iv))
             val cipherBytes = cipher.doFinal(plainBytes)
 
-            // Output format: [Salt: 16 bytes][IV: 12 bytes][Ciphertext]
+            // Output format: [Magic: 4 bytes][Salt: 16 bytes][IV: 12 bytes][Ciphertext]
             outputStream.use { out ->
+                out.write(MAGIC_HEADER)
                 out.write(salt)
                 out.write(iv)
                 out.write(cipherBytes)
@@ -146,15 +148,34 @@ object DatabaseBackupHelper {
         passphrase: String,
         dao: ExpenseDao,
         preferences: ExpensePreferences,
-        ruleDao: MerchantRuleDao? = null
+        ruleDao: MerchantRuleDao? = null,
+        allowLegacyWithoutHeader: Boolean = true
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
             val allBytes = inputStream.use { it.readBytes() }
-            if (allBytes.size < SALT_LENGTH_BYTES + IV_LENGTH_BYTES + 16) {
+            val minLegacySize = SALT_LENGTH_BYTES + IV_LENGTH_BYTES + 16
+            val minMagicSize = MAGIC_HEADER.size + minLegacySize
+
+            if (allBytes.size < minLegacySize) {
                 return@withContext Result.failure(IllegalArgumentException("File is too small or corrupted."))
             }
 
             val byteBuffer = ByteBuffer.wrap(allBytes)
+
+            val hasMagic = allBytes.size >= minMagicSize &&
+                    allBytes[0] == MAGIC_HEADER[0] &&
+                    allBytes[1] == MAGIC_HEADER[1] &&
+                    allBytes[2] == MAGIC_HEADER[2] &&
+                    allBytes[3] == MAGIC_HEADER[3]
+
+            if (hasMagic) {
+                byteBuffer.position(MAGIC_HEADER.size)
+            } else {
+                if (!allowLegacyWithoutHeader || isKnownNonBackupFormat(allBytes)) {
+                    return@withContext Result.failure(IllegalArgumentException("Invalid or corrupted Savio backup file."))
+                }
+            }
+
             val salt = ByteArray(SALT_LENGTH_BYTES)
             byteBuffer.get(salt)
 
@@ -260,6 +281,24 @@ object DatabaseBackupHelper {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private fun isKnownNonBackupFormat(bytes: ByteArray): Boolean {
+        if (bytes.size < 4) return true
+        // PDF: "%PDF"
+        if (bytes[0] == '%'.code.toByte() && bytes[1] == 'P'.code.toByte() && bytes[2] == 'D'.code.toByte() && bytes[3] == 'F'.code.toByte()) return true
+        // PNG: 0x89 'P' 'N' 'G'
+        if (bytes[0] == 0x89.toByte() && bytes[1] == 'P'.code.toByte() && bytes[2] == 'N'.code.toByte() && bytes[3] == 'G'.code.toByte()) return true
+        // JPEG: 0xFF 0xD8 0xFF
+        if (bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte()) return true
+        // GIF: "GIF8"
+        if (bytes[0] == 'G'.code.toByte() && bytes[1] == 'I'.code.toByte() && bytes[2] == 'F'.code.toByte() && bytes[3] == '8'.code.toByte()) return true
+        // ZIP / APK / JAR / DOCX / XLSX: "PK\x03\x04"
+        if (bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte() && bytes[2] == 0x03.toByte() && bytes[3] == 0x04.toByte()) return true
+        // Plain text / JSON / XML / HTML
+        val firstChar = bytes[0].toInt().toChar()
+        if (firstChar == '{' || firstChar == '[' || firstChar == '<') return true
+        return false
     }
 
     // ==========================================

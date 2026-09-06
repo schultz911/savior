@@ -120,6 +120,28 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+private val sharedTransactionNumberFormatter = NumberFormat.getNumberInstance(Locale.US).apply {
+    minimumFractionDigits = 2
+    maximumFractionDigits = 2
+}
+
+private val sharedCardDateWithoutYear = SimpleDateFormat("MMM dd, hh:mm a", Locale.US)
+private val sharedCardDateWithYear = SimpleDateFormat("MMM dd, yyyy · hh:mm a", Locale.US)
+private val sharedCardCalendar = Calendar.getInstance()
+
+private fun formatCardDate(timestamp: Long): String = synchronized(sharedCardCalendar) {
+    sharedCardCalendar.timeInMillis = System.currentTimeMillis()
+    val currentYear = sharedCardCalendar.get(Calendar.YEAR)
+    sharedCardCalendar.timeInMillis = timestamp
+    val expenseYear = sharedCardCalendar.get(Calendar.YEAR)
+    val date = Date(timestamp)
+    if (expenseYear != currentYear) {
+        sharedCardDateWithYear.format(date)
+    } else {
+        sharedCardDateWithoutYear.format(date)
+    }
+}
+
 private data class SwipeActionStyle(
     val bgColor: Color,
     val icon: ImageVector,
@@ -182,12 +204,7 @@ fun TransactionItemCard(
         )
     }
 
-    val numberFormatter = remember {
-        NumberFormat.getNumberInstance(Locale.US).apply {
-            minimumFractionDigits = 2
-            maximumFractionDigits = 2
-        }
-    }
+    val numberFormatter = sharedTransactionNumberFormatter
     val effectiveCurrency = if (currency.isNotBlank()) currency else expense.currency
     val isCreditReversal = expense.isRefundOrReversal
     val formattedAmount = if (isCreditReversal) {
@@ -196,19 +213,9 @@ fun TransactionItemCard(
         "-${effectiveCurrency}${numberFormatter.format(expense.amount)}"
     }
 
-    val currentYear = remember { Calendar.getInstance().get(Calendar.YEAR) }
-    val expenseYear = remember(expense.timestamp) {
-        val c = Calendar.getInstance().apply { timeInMillis = expense.timestamp }
-        c.get(Calendar.YEAR)
+    val formattedDate = remember(expense.timestamp) {
+        formatCardDate(expense.timestamp)
     }
-    val dateFormatter = remember(expenseYear, currentYear) {
-        if (expenseYear != currentYear) {
-            SimpleDateFormat("MMM dd, yyyy · hh:mm a", Locale.US)
-        } else {
-            SimpleDateFormat("MMM dd, hh:mm a", Locale.US)
-        }
-    }
-    val formattedDate = dateFormatter.format(Date(expense.timestamp))
 
     val (typeColor, typeBg, _) = if (isCreditReversal) {
         Triple(SavioEmerald, SavioEmeraldContainer, Icons.Default.CheckCircle)
@@ -1420,12 +1427,7 @@ fun RefundSettlementDialog(
     onConfirmSettlement: (Double) -> Unit
 ) {
     val effectiveCurrency = if (currency.isNotBlank()) currency else expense.currency
-    val numberFormatter = remember {
-        NumberFormat.getNumberInstance(Locale.US).apply {
-            minimumFractionDigits = 2
-            maximumFractionDigits = 2
-        }
-    }
+    val numberFormatter = sharedTransactionNumberFormatter
 
     var settlementInput by remember(expense.refundedAmount) {
         mutableStateOf(

@@ -7,7 +7,6 @@ import java.util.regex.Pattern
 object SmsParser {
 
     // Negative keywords: Non-expenditures, OTPs, incoming credits, ads, intimations
-    // Negative keywords: Non-expenditures, OTPs, ads, intimations
     private val EXCLUSION_PATTERNS = listOf(
         Pattern.compile("(?i)\\b(otp|one time password|verification code|security code|is your code|secret code)\\b"),
         Pattern.compile("(?i)\\b(pre-approved|apply now|congratulations|click here|claim your|loan offer|discount on|cash prize)\\b"),

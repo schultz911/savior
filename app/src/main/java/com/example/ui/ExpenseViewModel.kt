@@ -545,9 +545,10 @@ class ExpenseViewModel(
         val currentDay = if (isCurrentMonth) cal.get(Calendar.DAY_OF_MONTH).coerceIn(1, daysInMonth) else daysInMonth
 
         val daySpendMap = mutableMapOf<Int, Double>()
+        val expCal = Calendar.getInstance()
         for (exp in expenses) {
             if (exp.isExcluded || isBlacklistedMerchant(exp.merchantOrRecipient, blacklisted) || isSelf(exp) || isCreditCard(exp)) continue
-            val expCal = Calendar.getInstance().apply { timeInMillis = exp.timestamp }
+            expCal.timeInMillis = exp.timestamp
             val day = expCal.get(Calendar.DAY_OF_MONTH)
             val netAmt = exp.effectiveSpendAmount
             daySpendMap[day] = (daySpendMap[day] ?: 0.0) + netAmt

@@ -435,12 +435,21 @@ object AiCoreCategorizer {
         }.toString()
     }
 
+    // Pre-compiled static regexes for on-device inference extraction
+    private val AMOUNT_PATTERN_1 = Regex("""(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)""", RegexOption.IGNORE_CASE)
+    private val AMOUNT_PATTERN_2 = Regex("""([\d,]+(?:\.\d{1,2})?)\s*(?:debited|spent|paid|transferred|withdrawn)""", RegexOption.IGNORE_CASE)
+    private val AMOUNT_PATTERNS = listOf(AMOUNT_PATTERN_1, AMOUNT_PATTERN_2)
+
+    private val ACCOUNT_PATTERN_CARD_AC = Regex("""(?:a/c|acct|ac|card)\s*(?:no\.?)?\s*[*•xX]*(\d{3,4})""", RegexOption.IGNORE_CASE)
+    private val ACCOUNT_PATTERN_ENDING = Regex("""ending\s*(?:in)?\s*[*•xX]*(\d{3,4})""", RegexOption.IGNORE_CASE)
+
+    private val MERCHANT_PATTERN_AT_TO = Regex("""(?:at|to|info:?|vpa)\s+([A-Za-z0-9\s.&'-]+?)(?:\s+on|\s+ref|\s+upi|\s+txn|\s+via|\s+balance|\s+avail|\.|$)""", RegexOption.IGNORE_CASE)
+    private val MERCHANT_PATTERN_PAID_TO = Regex("""paid\s+(?:rs\.?|inr|₹)?\s*[\d,.]*\s*to\s+([A-Za-z0-9\s.&'-]+?)(?:\s+on|\s+ref|\.|$)""", RegexOption.IGNORE_CASE)
+    private val MERCHANT_PATTERNS = listOf(MERCHANT_PATTERN_AT_TO, MERCHANT_PATTERN_PAID_TO)
+    private val MERCHANT_CLEAN_PREFIX = Regex("""^(?:vpa|upi|imps|neft|pos|txn)\s*[-:]?\s*""", RegexOption.IGNORE_CASE)
+
     private fun extractAmount(rawText: String): Double {
-        val patterns = listOf(
-            Regex("""(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)""", RegexOption.IGNORE_CASE),
-            Regex("""([\d,]+(?:\.\d{1,2})?)\s*(?:debited|spent|paid|transferred|withdrawn)""", RegexOption.IGNORE_CASE)
-        )
-        for (pattern in patterns) {
+        for (pattern in AMOUNT_PATTERNS) {
             val match = pattern.find(rawText)
             if (match != null) {
                 val numStr = match.groupValues[1].replace(",", "").trim()
@@ -454,13 +463,12 @@ object AiCoreCategorizer {
     }
 
     private fun extractAccount(rawText: String): String {
-        val pattern = Regex("""(?:a/c|acct|ac|card)\s*(?:no\.?)?\s*[*•xX]*(\d{3,4})""", RegexOption.IGNORE_CASE)
-        val match = pattern.find(rawText)
+        val match = ACCOUNT_PATTERN_CARD_AC.find(rawText)
         if (match != null) {
             val digits = match.groupValues[1]
             return if (rawText.contains("card", ignoreCase = true)) "Card ••$digits" else "A/c ••$digits"
         }
-        val endMatch = Regex("""ending\s*(?:in)?\s*[*•xX]*(\d{3,4})""", RegexOption.IGNORE_CASE).find(rawText)
+        val endMatch = ACCOUNT_PATTERN_ENDING.find(rawText)
         if (endMatch != null) {
             return "••${endMatch.groupValues[1]}"
         }
@@ -468,15 +476,11 @@ object AiCoreCategorizer {
     }
 
     private fun extractMerchant(rawText: String, sender: String, classification: String): String {
-        val patterns = listOf(
-            Regex("""(?:at|to|info:?|vpa)\s+([A-Za-z0-9\s.&'-]+?)(?:\s+on|\s+ref|\s+upi|\s+txn|\s+via|\s+balance|\s+avail|\.|$)""", RegexOption.IGNORE_CASE),
-            Regex("""paid\s+(?:rs\.?|inr|₹)?\s*[\d,.]*\s*to\s+([A-Za-z0-9\s.&'-]+?)(?:\s+on|\s+ref|\.|$)""", RegexOption.IGNORE_CASE)
-        )
-        for (p in patterns) {
+        for (p in MERCHANT_PATTERNS) {
             val m = p.find(rawText)
             if (m != null) {
                 var candidate = m.groupValues[1].trim()
-                candidate = candidate.replace(Regex("""^(?:vpa|upi|imps|neft|pos|txn)\s*[-:]?\s*""", RegexOption.IGNORE_CASE), "")
+                candidate = candidate.replace(MERCHANT_CLEAN_PREFIX, "")
                 if (candidate.length > 2 && !candidate.equals("your account", ignoreCase = true) && !candidate.equals("a/c", ignoreCase = true)) {
                     return candidate
                 }

@@ -101,14 +101,7 @@ class LiveExpenditureNotificationService : Service() {
                 }
 
                 val currentMonthKey = ExpenseEntity.formatMonthKey(System.currentTimeMillis())
-                val monthName = try {
-                    val parser = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.US)
-                    val formatter = java.text.SimpleDateFormat("MMMM", java.util.Locale.US)
-                    val date = parser.parse(currentMonthKey)
-                    if (date != null) formatter.format(date) else currentMonthKey
-                } catch (e: Exception) {
-                    "Month"
-                }
+                val monthName = formatMonthName(currentMonthKey)
                 val currentMonthExpenses = dao.getExpensesForMonthSync(currentMonthKey)
 
                 val currency = prefs.currency
@@ -282,6 +275,10 @@ class LiveExpenditureNotificationService : Service() {
     }
 
     private fun getPacedNotificationLargeIcon(context: Context, status: PacingStatus, currency: String = "₹"): Bitmap {
+        val symbol = if (currency.isNotBlank()) currency else "₹"
+        val cacheKey = "${status.name}_$symbol"
+        pacedIconCache[cacheKey]?.let { return it }
+
         val size = (context.resources.displayMetrics.density * 64).toInt().coerceAtLeast(96)
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -313,9 +310,9 @@ class LiveExpenditureNotificationService : Service() {
             textAlign = Paint.Align.CENTER
         }
         val yPos = radius - ((textPaint.descent() + textPaint.ascent()) / 2)
-        val symbol = if (currency.isNotBlank()) currency else "₹"
         canvas.drawText(symbol, radius, yPos, textPaint)
 
+        pacedIconCache[cacheKey] = bitmap
         return bitmap
     }
 
@@ -329,6 +326,20 @@ class LiveExpenditureNotificationService : Service() {
     }
 
     companion object {
+        private val pacedIconCache = java.util.concurrent.ConcurrentHashMap<String, Bitmap>()
+
+        private val monthKeyParser = java.text.SimpleDateFormat("yyyy-MM", Locale.US)
+        private val monthNameFormatter = java.text.SimpleDateFormat("MMMM", Locale.US)
+
+        fun formatMonthName(monthKey: String): String = synchronized(monthKeyParser) {
+            try {
+                val date = monthKeyParser.parse(monthKey)
+                if (date != null) monthNameFormatter.format(date) else monthKey
+            } catch (e: Exception) {
+                "Month"
+            }
+        }
+
         private val currencyFormatter = NumberFormat.getNumberInstance(Locale.US).apply {
             minimumFractionDigits = 2
             maximumFractionDigits = 2
