@@ -69,6 +69,12 @@ interface ExpenseDao {
     @Query("UPDATE expenses SET refundedAmount = MIN(amount, refundedAmount + :refundAmount) WHERE id = :id")
     suspend fun applyRefund(id: Long, refundAmount: Double)
 
+    @Query("UPDATE expenses SET refundedAmount = :refundAmount WHERE id = :id")
+    suspend fun setRefundedAmount(id: Long, refundAmount: Double)
+
+    @Query("SELECT * FROM expenses WHERE timestamp >= :sinceTimestamp ORDER BY timestamp DESC")
+    suspend fun getExpensesSinceSync(sinceTimestamp: Long): List<ExpenseEntity>
+
     @Query("UPDATE expenses SET isReversal = :isReversal WHERE id = :id")
     suspend fun updateIsReversal(id: Long, isReversal: Boolean)
 

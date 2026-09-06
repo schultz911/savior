@@ -193,6 +193,10 @@ class ExpensePreferences(context: Context) {
         get() = prefs.getBoolean(KEY_ANOMALY_ALERTS, true)
         set(value) = prefs.edit().putBoolean(KEY_ANOMALY_ALERTS, value).apply()
 
+    var isWeeklyDigestEnabled: Boolean
+        get() = prefs.getBoolean(KEY_WEEKLY_DIGEST, true)
+        set(value) = prefs.edit().putBoolean(KEY_WEEKLY_DIGEST, value).apply()
+
     companion object {
         private const val KEY_CURRENCY = "key_currency"
         private const val KEY_MONTHLY_SALARY = "key_monthly_salary"
@@ -212,5 +216,6 @@ class ExpensePreferences(context: Context) {
         private const val KEY_LOCK_TIMEOUT = "key_lock_timeout"
         private const val KEY_VELOCITY_ALERTS = "key_velocity_alerts"
         private const val KEY_ANOMALY_ALERTS = "key_anomaly_alerts"
+        private const val KEY_WEEKLY_DIGEST = "key_weekly_digest"
     }
 }

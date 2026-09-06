@@ -75,6 +75,17 @@ class ExpenseRepository(
         }
     }
 
+    suspend fun setRefundedAmount(id: Long, refundAmount: Double) = withContext(Dispatchers.IO) {
+        expenseDao.setRefundedAmount(id, refundAmount)
+        if (preferences.isPersistentNotificationEnabled) {
+            LiveExpenditureNotificationService.updateLiveExpenditure(context)
+        }
+    }
+
+    suspend fun getExpensesSince(sinceTimestamp: Long): List<ExpenseEntity> = withContext(Dispatchers.IO) {
+        expenseDao.getExpensesSinceSync(sinceTimestamp)
+    }
+
     fun getExpensesForMerchant(merchant: String): Flow<List<ExpenseEntity>> =
         expenseDao.getExpensesForMerchant(merchant)
 

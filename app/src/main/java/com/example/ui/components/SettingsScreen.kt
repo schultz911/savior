@@ -154,6 +154,8 @@ fun SettingsScreen(
     onToggleVelocityAlerts: (Boolean) -> Unit = {},
     isAnomalyAlertsEnabled: Boolean = true,
     onToggleAnomalyAlerts: (Boolean) -> Unit = {},
+    isWeeklyDigestEnabled: Boolean = true,
+    onToggleWeeklyDigest: (Boolean) -> Unit = {},
     trailingMedianSpend: Double = 500.0,
     modifier: Modifier = Modifier
 ) {
@@ -765,6 +767,40 @@ fun SettingsScreen(
                         Switch(
                             checked = isAnomalyAlertsEnabled,
                             onCheckedChange = { onToggleAnomalyAlerts(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = SavioEmerald
+                            )
+                        )
+                    }
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        thickness = 0.5.dp,
+                        color = GlassCardBorder
+                    )
+
+                    // Sunday Evening Spend Digest Toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Sunday Evening Spend Digest",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = SavioSlateDark
+                            )
+                            Text(
+                                text = "Zero-overhead Sunday 8:00 PM local summary of 7-day spend, top category & month pacing.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SavioSlateMuted
+                            )
+                        }
+                        Switch(
+                            checked = isWeeklyDigestEnabled,
+                            onCheckedChange = { onToggleWeeklyDigest(it) },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
                                 checkedTrackColor = SavioEmerald

@@ -24,7 +24,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.automirrored.filled.CallSplit
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -132,10 +135,12 @@ fun TransactionItemCard(
     onToggleRecurring: ((Long, Boolean) -> Unit)? = null,
     onOpenMerchantSheet: ((String) -> Unit)? = null,
     onEditMerchant: ((id: Long, oldMerchant: String, newMerchant: String, category: String) -> Unit)? = null,
+    onUpdateRefundSettlement: ((Long, Double) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var showDetailSheet by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showRefundSettlementDialog by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
 
@@ -478,7 +483,8 @@ fun TransactionItemCard(
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp
                         ),
-                        color = SavioEmerald
+                        color = SavioEmerald,
+                        modifier = Modifier.clickable { showRefundSettlementDialog = true }
                     )
                 } else if (expense.isPartiallyRefunded) {
                     Text(
@@ -496,7 +502,8 @@ fun TransactionItemCard(
                             fontWeight = FontWeight.Medium,
                             fontSize = 10.sp
                         ),
-                        color = SavioEmerald
+                        color = SavioEmerald,
+                        modifier = Modifier.clickable { showRefundSettlementDialog = true }
                     )
                 } else {
                     Text(
@@ -707,7 +714,21 @@ fun TransactionItemCard(
                 onDelete(expense.id)
                 showDetailSheet = false
             },
-            onEditMerchant = onEditMerchant
+            onEditMerchant = onEditMerchant,
+            onOpenRefundSettlementDialog = {
+                showRefundSettlementDialog = true
+            }
+        )
+    }
+
+    if (showRefundSettlementDialog) {
+        RefundSettlementDialog(
+            expense = expense,
+            currency = effectiveCurrency,
+            onDismiss = { showRefundSettlementDialog = false },
+            onConfirmSettlement = { amount ->
+                onUpdateRefundSettlement?.invoke(expense.id, amount)
+            }
         )
     }
 }
@@ -728,7 +749,8 @@ private fun TransactionDetailBottomSheet(
     onToggleRecurring: (() -> Unit)? = null,
     onOpenMerchantSheet: (() -> Unit)? = null,
     onDelete: () -> Unit,
-    onEditMerchant: ((id: Long, oldMerchant: String, newMerchant: String, category: String) -> Unit)? = null
+    onEditMerchant: ((id: Long, oldMerchant: String, newMerchant: String, category: String) -> Unit)? = null,
+    onOpenRefundSettlementDialog: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val clipboardManager = LocalClipboardManager.current
@@ -1070,6 +1092,40 @@ private fun TransactionDetailBottomSheet(
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            // Refund / Reimbursement / Split Pay Settlement Button
+            OutlinedButton(
+                onClick = onOpenRefundSettlementDialog,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (expense.refundedAmount > 0) SavioEmerald else GlassCardBorder
+                ),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = if (expense.refundedAmount > 0) SavioEmeraldContainer else Color.Transparent
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.CallSplit,
+                    contentDescription = null,
+                    tint = if (expense.refundedAmount > 0) SavioEmerald else SavioSlateDark,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (expense.isFullyRefunded) "Refunded / Settled (100% Excluded - Edit)"
+                           else if (expense.isPartiallyRefunded) "Settled: -${expense.currency}${NumberFormat.getNumberInstance(Locale.US).format(expense.refundedAmount)} (Edit)"
+                           else "Log Refund / Split Settlement",
+                    color = if (expense.refundedAmount > 0) SavioEmerald else SavioSlateDark,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.5.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             // Action Buttons Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1235,3 +1291,296 @@ private fun getCategoryIcon(category: String): ImageVector {
         else -> Icons.Default.CreditCard
     }
 }
+
+@Composable
+fun RefundSettlementDialog(
+    expense: ExpenseEntity,
+    currency: String,
+    onDismiss: () -> Unit,
+    onConfirmSettlement: (Double) -> Unit
+) {
+    val effectiveCurrency = if (currency.isNotBlank()) currency else expense.currency
+    val numberFormatter = remember {
+        NumberFormat.getNumberInstance(Locale.US).apply {
+            minimumFractionDigits = 2
+            maximumFractionDigits = 2
+        }
+    }
+
+    var settlementInput by remember(expense.refundedAmount) {
+        mutableStateOf(
+            if (expense.refundedAmount > 0.0) {
+                String.format(Locale.US, "%.2f", expense.refundedAmount)
+            } else ""
+        )
+    }
+
+    val parsedSettlement = settlementInput.toDoubleOrNull() ?: 0.0
+    val netRemaining = (expense.amount - parsedSettlement).coerceAtLeast(0.0)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(SavioEmeraldContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.CallSplit,
+                    contentDescription = null,
+                    tint = SavioEmerald,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+        },
+        title = {
+            Text(
+                text = "Log Settlement / Refund",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = SavioSlateDark,
+                textAlign = TextAlign.Center
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Exclude refunds, company reimbursements, or friend splits from your spend totals.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SavioSlateMuted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Original Transaction Reference Card
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = GlassCardBg,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = expense.merchantOrRecipient,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = SavioSlateDark,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "Original Transaction Spend",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SavioSlateMuted
+                            )
+                        }
+                        Text(
+                            text = "$effectiveCurrency${numberFormatter.format(expense.amount)}",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
+                            color = SavioSlateDark
+                        )
+                    }
+                }
+
+                // Settlement Amount Input
+                Column {
+                    Text(
+                        text = "Settlement / Refund Amount",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = SavioSlateDark
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = settlementInput,
+                        onValueChange = { input ->
+                            val filtered = input.filter { it.isDigit() || it == '.' }
+                            if (filtered.count { it == '.' } <= 1) {
+                                settlementInput = filtered
+                            }
+                        },
+                        placeholder = { Text("0.00") },
+                        prefix = {
+                            Text(
+                                text = "$effectiveCurrency ",
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                                color = SavioEmerald
+                            )
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = SavioEmerald,
+                            unfocusedBorderColor = GlassCardBorder
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // Quick Preset Chips (1-tap settlement selection)
+                Text(
+                    text = "Quick Presets",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = SavioSlateMuted
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf(
+                        "Full (100%)" to expense.amount,
+                        "50% (½)" to expense.amount / 2.0,
+                        "33% (⅓)" to expense.amount / 3.0,
+                        "25% (¼)" to expense.amount / 4.0
+                    ).forEach { (label, amt) ->
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = GlassBackground,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    settlementInput = String.format(Locale.US, "%.2f", amt)
+                                }
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(vertical = 6.dp, horizontal = 2.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp
+                                    ),
+                                    color = SavioEmerald,
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    text = "$effectiveCurrency${numberFormatter.format(amt)}",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Medium
+                                    ),
+                                    color = SavioSlateMuted,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Live Impact Preview Box
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (parsedSettlement > 0.0) SavioEmeraldContainer.copy(alpha = 0.5f) else GlassBackground,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (parsedSettlement > 0.0) SavioEmeraldBorder else GlassCardBorder
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Excluded from Spend:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SavioSlateDark
+                            )
+                            Text(
+                                text = "-$effectiveCurrency${numberFormatter.format(parsedSettlement)}",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                color = SavioEmerald
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Net Spend Counted:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SavioSlateDark
+                            )
+                            Text(
+                                text = "$effectiveCurrency${numberFormatter.format(netRemaining)}",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (netRemaining == 0.0) SavioEmerald else SavioSlateDark
+                            )
+                        }
+                        if (parsedSettlement >= expense.amount && expense.amount > 0.0) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "✓ 100% of this transaction is reversed and will not count towards your monthly spend.",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 10.sp,
+                                    color = SavioEmerald,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onConfirmSettlement(parsedSettlement)
+                    onDismiss()
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "Apply Settlement",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (expense.refundedAmount > 0.0) {
+                    TextButton(
+                        onClick = {
+                            onConfirmSettlement(0.0)
+                            onDismiss()
+                        }
+                    ) {
+                        Text(
+                            text = "Clear",
+                            color = SavioSpendRose,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel", color = SavioSlateDark)
+                }
+            }
+        },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(22.dp)
+    )
+}
+

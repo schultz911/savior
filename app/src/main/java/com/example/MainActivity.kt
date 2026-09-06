@@ -311,6 +311,7 @@ fun SpendTrackerScreen(
     val isGlobalSearch by viewModel.isGlobalSearch.collectAsStateWithLifecycle()
     val isVelocityAlertsEnabled by viewModel.isVelocityAlertsEnabled.collectAsStateWithLifecycle()
     val isAnomalyAlertsEnabled by viewModel.isAnomalyAlertsEnabled.collectAsStateWithLifecycle()
+    val isWeeklyDigestEnabled by viewModel.isWeeklyDigestEnabled.collectAsStateWithLifecycle()
     val trailingMedianSpend by viewModel.trailingMedianSpend.collectAsStateWithLifecycle()
     val predictedRecurringBills by viewModel.predictedRecurringBills.collectAsStateWithLifecycle()
     val safeSpendPacing by viewModel.safeSpendPacing.collectAsStateWithLifecycle()
@@ -758,6 +759,8 @@ fun SpendTrackerScreen(
                         onToggleVelocityAlerts = { viewModel.toggleVelocityAlerts(it) },
                         isAnomalyAlertsEnabled = isAnomalyAlertsEnabled,
                         onToggleAnomalyAlerts = { viewModel.toggleAnomalyAlerts(it) },
+                        isWeeklyDigestEnabled = isWeeklyDigestEnabled,
+                        onToggleWeeklyDigest = { viewModel.toggleWeeklyDigest(it) },
                         trailingMedianSpend = trailingMedianSpend,
                         onTriggerBackupExport = { passphrase ->
                             pendingBackupPassphrase = passphrase
@@ -850,7 +853,8 @@ fun SpendTrackerScreen(
                         onAssignCategory = { target -> assignCategoryTargetExpense = target },
                         onToggleBlacklist = { merchant -> viewModel.toggleBlacklistMerchant(merchant) },
                         onToggleRecurring = { id, isRec -> viewModel.toggleRecurring(id, isRec) },
-                        isBlacklistedMerchant = { viewModel.isBlacklistedMerchant(it, blacklistedMerchants) }
+                        isBlacklistedMerchant = { viewModel.isBlacklistedMerchant(it, blacklistedMerchants) },
+                        onUpdateRefundSettlement = { id, amount -> viewModel.updateRefundSettlement(id, amount) }
                     )
                 }
             }
@@ -1079,6 +1083,9 @@ fun SpendTrackerScreen(
                                 },
                                 onEditMerchant = { id, oldM, newM, cat ->
                                     viewModel.updateMerchantName(id, oldM, newM, cat)
+                                },
+                                onUpdateRefundSettlement = { id, amount ->
+                                    viewModel.updateRefundSettlement(id, amount)
                                 }
                             )
                         }

@@ -32,6 +32,9 @@ class SpendTrackerApplication : Application() {
         // Schedule Background SMS Reliability Watchdog (Doze Protection)
         com.example.service.SmsCatchUpWorker.schedule(this)
 
+        // Schedule Sunday Evening Weekly Spend Digest
+        com.example.service.WeeklySpendDigestWorker.schedule(this)
+
         // If persistent notification is enabled, ensure it's started/synced
         if (preferences.isPersistentNotificationEnabled) {
             try {

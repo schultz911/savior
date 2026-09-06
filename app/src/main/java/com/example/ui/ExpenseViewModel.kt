@@ -125,6 +125,9 @@ class ExpenseViewModel(
     private val _isAnomalyAlertsEnabled = MutableStateFlow(preferences.isAnomalyAlertsEnabled)
     val isAnomalyAlertsEnabled: StateFlow<Boolean> = _isAnomalyAlertsEnabled.asStateFlow()
 
+    private val _isWeeklyDigestEnabled = MutableStateFlow(preferences.isWeeklyDigestEnabled)
+    val isWeeklyDigestEnabled: StateFlow<Boolean> = _isWeeklyDigestEnabled.asStateFlow()
+
     private val _isSearchExpanded = MutableStateFlow(false)
     val isSearchExpanded: StateFlow<Boolean> = _isSearchExpanded.asStateFlow()
 
@@ -915,6 +918,17 @@ class ExpenseViewModel(
         }
     }
 
+    fun updateRefundSettlement(expenseId: Long, settlementAmount: Double) {
+        viewModelScope.launch {
+            repository.setRefundedAmount(expenseId, settlementAmount.coerceAtLeast(0.0))
+            _syncFeedback.value = if (settlementAmount > 0.0) {
+                "Settlement/Refund of ${currency.value}${String.format(Locale.US, "%,.2f", settlementAmount)} recorded"
+            } else {
+                "Settlement/Refund cleared"
+            }
+        }
+    }
+
     fun clearAll() {
         viewModelScope.launch {
             repository.clearAll()
@@ -990,6 +1004,18 @@ class ExpenseViewModel(
         preferences.isAnomalyAlertsEnabled = enabled
         _isAnomalyAlertsEnabled.value = enabled
         _syncFeedback.value = if (enabled) "High-value spend anomaly alerts enabled" else "Anomaly alerts disabled"
+    }
+
+    fun toggleWeeklyDigest(enabled: Boolean) {
+        preferences.isWeeklyDigestEnabled = enabled
+        _isWeeklyDigestEnabled.value = enabled
+        if (enabled) {
+            com.example.service.WeeklySpendDigestWorker.schedule(getApplication())
+            _syncFeedback.value = "Sunday evening spend digest enabled"
+        } else {
+            com.example.service.WeeklySpendDigestWorker.cancel(getApplication())
+            _syncFeedback.value = "Sunday evening spend digest disabled"
+        }
     }
 
     fun toggleRecurring(expenseId: Long, isRecurring: Boolean) {

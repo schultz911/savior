@@ -124,6 +124,7 @@ fun CalendarAnalyticsTab(
     onToggleBlacklist: ((String) -> Unit)? = null,
     onToggleRecurring: ((Long, Boolean) -> Unit)? = null,
     isBlacklistedMerchant: ((String) -> Boolean)? = null,
+    onUpdateRefundSettlement: ((Long, Double) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val numberFormatter = remember {
@@ -781,7 +782,8 @@ fun CalendarAnalyticsTab(
                     onAssignCategory = onAssignCategory,
                     onToggleBlacklist = onToggleBlacklist,
                     onToggleRecurring = onToggleRecurring,
-                    onEditMerchant = onEditMerchant
+                    onEditMerchant = onEditMerchant,
+                    onUpdateRefundSettlement = onUpdateRefundSettlement
                 )
             }
         }
