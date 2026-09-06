@@ -62,6 +62,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -136,22 +137,24 @@ fun TransactionItemCard(
     val coroutineScope = rememberCoroutineScope()
 
     val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.StartToEnd -> {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onToggleRecurring?.invoke(expense.id, !expense.isRecurring)
-                    false
-                }
-                SwipeToDismissBoxValue.EndToStart -> {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onToggleBlacklist?.invoke(expense.merchantOrRecipient)
-                    false
-                }
-                SwipeToDismissBoxValue.Settled -> false
-            }
-        }
+        confirmValueChange = { true }
     )
+
+    LaunchedEffect(dismissState.currentValue) {
+        when (dismissState.currentValue) {
+            SwipeToDismissBoxValue.StartToEnd -> {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onToggleRecurring?.invoke(expense.id, !expense.isRecurring)
+                dismissState.reset()
+            }
+            SwipeToDismissBoxValue.EndToStart -> {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onToggleBlacklist?.invoke(expense.merchantOrRecipient)
+                dismissState.reset()
+            }
+            SwipeToDismissBoxValue.Settled -> {}
+        }
+    }
 
     val numberFormatter = remember {
         NumberFormat.getNumberInstance(Locale.US).apply {
@@ -695,6 +698,7 @@ private fun TransactionDetailBottomSheet(
     var copiedToClipboard by remember { mutableStateOf(false) }
     var showEditMerchantDialog by remember { mutableStateOf(false) }
     var editedMerchantName by remember(expense.merchantOrRecipient) { mutableStateOf(expense.merchantOrRecipient) }
+    var isRecurringState by remember(expense.id, expense.isRecurring) { mutableStateOf(expense.isRecurring) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -995,29 +999,32 @@ private fun TransactionDetailBottomSheet(
                 }
 
                 OutlinedButton(
-                    onClick = { onToggleRecurring?.invoke() },
+                    onClick = {
+                        isRecurringState = !isRecurringState
+                        onToggleRecurring?.invoke()
+                    },
                     modifier = Modifier
                         .weight(1f)
                         .height(44.dp),
                     shape = RoundedCornerShape(12.dp),
                     border = androidx.compose.foundation.BorderStroke(
                         1.dp,
-                        if (expense.isRecurring) Color(0xFF93C5FD) else GlassCardBorder
+                        if (isRecurringState) Color(0xFF93C5FD) else GlassCardBorder
                     ),
                     colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (expense.isRecurring) Color(0xFFEFF6FF) else Color.Transparent
+                        containerColor = if (isRecurringState) Color(0xFFEFF6FF) else Color.Transparent
                     )
                 ) {
                     Icon(
                         imageVector = Icons.Default.EventRepeat,
                         contentDescription = null,
-                        tint = if (expense.isRecurring) Color(0xFF2563EB) else SavioSlateMuted,
+                        tint = if (isRecurringState) Color(0xFF2563EB) else SavioSlateMuted,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (expense.isRecurring) "Recurring" else "Mark Recurring",
-                        color = if (expense.isRecurring) Color(0xFF2563EB) else SavioSlateDark,
+                        text = if (isRecurringState) "Recurring" else "Mark Recurring",
+                        color = if (isRecurringState) Color(0xFF2563EB) else SavioSlateDark,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 12.sp
                     )

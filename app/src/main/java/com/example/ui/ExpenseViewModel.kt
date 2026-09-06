@@ -995,14 +995,32 @@ class ExpenseViewModel(
     fun toggleRecurring(expenseId: Long, isRecurring: Boolean) {
         viewModelScope.launch {
             repository.updateIsRecurring(expenseId, isRecurring)
+            if (isRecurring) {
+                val expense = allExpenses.value.find { it.id == expenseId }
+                expense?.let {
+                    val m = it.merchantOrRecipient.trim()
+                    if (_ignoredRecurringMerchants.value.any { ign -> ign.equals(m, ignoreCase = true) }) {
+                        preferences.removeIgnoredRecurringMerchant(m)
+                        _ignoredRecurringMerchants.value = preferences.getIgnoredRecurringMerchants()
+                    }
+                }
+            }
             _syncFeedback.value = if (isRecurring) "Marked as recurring commitment" else "Removed recurring mark"
+            LiveExpenditureNotificationService.updateLiveExpenditure(getApplication())
         }
     }
 
     fun toggleRecurringForMerchant(merchant: String, isRecurring: Boolean) {
         viewModelScope.launch {
             repository.updateIsRecurringForMerchant(merchant, isRecurring)
+            if (isRecurring) {
+                if (_ignoredRecurringMerchants.value.any { ign -> ign.equals(merchant.trim(), ignoreCase = true) }) {
+                    preferences.removeIgnoredRecurringMerchant(merchant.trim())
+                    _ignoredRecurringMerchants.value = preferences.getIgnoredRecurringMerchants()
+                }
+            }
             _syncFeedback.value = if (isRecurring) "Marked all '$merchant' recurring" else "Unmarked all '$merchant' recurring"
+            LiveExpenditureNotificationService.updateLiveExpenditure(getApplication())
         }
     }
 
