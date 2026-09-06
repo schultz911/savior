@@ -13,27 +13,27 @@ import java.util.concurrent.TimeUnit
 
 @JsonClass(generateAdapter = true)
 data class OpenRouterMessage(
-    @Json(name = "role") val role: String,
-    @Json(name = "content") val content: String
+    @param:Json(name = "role") val role: String,
+    @param:Json(name = "content") val content: String
 )
 
 @JsonClass(generateAdapter = true)
 data class OpenRouterChatRequest(
-    @Json(name = "model") val model: String = "google/gemini-3.5-flash-lite",
-    @Json(name = "messages") val messages: List<OpenRouterMessage>,
-    @Json(name = "temperature") val temperature: Double = 0.1,
-    @Json(name = "max_tokens") val maxTokens: Int = 200
+    @param:Json(name = "model") val model: String = "google/gemini-3.5-flash-lite",
+    @param:Json(name = "messages") val messages: List<OpenRouterMessage>,
+    @param:Json(name = "temperature") val temperature: Double = 0.1,
+    @param:Json(name = "max_tokens") val maxTokens: Int = 200
 )
 
 @JsonClass(generateAdapter = true)
 data class OpenRouterChatChoice(
-    @Json(name = "message") val message: OpenRouterMessage?
+    @param:Json(name = "message") val message: OpenRouterMessage?
 )
 
 @JsonClass(generateAdapter = true)
 data class OpenRouterChatResponse(
-    @Json(name = "id") val id: String?,
-    @Json(name = "choices") val choices: List<OpenRouterChatChoice>?
+    @param:Json(name = "id") val id: String?,
+    @param:Json(name = "choices") val choices: List<OpenRouterChatChoice>?
 )
 
 interface OpenRouterApi {

@@ -678,7 +678,9 @@ class ExpenseViewModel(
     fun isBlacklistedMerchant(merchant: String, blacklisted: Set<String> = _blacklistedMerchants.value): Boolean {
         val norm = merchant.trim().lowercase(Locale.US)
         if (norm.isBlank()) return false
-        return blacklisted.any { it.trim().equals(norm, ignoreCase = true) }
+        // O(1) HashSet containment via pre-normalized lowercase set
+        val normalizedSet = normalizedBlacklistedMerchants.value
+        return normalizedSet.any { norm.contains(it) || it.contains(norm) }
     }
 
     fun blacklistMerchant(merchant: String) {

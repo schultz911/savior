@@ -132,13 +132,17 @@ SMS Body: "$rawText"
 
             if (rawResult.isBlank()) return@withContext null
 
-            // Clean json response if wrapped in codeblocks
+            // Robust JSON boundary extraction — handles markdown fences, preambles, and trailing text
             val cleanedJson = rawResult
                 .replace("```json", "")
                 .replace("```", "")
                 .trim()
+            val jsonStart = cleanedJson.indexOf('{')
+            val jsonEnd = cleanedJson.lastIndexOf('}')
+            if (jsonStart < 0 || jsonEnd < 0 || jsonEnd <= jsonStart) return@withContext null
+            val boundedJson = cleanedJson.substring(jsonStart, jsonEnd + 1)
 
-            val json = JSONObject(cleanedJson)
+            val json = JSONObject(boundedJson)
             val classification = json.optString("classification", "OTHER").uppercase(Locale.US)
             val amount = json.optDouble("amount", 0.0)
             val currency = json.optString("currency", "₹").ifEmpty { "₹" }

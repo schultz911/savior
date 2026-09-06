@@ -62,19 +62,23 @@ object RecurringDetectionEngine {
             val distinctMonths = sorted.map { it.monthKey }.distinct()
             val hasMultiMonthCadence = distinctMonths.size >= 2
 
-            // Check amount consistency across occurrences
-            val avgAmount = sorted.map { it.amount }.average()
-            val isConsistentAmount = sorted.all { abs(it.amount - avgAmount) / avgAmount <= 0.20 }
+            // Single-pass accumulation — zero intermediate list allocations
+            var amountSum = 0.0
+            for (exp in sorted) { amountSum += exp.amount }
+            val avgAmount = if (sorted.isNotEmpty()) amountSum / sorted.size else 0.0
+            val isConsistentAmount = avgAmount > 0.0 && sorted.all { abs(it.amount - avgAmount) / avgAmount <= 0.20 }
 
             val isRecurring = hasManualRecurring || isKnownKeyword || (hasMultiMonthCadence && isConsistentAmount)
 
             if (isRecurring) {
-                // Find median day of month
-                val days = sorted.map {
-                    cal.timeInMillis = it.timestamp
-                    cal.get(Calendar.DAY_OF_MONTH)
+                // Find median day of month — direct accumulation without intermediate list
+                val days = ArrayList<Int>(sorted.size)
+                for (exp in sorted) {
+                    cal.timeInMillis = exp.timestamp
+                    days.add(cal.get(Calendar.DAY_OF_MONTH))
                 }
-                val typicalDay = days.sorted().let { it[it.size / 2] }
+                days.sort()
+                val typicalDay = days[days.size / 2]
 
                 val paidThisMonth = sorted.any { it.monthKey == currentMonthKey }
 

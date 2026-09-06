@@ -159,9 +159,15 @@ class LiveExpenditureNotificationService : Service() {
                 val currentDay = cal.get(java.util.Calendar.DAY_OF_MONTH)
                 val daysRemaining = (daysInMonth - currentDay + 1).coerceAtLeast(1)
 
-                val allExpensesSync = dao.getAllExpensesSync()
+                // Scoped query: trailing 180-day window for recurring cadence detection (covers monthly, bi-monthly, quarterly)
+                // Plus any manually-marked recurring items that may fall outside the window
+                val recurringCutoff = System.currentTimeMillis() - 180L * 24 * 60 * 60 * 1000
+                val recentExpenses = dao.getExpensesSinceSync(recurringCutoff)
+                val manualRecurring = dao.getExpensesForMonthSync(currentMonthKey)
+                    .filter { it.isRecurring && it.timestamp < recurringCutoff }
+                val scopedExpenses = (recentExpenses + manualRecurring).distinctBy { it.id }
                 val ignoredMerchants = prefs.getIgnoredRecurringMerchants()
-                val recurringCommitments = RecurringDetectionEngine.detectRecurringBills(allExpensesSync, currentMonthKey, ignoredMerchants)
+                val recurringCommitments = RecurringDetectionEngine.detectRecurringBills(scopedExpenses, currentMonthKey, ignoredMerchants)
                 val upcomingRecurring = recurringCommitments.filter { !it.isPaidThisMonth }.sumOf { it.expectedAmount }
                 val remainingDiscretionary = (budget - totalSpend - upcomingRecurring).coerceAtLeast(0.0)
                 val safeDaily = if (budget > 0) remainingDiscretionary / daysRemaining else 0.0
