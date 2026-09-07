@@ -1013,6 +1013,22 @@ class ExampleRobolectricTest {
     assertTrue(parsedUber!!.isRefund)
     assertEquals(250.0, parsedUber.amount, 0.01)
     assertEquals("Uber", parsedUber.title)
+
+    val refundedSwiggy = "Rs 450.00 refunded to your account ending 1234 on 08-Sep from Swiggy. Avl Bal: Rs 15,200.00."
+    assertFalse(SmsParser.isRefundIntimationOrPending(refundedSwiggy))
+    val parsedRefSwiggy = SmsParser.parse(refundedSwiggy, "HDFC")
+    assertNotNull(parsedRefSwiggy)
+    assertTrue(parsedRefSwiggy!!.isRefund)
+    assertEquals(450.0, parsedRefSwiggy.amount, 0.01)
+    assertEquals("Swiggy", parsedRefSwiggy.title)
+
+    val refundedBlinkit = "INR 300.00 has been refunded for order at Blinkit to card ending 5678."
+    assertFalse(SmsParser.isRefundIntimationOrPending(refundedBlinkit))
+    val parsedRefBlinkit = SmsParser.parse(refundedBlinkit, "SBI")
+    assertNotNull(parsedRefBlinkit)
+    assertTrue(parsedRefBlinkit!!.isRefund)
+    assertEquals(300.0, parsedRefBlinkit.amount, 0.01)
+    assertEquals("Blinkit", parsedRefBlinkit.title)
   }
 
   @Test

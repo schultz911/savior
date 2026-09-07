@@ -63,11 +63,11 @@ object SmsParser {
         // 1. Info / BIL*REFUND*FLIPKART or INFO: BIL-REV-SWIGGY
         Pattern.compile("""(?i)(?:info[:\s]+(?:bil|ips|inf|info|txn)?[*_\s-]*(?:refund|rev|reversal|ret)[*_\s-]+)([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s*(?:on\b|ref\b|avl\b|bal\b)|[.!,;]|$)"""),
         // 2. Specific refund/reversal phrases: towards refund from / reversal of txn at / refund for order at
-        Pattern.compile("""(?i)(?:towards\s+refund\s+from|refund\s+from|reversal\s+of\s+(?:(?:upi\s+)?txn\s+(?:at|to)\s+)?|returned\s+from|refund\s+for\s+(?:(?:order|txn)\s+(?:at|on|from)\s+)?|(?:refund|reversal|credited\s+back)\s+(?:from|for|at)\s+|refund\s+(?:of|for)\s+(?:upi\s+)?txn\s+to\s+|(?:refund|credited|reversal).{0,50}?\bfrom\s+)([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|upi\s+ref\b|ref\s+no\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
+        Pattern.compile("""(?i)(?:towards\s+refund\s+from|refund\s+from|refunded\s+(?:from|by|at|towards)\s+|reversal\s+of\s+(?:(?:upi\s+)?txn\s+(?:at|to)\s+)?|returned\s+from|refund\s+for\s+(?:(?:order|txn)\s+(?:at|on|from)\s+)?|refunded\s+for\s+(?:(?:order|txn)\s+(?:at|on|from)\s+)?|(?:refund|refunded|reversal|credited\s+back)\s+(?:from|for|at|by)\s+|refund\s+(?:of|for)\s+(?:upi\s+)?txn\s+to\s+|(?:refund|refunded|credited|reversal).{0,50}?\bfrom\s+)([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:to\b|on\b|via\b|using\b|upi\s+ref\b|ref\s+no\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
         // 3. Card reversal at / done on Card at merchant
         Pattern.compile("""(?i)(?:reversal\s+of\s+.{0,40}?\bat\s+|done\s+on\s+(?:card|a/c).{0,30}?\bat\s+)([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s*(?:on\b|dated\b)|[.!,;]|$)"""),
-        // 4. Refund of Rs X from <Merchant>
-        Pattern.compile("""(?i)(?:refund\s+(?:of\s+)?(?:rs\.?|inr|[$€£])?\s*[0-9,.]+\s+from\s+)([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:is\s+credited|credited|on\b|via\b|using\b|ref\b)|[.!,;]|$)"""),
+        // 4. Refund of Rs X from <Merchant> or Rs X refunded to ... from/by/at/for <Merchant>
+        Pattern.compile("""(?i)(?:refund\s+(?:of\s+)?(?:rs\.?|inr|[$€£])?\s*[0-9,.]+\s+from\s+|(?:amount\s+of\s+)?(?:rs\.?|inr|[$€£])?\s*[0-9,.]+\s+(?:has\s+been\s+)?refunded\s+(?:to\s+.{0,35}?\s+)?(?:from|by|at|for)\s+)([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:is\s+credited|credited|on\b|via\b|using\b|ref\b|avl\b)|[.!,;]|$)"""),
         // 5. Transfer to / paid to / towards / in favor of
         Pattern.compile("""(?i)(?:towards\s+transfer\s+to|transfer(?:red)?\s+to|sent\s+to|paid\s+to|via\s+upi\s+to|by\s+upi\s+to|upi\s+to|to\s+vpa|in\s+favor\s+of)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|upi\s+ref\b|ref\s+no\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
         // 6. Sent / paid / transferred ... to
@@ -76,8 +76,8 @@ object SmsParser {
         Pattern.compile("""(?i)(?:with|via)\s+(?:zelle|upi|venmo)\s+to\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|ref\b)|[.!,;]|$)"""),
         // 8. UPI P2M / P2A
         Pattern.compile("""(?i)(?:upi/(?:p2m|p2a)/[0-9]+/)([A-Za-z0-9&.\-_/ ]{2,30})"""),
-        // 9. Spent at / purchase at / charged at / swiped at
-        Pattern.compile("""(?i)(?:spent\s+at|purchase\s+at|charged\s+at|swiped\s+at|approved\s+at|at)\s+([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s*(?:on\b|via\b|for\b|using\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
+        // 9. Spent at / purchase at / charged at / swiped at / refunded at
+        Pattern.compile("""(?i)(?:spent\s+at|purchase\s+at|charged\s+at|swiped\s+at|approved\s+at|refunded\s+at|at)\s+([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s*(?:on\b|via\b|for\b|using\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
         // 10. Debited ... to
         Pattern.compile("""(?i)(?:debited\s+.{0,40}\s+to)\s+([A-Za-z0-9&.\-_/@ ]{2,30}?)(?:\s*(?:on\b|via\b|using\b|ref\b)|[.!,;]|$)"""),
         // 11. General info prefix
@@ -91,13 +91,24 @@ object SmsParser {
 
     private val PREFIX_ARTICLE_REGEX = Regex("(?i)^(the|a|an)\\s+")
     private val TRANSFER_PREFIX_REGEX = Regex("(?i)^transfer(?:red)?\\s+to\\s+")
-    private val PREFIX_ORDER_REGEX = Regex("(?i)^(?:order|txn|transaction|purchase)(?:\\s+(?:at|on|from|to|#\\w+))+\\s+")
+    private val PREFIX_ORDER_REGEX = Regex("""(?i)^(?:your\s+)?(?:order|txn|transaction|purchase)(?:\s+(?:at|on|from|to|for|#\w+))+\s+""")
     private val PREFIX_BIL_REFUND_REGEX = Regex("""(?i)^(?:bil|ips|inf|info|txn)[*_\s-]*(?:refund|rev|reversal|ret)[*_\s-]+""")
     private val SUFFIX_ENTITY_REGEX = Regex("(?i)\\s+(ltd|inc|corp|co|llc|pvt|services|vpa)$")
     private val SPECIAL_CHARS_REGEX = Regex("[*#_/]")
 
     fun isRefundIntimationOrPending(text: String): Boolean {
         val lower = text.lowercase(Locale.US)
+
+        // If the SMS explicitly confirms that money was "refunded" (past tense), it is an actual refund, NOT a pending intimation!
+        if (lower.contains("refunded") &&
+            !lower.contains("will be refunded") &&
+            !lower.contains("being refunded") &&
+            !lower.contains("will reflect") &&
+            !lower.contains("will be credited") &&
+            !lower.contains("in process")
+        ) {
+            return false
+        }
 
         // 1. Explicit future-credit promises or pending timing phrasing
         val hasPendingTiming = lower.contains("will be credited") ||
@@ -143,16 +154,15 @@ object SmsParser {
     }
 
     private fun hasConfirmedAccountCredit(lower: String): Boolean {
-        val hasCreditVerb = lower.contains("credited to") ||
-                lower.contains("credited with") ||
-                lower.contains("credited by") ||
-                lower.contains("is credited") ||
-                lower.contains("has been credited") ||
-                lower.contains("credited your a/c") ||
-                lower.contains("credited back") ||
-                lower.contains("refunded to your") ||
-                lower.contains("reversed to your") ||
-                lower.contains("reversal of")
+        if (lower.contains("refunded") && !lower.contains("will be refunded") && !lower.contains("being refunded")) {
+            return true
+        }
+
+        val hasCreditVerb = lower.contains("credited") ||
+                lower.contains("refunded") ||
+                lower.contains("reversed") ||
+                lower.contains("reversal") ||
+                lower.contains("credited back")
 
         val hasAccountContext = lower.contains("a/c") ||
                 lower.contains("account") ||
@@ -160,6 +170,7 @@ object SmsParser {
                 lower.contains("acct") ||
                 lower.contains("ending in") ||
                 lower.contains("ending with") ||
+                lower.contains("ending") ||
                 lower.contains("avl bal") ||
                 lower.contains("balance") ||
                 lower.contains("vpa") ||
@@ -167,7 +178,7 @@ object SmsParser {
                 lower.contains("wallet") ||
                 lower.contains("bank")
 
-        return hasCreditVerb && hasAccountContext
+        return hasCreditVerb && (hasAccountContext || lower.contains("credited to"))
     }
 
     fun parse(smsBody: String, sender: String = ""): ParsedSms? {
