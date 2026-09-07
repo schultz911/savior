@@ -985,6 +985,7 @@ class ExpenseViewModel(
                 currency = preferences.currency,
                 type = type,
                 merchantOrRecipient = merchant,
+                originalMerchant = merchant,
                 accountInfo = accountInfo,
                 category = effectiveCategory,
                 rawBody = "Manual Entry: $merchant $effectiveCategory",

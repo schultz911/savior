@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Speed
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -403,14 +404,61 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
                             onClick = {
-                                try {
-                                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                                        data = Uri.parse("package:${context.packageName}")
+                                var launched = false
+                                // 1. Attempt OEM-specific background power control / battery saver pages
+                                val oemIntents = listOf(
+                                    // Xiaomi / HyperOS / MIUI
+                                    Intent().apply {
+                                        component = ComponentName("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity")
+                                        putExtra("package_name", context.packageName)
+                                        putExtra("package_label", context.applicationInfo.loadLabel(context.packageManager))
+                                    },
+                                    // Samsung Device Care / Battery
+                                    Intent().apply {
+                                        component = ComponentName("com.samsung.android.lool", "com.samsung.android.sm.ui.battery.BatteryActivity")
                                     }
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
+                                )
+                                for (oemIntent in oemIntents) {
                                     try {
-                                        val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                        oemIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        if (context.packageManager.resolveActivity(oemIntent, 0) != null) {
+                                            context.startActivity(oemIntent)
+                                            launched = true
+                                            break
+                                        }
+                                    } catch (_: Exception) {}
+                                }
+
+                                if (!launched) {
+                                    // 2. Direct system prompt dialog for ignoring battery optimizations
+                                    try {
+                                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                            data = Uri.parse("package:${context.packageName}")
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                        context.startActivity(intent)
+                                        launched = true
+                                    } catch (_: Exception) {}
+                                }
+
+                                if (!launched) {
+                                    // 3. Fallback to App Info / Application Details Settings (where App Battery Usage / Background control is located on Android 12+)
+                                    try {
+                                        val appDetails = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                            data = Uri.fromParts("package", context.packageName, null)
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                        context.startActivity(appDetails)
+                                        launched = true
+                                    } catch (_: Exception) {}
+                                }
+
+                                if (!launched) {
+                                    // 4. System-wide battery optimization settings list
+                                    try {
+                                        val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
                                         context.startActivity(fallback)
                                     } catch (_: Exception) {}
                                 }
@@ -1812,7 +1860,7 @@ fun SettingsScreen(
                 )
 
                 Text(
-                    text = "v1.0.0 (Stable)",
+                    text = "v1.0.1 (Stable)",
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Normal,
                         fontSize = 12.sp

@@ -60,13 +60,27 @@ object SmsParser {
 
     // Regex for merchant / recipient
     private val MERCHANT_PATTERNS = listOf(
-        Pattern.compile("""(?i)(?:towards\s+refund\s+from|refund\s+from|reversal\s+of\s+(?:txn\s+at\s+)?|returned\s+from\s+|refund\s+for\s+|(?:refund|credited|reversal).{0,50}?\bfrom\s+)([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|upi\s+ref\b|ref\s+no\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
-        Pattern.compile("""(?i)(?:towards\s+transfer\s+to|transfer(?:red)?\s+to|sent\s+to|paid\s+to|via\s+upi\s+to|by\s+upi\s+to|upi\s+to|to\s+vpa|towards|in\s+favor\s+of)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|upi\s+ref\b|ref\s+no\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
+        // 1. Info / BIL*REFUND*FLIPKART or INFO: BIL-REV-SWIGGY
+        Pattern.compile("""(?i)(?:info[:\s]+(?:bil|ips|inf|info|txn)?[*_\s-]*(?:refund|rev|reversal|ret)[*_\s-]+)([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s*(?:on\b|ref\b|avl\b|bal\b)|[.!,;]|$)"""),
+        // 2. Specific refund/reversal phrases: towards refund from / reversal of txn at / refund for order at
+        Pattern.compile("""(?i)(?:towards\s+refund\s+from|refund\s+from|reversal\s+of\s+(?:(?:upi\s+)?txn\s+(?:at|to)\s+)?|returned\s+from|refund\s+for\s+(?:(?:order|txn)\s+(?:at|on|from)\s+)?|(?:refund|reversal|credited\s+back)\s+(?:from|for|at)\s+|refund\s+(?:of|for)\s+(?:upi\s+)?txn\s+to\s+|(?:refund|credited|reversal).{0,50}?\bfrom\s+)([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|upi\s+ref\b|ref\s+no\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
+        // 3. Card reversal at / done on Card at merchant
+        Pattern.compile("""(?i)(?:reversal\s+of\s+.{0,40}?\bat\s+|done\s+on\s+(?:card|a/c).{0,30}?\bat\s+)([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s*(?:on\b|dated\b)|[.!,;]|$)"""),
+        // 4. Refund of Rs X from <Merchant>
+        Pattern.compile("""(?i)(?:refund\s+(?:of\s+)?(?:rs\.?|inr|[$€£])?\s*[0-9,.]+\s+from\s+)([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:is\s+credited|credited|on\b|via\b|using\b|ref\b)|[.!,;]|$)"""),
+        // 5. Transfer to / paid to / towards / in favor of
+        Pattern.compile("""(?i)(?:towards\s+transfer\s+to|transfer(?:red)?\s+to|sent\s+to|paid\s+to|via\s+upi\s+to|by\s+upi\s+to|upi\s+to|to\s+vpa|in\s+favor\s+of)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|upi\s+ref\b|ref\s+no\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
+        // 6. Sent / paid / transferred ... to
         Pattern.compile("""(?i)(?:sent|paid|transferred)\s+.{0,45}?\bto\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|upi\s+ref\b|ref\s+no\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
+        // 7. Zelle / UPI / Venmo to
         Pattern.compile("""(?i)(?:with|via)\s+(?:zelle|upi|venmo)\s+to\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|ref\b)|[.!,;]|$)"""),
+        // 8. UPI P2M / P2A
         Pattern.compile("""(?i)(?:upi/(?:p2m|p2a)/[0-9]+/)([A-Za-z0-9&.\-_/ ]{2,30})"""),
+        // 9. Spent at / purchase at / charged at / swiped at
         Pattern.compile("""(?i)(?:spent\s+at|purchase\s+at|charged\s+at|swiped\s+at|approved\s+at|at)\s+([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s*(?:on\b|via\b|for\b|using\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
+        // 10. Debited ... to
         Pattern.compile("""(?i)(?:debited\s+.{0,40}\s+to)\s+([A-Za-z0-9&.\-_/@ ]{2,30}?)(?:\s*(?:on\b|via\b|using\b|ref\b)|[.!,;]|$)"""),
+        // 11. General info prefix
         Pattern.compile("""(?i)(?:info[:\s]+)([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s*(?:on\b|ref\b|avl\b)|[.!,;]|$)""")
     )
 
@@ -77,12 +91,93 @@ object SmsParser {
 
     private val PREFIX_ARTICLE_REGEX = Regex("(?i)^(the|a|an)\\s+")
     private val TRANSFER_PREFIX_REGEX = Regex("(?i)^transfer(?:red)?\\s+to\\s+")
+    private val PREFIX_ORDER_REGEX = Regex("(?i)^(?:order|txn|transaction|purchase)(?:\\s+(?:at|on|from|to|#\\w+))+\\s+")
+    private val PREFIX_BIL_REFUND_REGEX = Regex("""(?i)^(?:bil|ips|inf|info|txn)[*_\s-]*(?:refund|rev|reversal|ret)[*_\s-]+""")
     private val SUFFIX_ENTITY_REGEX = Regex("(?i)\\s+(ltd|inc|corp|co|llc|pvt|services|vpa)$")
     private val SPECIAL_CHARS_REGEX = Regex("[*#_/]")
+
+    fun isRefundIntimationOrPending(text: String): Boolean {
+        val lower = text.lowercase(Locale.US)
+
+        // 1. Explicit future-credit promises or pending timing phrasing
+        val hasPendingTiming = lower.contains("will be credited") ||
+                lower.contains("will reflect") ||
+                lower.contains("will be processed") ||
+                lower.contains("will be refunded") ||
+                lower.contains("would be credited") ||
+                lower.contains("shall be credited") ||
+                lower.contains("business days") ||
+                lower.contains("working days") ||
+                Regex("""(?i)\b(?:in|within|takes?)\s+\d+(?:-\d+|\s+to\s+\d+)?\s*(?:days|hrs|hours)\b""").containsMatchIn(text)
+
+        // 2. Processing or initiated phrasing
+        val hasProcessingOrInitiated = lower.contains("refund processing") ||
+                lower.contains("processing refund") ||
+                lower.contains("is being processed") ||
+                lower.contains("processing your refund") ||
+                lower.contains("refund is in process") ||
+                lower.contains("refund initiated") ||
+                lower.contains("has initiated") ||
+                lower.contains("initiated your refund") ||
+                lower.contains("initiated a refund") ||
+                lower.contains("we have initiated") ||
+                lower.contains("refund request") ||
+                lower.contains("request for refund")
+
+        // 3. Status updates or reference-only messages that do not confirm actual bank settlement
+        val hasConfirmedCredit = hasConfirmedAccountCredit(lower)
+
+        val hasProcessedWithoutCredit = (lower.contains("has been processed") ||
+                lower.contains("processed successfully") ||
+                lower.contains("refund successful")) && !hasConfirmedCredit
+
+        val hasRefundRefOnly = (lower.contains("refund reference") ||
+                lower.contains("refund ref no") ||
+                lower.contains("refund ref number") ||
+                lower.contains("refund ref.") ||
+                lower.contains("refund arn") ||
+                lower.contains("refund tracking") ||
+                lower.contains("refund id")) && !hasConfirmedCredit
+
+        return hasPendingTiming || hasProcessingOrInitiated || hasProcessedWithoutCredit || hasRefundRefOnly
+    }
+
+    private fun hasConfirmedAccountCredit(lower: String): Boolean {
+        val hasCreditVerb = lower.contains("credited to") ||
+                lower.contains("credited with") ||
+                lower.contains("credited by") ||
+                lower.contains("is credited") ||
+                lower.contains("has been credited") ||
+                lower.contains("credited your a/c") ||
+                lower.contains("credited back") ||
+                lower.contains("refunded to your") ||
+                lower.contains("reversed to your") ||
+                lower.contains("reversal of")
+
+        val hasAccountContext = lower.contains("a/c") ||
+                lower.contains("account") ||
+                lower.contains("card") ||
+                lower.contains("acct") ||
+                lower.contains("ending in") ||
+                lower.contains("ending with") ||
+                lower.contains("avl bal") ||
+                lower.contains("balance") ||
+                lower.contains("vpa") ||
+                lower.contains("upi") ||
+                lower.contains("wallet") ||
+                lower.contains("bank")
+
+        return hasCreditVerb && hasAccountContext
+    }
 
     fun parse(smsBody: String, sender: String = ""): ParsedSms? {
         val cleanBody = smsBody.trim()
         if (cleanBody.isEmpty()) return null
+
+        // Check for refund intimations, processing, or reference-only messages (never record pending refunds)
+        if (isRefundIntimationOrPending(cleanBody)) {
+            return null
+        }
 
         // Check for exclusions (OTP, loans, pure deposits)
         for (pattern in EXCLUSION_PATTERNS) {
@@ -93,9 +188,10 @@ object SmsParser {
 
         val lower = cleanBody.lowercase(Locale.US)
 
-        // 1. Check for Credit Reversal & Refund
-        val isRefund = REFUND_KEYWORDS.any { lower.contains(it) } &&
-                (lower.contains("credited") || lower.contains("credit") || lower.contains("received") || lower.contains("refund") || lower.contains("reversed"))
+        // 1. Check for Credit Reversal & Refund (only confirmed settled refunds)
+        val isRefund = !isRefundIntimationOrPending(cleanBody) &&
+                REFUND_KEYWORDS.any { lower.contains(it) } &&
+                hasConfirmedAccountCredit(lower)
 
         if (isRefund) {
             val (amount, currency) = extractAmountAndCurrency(cleanBody) ?: return null
@@ -116,7 +212,7 @@ object SmsParser {
         }
 
         // If it's a general credit alert without debit or refund keywords, ignore
-        if (cleanBody.contains("credited", ignoreCase = true) && !cleanBody.contains("debited", ignoreCase = true)) {
+        if (cleanBody.contains("credited", ignoreCase = true) && !cleanBody.contains("debited", ignoreCase = true) && !isRefund) {
             return null
         }
         if (RECEIVED_CREDIT_PATTERN.matcher(cleanBody).find() && !isRefund) {
@@ -271,7 +367,7 @@ object SmsParser {
             while (matcher.find()) {
                 val match = matcher.group(1)?.trim() ?: ""
                 val clean = cleanMerchantName(match)
-                if (clean.length in 2..35 && !isBankName(clean)) {
+                if (clean.length in 2..35 && !isBankName(clean) && clean.any { it.isLetter() } && !clean.startsWith("UPI (", ignoreCase = true)) {
                     return clean
                 }
             }
@@ -305,6 +401,8 @@ object SmsParser {
 
         var clean = raw.replace(PREFIX_ARTICLE_REGEX, "")
             .replace(TRANSFER_PREFIX_REGEX, "")
+            .replace(PREFIX_BIL_REFUND_REGEX, "")
+            .replace(PREFIX_ORDER_REGEX, "")
             .replace(SUFFIX_ENTITY_REGEX, "")
             .replace(SPECIAL_CHARS_REGEX, " ")
             .trim()
@@ -319,7 +417,7 @@ object SmsParser {
                 else cleanWord.lowercase(Locale.US).replaceFirstChar { it.titlecase(Locale.US) }
             }
 
-        return words.ifEmpty { "Merchant / Payee" }
+        return if (words.any { it.isLetter() }) words else "Merchant / Payee"
     }
 
     fun isBankSender(sender: String): Boolean {

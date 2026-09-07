@@ -54,8 +54,66 @@ interface ExpenseDao {
     @Query("SELECT SUM(CASE WHEN amount > refundedAmount THEN amount - refundedAmount ELSE 0.0 END) FROM expenses WHERE monthKey = :monthKey AND category = :category")
     suspend fun getTotalForCategoryInMonthSync(monthKey: String, category: String): Double?
 
-    @Query("SELECT * FROM expenses WHERE timestamp >= :minTimestamp AND timestamp <= :maxTimestamp AND (refundedAmount < amount) AND (ABS(amount - :amount) < 0.01 OR (LENGTH(:merchantKeyword) > 2 AND LOWER(merchantOrRecipient) LIKE '%' || LOWER(:merchantKeyword) || '%')) ORDER BY timestamp DESC LIMIT 1")
+    @Query("SELECT * FROM expenses WHERE timestamp >= :minTimestamp AND timestamp <= :maxTimestamp AND (refundedAmount < amount) AND isReversal = 0 AND LOWER(category) != 'refund' AND (ABS(amount - :amount) < 0.01 OR (LENGTH(:merchantKeyword) > 2 AND LOWER(merchantOrRecipient) LIKE '%' || LOWER(:merchantKeyword) || '%')) ORDER BY timestamp DESC LIMIT 1")
     suspend fun findMatchingDebitForRefund(amount: Double, merchantKeyword: String, minTimestamp: Long, maxTimestamp: Long): ExpenseEntity?
+
+    @Query("""
+        SELECT * FROM expenses 
+        WHERE timestamp >= :minTimestamp 
+          AND timestamp <= :maxTimestamp 
+          AND isReversal = 0 
+          AND LOWER(category) != 'refund'
+          AND (LENGTH(:merchantKeyword) >= 2 AND (
+              LOWER(merchantOrRecipient) LIKE '%' || LOWER(:merchantKeyword) || '%'
+              OR LOWER(:merchantKeyword) LIKE '%' || LOWER(merchantOrRecipient) || '%'
+          ))
+        ORDER BY 
+          CASE WHEN ABS(amount - :amount) < 0.01 THEN 0 ELSE 1 END,
+          timestamp DESC 
+        LIMIT 1
+    """)
+    suspend fun findMatchingDebitByMerchant(
+        merchantKeyword: String,
+        amount: Double,
+        minTimestamp: Long,
+        maxTimestamp: Long
+    ): ExpenseEntity?
+
+    @Query("""
+        SELECT * FROM expenses 
+        WHERE timestamp >= :minTimestamp 
+          AND timestamp <= :maxTimestamp 
+          AND isReversal = 0 
+          AND LOWER(category) != 'refund'
+          AND type != 'SELF'
+          AND type != 'CREDIT_CARD'
+          AND ABS(amount - :amount) < 0.01
+        ORDER BY timestamp DESC 
+        LIMIT 1
+    """)
+    suspend fun findMatchingDebitByAmount(
+        amount: Double,
+        minTimestamp: Long,
+        maxTimestamp: Long
+    ): ExpenseEntity?
+
+    @Query("""
+        SELECT COUNT(*) > 0 FROM expenses 
+        WHERE isReversal = 1 
+          AND ABS(amount - :amount) < 0.01 
+          AND (
+            (rawBody = :rawBody AND LENGTH(:rawBody) > 5)
+            OR (timestamp >= :minTimestamp AND timestamp <= :maxTimestamp AND (sender = :sender OR LOWER(TRIM(merchantOrRecipient)) = LOWER(TRIM(:merchant))))
+          )
+    """)
+    suspend fun existsRefundDuplicate(
+        amount: Double,
+        rawBody: String,
+        sender: String,
+        merchant: String,
+        minTimestamp: Long,
+        maxTimestamp: Long
+    ): Boolean
 
     @Query("UPDATE expenses SET refundedAmount = MIN(amount, refundedAmount + :refundAmount) WHERE id = :id")
     suspend fun applyRefund(id: Long, refundAmount: Double)

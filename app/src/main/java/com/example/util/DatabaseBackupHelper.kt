@@ -104,6 +104,7 @@ object DatabaseBackupHelper {
                         put("refundedAmount", exp.refundedAmount)
                         put("isReversal", exp.isReversal)
                         put("isExcluded", exp.isExcluded)
+                        put("originalMerchant", exp.originalMerchant.ifEmpty { exp.merchantOrRecipient })
                     }
                     expensesArray.put(obj)
                 }
@@ -267,7 +268,8 @@ object DatabaseBackupHelper {
                     isRecurring = obj.optBoolean("isRecurring", false),
                     refundedAmount = obj.optDouble("refundedAmount", 0.0),
                     isReversal = obj.optBoolean("isReversal", false),
-                    isExcluded = obj.optBoolean("isExcluded", false)
+                    isExcluded = obj.optBoolean("isExcluded", false),
+                    originalMerchant = obj.optString("originalMerchant", obj.optString("merchantOrRecipient", "Unknown"))
                 )
                 entitiesToInsert.add(entity)
             }

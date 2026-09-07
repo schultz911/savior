@@ -41,7 +41,9 @@ data class ExpenseEntity(
     @ColumnInfo(name = "isReversal", defaultValue = "0")
     val isReversal: Boolean = false,
     @ColumnInfo(name = "isExcluded", defaultValue = "0")
-    val isExcluded: Boolean = false
+    val isExcluded: Boolean = false,
+    @ColumnInfo(name = "originalMerchant", defaultValue = "")
+    val originalMerchant: String = ""
 ) {
     val netAmount: Double
         get() = (amount - refundedAmount).coerceAtLeast(0.0)

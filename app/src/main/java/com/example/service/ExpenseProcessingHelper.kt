@@ -41,10 +41,16 @@ object ExpenseProcessingHelper {
             }
         }
 
+        // 0.5. Suppress refund intimation, processing, or reference number messages (only actual settled refunds are recorded)
+        if (SmsParser.isRefundIntimationOrPending(rawText)) {
+            Log.d(TAG, "SMS classified as refund intimation/processing/reference, ignoring: '$rawText'")
+            return@withContext null
+        }
+
         // 1. Check if it's a refund or reversal via deterministic local parser
         val localParsed = SmsParser.parse(rawText, sender)
         if (localParsed != null && localParsed.isRefund) {
-            return@withContext handleRefund(context, localParsed, sender, timestamp, isBatchSync)
+            return@withContext handleRefund(context, localParsed, sender, timestamp, smsId, isBatchSync)
         }
 
         // 2. Tier 1: Cloud AI (OpenRouter Gemini 3.5 Flash Lite) if API key is provided
@@ -118,45 +124,98 @@ object ExpenseProcessingHelper {
         parsed: ParsedSms,
         sender: String,
         timestamp: Long,
+        smsId: Long = 0L,
         isBatchSync: Boolean = false
     ): ExpenseEntity? = withContext(Dispatchers.IO) {
         val app = context.applicationContext as? SpendTrackerApplication ?: return@withContext null
         val dao = app.database.expenseDao()
         val prefs = app.preferences
 
-        // Deduplication check: skip if this refund message has already been processed
-        val exists = dao.existsByContent(sender, timestamp, parsed.amount)
-        if (exists) {
-            Log.d(TAG, "Duplicate refund SMS detected, skipping insertion: sender=$sender, time=$timestamp, amount=${parsed.amount}")
+        // 1. Fast-path smsId deduplication — skip if this SMS ID was already ingested
+        if (smsId > 0L && dao.existsBySmsId(smsId)) {
+            Log.d(TAG, "Fast-path smsId dedup in handleRefund: smsId=$smsId already stored, skipping.")
+            return@withContext null
+        }
+
+        // 2. Exact content deduplication
+        val existsExact = dao.existsByContent(sender, timestamp, parsed.amount)
+        if (existsExact) {
+            Log.d(TAG, "Duplicate refund SMS detected by exact content, skipping: sender=$sender, time=$timestamp, amount=${parsed.amount}")
+            return@withContext null
+        }
+
+        // 3. Robust duplicate refund check within a 24-hour window
+        val isDuplicate = dao.existsRefundDuplicate(
+            amount = parsed.amount,
+            rawBody = parsed.rawText,
+            sender = sender,
+            merchant = parsed.title,
+            minTimestamp = timestamp - 86400000L,
+            maxTimestamp = timestamp + 86400000L
+        )
+        if (isDuplicate) {
+            Log.d(TAG, "Duplicate refund detected within 24h window, skipping: amount=${parsed.amount}, merchant=${parsed.title}")
             return@withContext null
         }
 
         // Look back up to 30 days for a matching debit transaction
         val lookbackMillis = 30L * 24 * 60 * 60 * 1000
         val minTimestamp = timestamp - lookbackMillis
-        val matching = dao.findMatchingDebitForRefund(
-            amount = parsed.amount,
-            merchantKeyword = parsed.title,
-            minTimestamp = minTimestamp,
-            maxTimestamp = timestamp + 3600000L
-        )
+        val maxTimestamp = timestamp + 3600000L
+
+        val hasSpecificMerchant = parsed.title.isNotBlank() &&
+                !parsed.title.equals("Merchant / Payee", ignoreCase = true) &&
+                !parsed.title.equals("Refund / Reversal", ignoreCase = true) &&
+                !parsed.title.equals("Transfer Recipient", ignoreCase = true) &&
+                !parsed.title.equals("Unknown", ignoreCase = true) &&
+                !parsed.title.startsWith("UPI (", ignoreCase = true) &&
+                parsed.title.any { it.isLetter() }
+
+        val matching: ExpenseEntity? = if (hasSpecificMerchant) {
+            dao.findMatchingDebitByMerchant(
+                merchantKeyword = parsed.title.trim(),
+                amount = parsed.amount,
+                minTimestamp = minTimestamp,
+                maxTimestamp = maxTimestamp
+            )
+        } else {
+            dao.findMatchingDebitByAmount(
+                amount = parsed.amount,
+                minTimestamp = minTimestamp,
+                maxTimestamp = maxTimestamp
+            )
+        }
 
         val preferredCurrency = prefs.currency.ifEmpty { parsed.currency }
         val effectiveMerchant = when {
-            matching != null -> matching.merchantOrRecipient
-            parsed.title.isNotBlank() && !parsed.title.equals("Merchant / Payee", ignoreCase = true) -> parsed.title
+            hasSpecificMerchant -> parsed.title.trim()
+            matching != null && matching.merchantOrRecipient.isNotBlank() -> matching.merchantOrRecipient.trim()
             else -> "Refund / Reversal"
         }
         val effectiveType = matching?.type ?: com.example.data.ExpenseType.MERCHANT
 
+        val refundOriginal = when {
+            hasSpecificMerchant -> parsed.title.trim()
+            effectiveMerchant.isNotBlank() -> effectiveMerchant.trim()
+            else -> "Refund / Reversal"
+        }
+
+        val effectiveCategory = if (matching != null && matching.category.isNotBlank() && !matching.category.equals("Refund", ignoreCase = true)) {
+            matching.category
+        } else {
+            "Refund"
+        }
+
         Log.d(TAG, "Recording refund transaction of ${parsed.amount} from '$effectiveMerchant'")
         val refundEntity = ExpenseEntity(
+            smsId = smsId,
             amount = parsed.amount,
             currency = preferredCurrency,
             type = effectiveType,
             merchantOrRecipient = effectiveMerchant,
+            originalMerchant = refundOriginal,
             accountInfo = parsed.accountInfo,
-            category = if (matching != null && matching.category.isNotBlank() && !matching.category.equals("Refund", ignoreCase = true)) matching.category else "Refund",
+            category = effectiveCategory,
             rawBody = parsed.rawText,
             sender = sender,
             timestamp = timestamp,
@@ -165,6 +224,11 @@ object ExpenseProcessingHelper {
         )
         val id = dao.insertExpense(refundEntity)
         val resultExpense = refundEntity.copy(id = id)
+
+        // If a matching debit was identified, update its refunded amount
+        if (matching != null) {
+            dao.applyRefund(matching.id, parsed.amount)
+        }
 
         if (!isBatchSync && prefs.isPersistentNotificationEnabled) {
             LiveExpenditureNotificationService.updateLiveExpenditure(context)
@@ -325,12 +389,19 @@ object ExpenseProcessingHelper {
             }
         }
 
+        val firstParsedMerchant = when {
+            parsed.title.isNotBlank() && !parsed.title.equals("Merchant / Payee", ignoreCase = true) && parsed.title.any { it.isLetter() } -> parsed.title.trim()
+            effectiveMerchant.isNotBlank() -> effectiveMerchant.trim()
+            else -> "Unknown"
+        }
+
         val entity = ExpenseEntity(
             smsId = smsId,
             amount = parsed.amount,
             currency = preferredCurrency,
             type = parsed.type,
             merchantOrRecipient = effectiveMerchant,
+            originalMerchant = firstParsedMerchant,
             accountInfo = parsed.accountInfo,
             category = finalCategory,
             rawBody = parsed.rawText,

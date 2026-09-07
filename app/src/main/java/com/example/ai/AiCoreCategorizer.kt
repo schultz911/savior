@@ -481,7 +481,7 @@ object AiCoreCategorizer {
             if (m != null) {
                 var candidate = m.groupValues[1].trim()
                 candidate = candidate.replace(MERCHANT_CLEAN_PREFIX, "")
-                if (candidate.length > 2 && !candidate.equals("your account", ignoreCase = true) && !candidate.equals("a/c", ignoreCase = true)) {
+                if (candidate.length > 2 && !candidate.equals("your account", ignoreCase = true) && !candidate.equals("a/c", ignoreCase = true) && candidate.any { it.isLetter() }) {
                     return candidate
                 }
             }

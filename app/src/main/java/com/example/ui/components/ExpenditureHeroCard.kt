@@ -451,7 +451,7 @@ fun ExpenditureHeroCard(
                                     }
 
                                     Text(
-                                        text = "View Radar ↗",
+                                        text = "View ↗",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold

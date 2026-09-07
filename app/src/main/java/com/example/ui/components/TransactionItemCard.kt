@@ -811,13 +811,23 @@ private fun TransactionDetailBottomSheet(
     var showEditMerchantDialog by remember { mutableStateOf(false) }
     var editedMerchantName by remember(expense.merchantOrRecipient) { mutableStateOf(expense.merchantOrRecipient) }
     var isRecurringState by remember(expense.id, expense.isRecurring) { mutableStateOf(expense.isRecurring) }
-    val originalParsedMerchant = remember(expense.rawBody) {
-        if (expense.rawBody.isNotBlank()) {
-            val parsed = SmsParser.parse(expense.rawBody)?.title
-            // Only offer undo when the parser produced a genuine merchant name —
-            // not one of the known fallback/placeholder strings SmsParser returns
-            // when it cannot identify a real payee ("Merchant / Payee", etc.).
-            if (parsed != null && parsed.trim().lowercase() !in MERCHANT_PLACEHOLDER_NAMES) parsed else null
+    val originalParsedMerchant = remember(expense.originalMerchant, expense.merchantOrRecipient, expense.rawBody) {
+        val original = expense.originalMerchant.trim()
+        if (original.isNotBlank() &&
+            original.lowercase() !in MERCHANT_PLACEHOLDER_NAMES &&
+            !original.startsWith("upi (", ignoreCase = true) &&
+            original.any { it.isLetter() }
+        ) {
+            original
+        } else if (original.isBlank() && expense.rawBody.isNotBlank()) {
+            val parsed = SmsParser.parse(expense.rawBody)?.title?.trim()
+            if (parsed != null &&
+                parsed.lowercase() !in MERCHANT_PLACEHOLDER_NAMES &&
+                !parsed.startsWith("upi (", ignoreCase = true) &&
+                parsed.any { it.isLetter() }
+            ) {
+                parsed
+            } else null
         } else null
     }
     val canUndoMerchant = originalParsedMerchant != null &&

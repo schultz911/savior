@@ -910,5 +910,188 @@ class ExampleRobolectricTest {
     val isSwiggyPlaceholder = swiggyTitle != null && swiggyTitle.trim().lowercase() in placeholders
     assertFalse("Swiggy should NOT be identified as placeholder", isSwiggyPlaceholder)
   }
+
+  @Test
+  fun `test numbers and phone numbers are suppressed from SmsParser merchants`() {
+    val phoneSms = "Dear SBI User, your A/c ending 1234 has been debited by Rs. 500 on 12-05-24 by transfer to 9876543210 Ref 4123456789."
+    val parsed = SmsParser.parse(phoneSms, "SBI")
+    assertNotNull(parsed)
+    val title = parsed?.title ?: ""
+    assertFalse("Phone number must not be extracted as merchant name", title.contains("9876543210"))
+    assertFalse("Phone number must not be pure digits", title.replace(" ", "").all { it.isDigit() })
+    assertTrue("Should fallback to Transfer Recipient or placeholder", title.equals("Transfer Recipient", ignoreCase = true) || title.equals("Merchant / Payee", ignoreCase = true))
+  }
+
+  @Test
+  fun `test originalMerchant storage and undo restoration`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val app = context as SpendTrackerApplication
+    val dao = app.database.expenseDao()
+
+    val sms = "Rs 850.00 debited from A/c **4321 on 08-Sep at Blue Tokai Coffee."
+    val inserted = com.example.service.ExpenseProcessingHelper.processRawSms(
+      context = context,
+      rawText = sms,
+      sender = "HDFC-BANK",
+      timestamp = 1725790000000L
+    )
+    assertNotNull(inserted)
+    assertEquals("Blue Tokai Coffee", inserted?.merchantOrRecipient)
+    assertEquals("Blue Tokai Coffee", inserted?.originalMerchant)
+
+    // Simulate user editing merchant name to something custom
+    val expenseId = inserted!!.id
+    dao.updateMerchantName(expenseId, "Afternoon Meeting Coffee")
+    val updated = dao.getExpenseById(expenseId)
+    assertNotNull(updated)
+    assertEquals("Afternoon Meeting Coffee", updated?.merchantOrRecipient)
+    // originalMerchant must remain unchanged
+    assertEquals("Blue Tokai Coffee", updated?.originalMerchant)
+
+    // Undo action should restore to originalMerchant
+    val targetUndoName = updated!!.originalMerchant
+    dao.updateMerchantName(expenseId, targetUndoName)
+    val restored = dao.getExpenseById(expenseId)
+    assertNotNull(restored)
+    assertEquals("Blue Tokai Coffee", restored?.merchantOrRecipient)
+    assertEquals("Blue Tokai Coffee", restored?.originalMerchant)
+  }
+
+  @Test
+  fun `test refund processing and refund reference messages are suppressed`() {
+    val initiatedSms = "Dear Customer, your refund of Rs. 450 has been initiated. Refund ref no: 12345. It will be credited to your account in 2-4 business days."
+    assertTrue(SmsParser.isRefundIntimationOrPending(initiatedSms))
+    assertNull(SmsParser.parse(initiatedSms, "SWIGGY"))
+
+    val processingSms = "Refund processing: Rs 300 will be refunded for order #123. Refund reference number: 8912839."
+    assertTrue(SmsParser.isRefundIntimationOrPending(processingSms))
+    assertNull(SmsParser.parse(processingSms, "VK-ZOMATO"))
+
+    val refNumberOnlySms = "Refund Reference Number: 987654321 for your order refund of Rs 500."
+    assertTrue(SmsParser.isRefundIntimationOrPending(refNumberOnlySms))
+    assertNull(SmsParser.parse(refNumberOnlySms, "AMAZON"))
+
+    val daysPendingSms = "Your refund request for Rs. 200 has been received and will reflect in 3-5 working days."
+    assertTrue(SmsParser.isRefundIntimationOrPending(daysPendingSms))
+    assertNull(SmsParser.parse(daysPendingSms, "FLIPKART"))
+  }
+
+  @Test
+  fun `test actual refund messages parse correct merchant names`() {
+    val sbiZomato = "Dear SBI User, your A/c ending 1234 has been credited by Rs. 500.00 on 08-Sep-26 towards refund from Zomato. UPI Ref 4123456789. Avl Bal: Rs 15,200.00."
+    assertFalse(SmsParser.isRefundIntimationOrPending(sbiZomato))
+    val parsedZomato = SmsParser.parse(sbiZomato, "SBI")
+    assertNotNull(parsedZomato)
+    assertTrue(parsedZomato!!.isRefund)
+    assertEquals(500.0, parsedZomato.amount, 0.01)
+    assertEquals("Zomato", parsedZomato.title)
+
+    val hdfcSwiggy = "Dear Customer, INR 450.00 is credited to your A/c ending with 4821 on 08-Sep-26 towards reversal of txn at SWIGGY. Avl Bal: INR 48,700.00."
+    val parsedSwiggy = SmsParser.parse(hdfcSwiggy, "HDFC")
+    assertNotNull(parsedSwiggy)
+    assertTrue(parsedSwiggy!!.isRefund)
+    assertEquals(450.0, parsedSwiggy.amount, 0.01)
+    assertEquals("Swiggy", parsedSwiggy.title)
+
+    val kotakBlinkit = "Dear Customer, your Kotak Bank A/c ending 7890 is credited with Rs 300.00 on 08-Sep-26 towards refund for order at Blinkit. Avl Bal Rs 12,000."
+    val parsedBlinkit = SmsParser.parse(kotakBlinkit, "KOTAK")
+    assertNotNull(parsedBlinkit)
+    assertTrue(parsedBlinkit!!.isRefund)
+    assertEquals(300.0, parsedBlinkit.amount, 0.01)
+    assertEquals("Blinkit", parsedBlinkit.title)
+
+    val iciciFlipkart = "Dear Customer, your Account ending 5678 has been credited with INR 600.00 on 08-Sep-26. Info: BIL*REFUND*FLIPKART. Avl Balance is INR 25,000.00."
+    val parsedFlipkart = SmsParser.parse(iciciFlipkart, "ICICI")
+    assertNotNull(parsedFlipkart)
+    assertTrue(parsedFlipkart!!.isRefund)
+    assertEquals(600.0, parsedFlipkart.amount, 0.01)
+    assertEquals("Flipkart", parsedFlipkart.title)
+
+    val axisUber = "Your A/c 1234 is credited by Rs 250 on 06-Sep-26 by refund of UPI txn to Uber. UPI Ref 89128391."
+    val parsedUber = SmsParser.parse(axisUber, "AXIS")
+    assertNotNull(parsedUber)
+    assertTrue(parsedUber!!.isRefund)
+    assertEquals(250.0, parsedUber.amount, 0.01)
+    assertEquals("Uber", parsedUber.title)
+  }
+
+  @Test
+  fun `test refund deduplication and debit matching`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val app = context as SpendTrackerApplication
+    val dao = app.database.expenseDao()
+
+    // 1. First record an original debit for Zomato
+    val debitTimestamp = 1725700000000L
+    val debit = com.example.data.ExpenseEntity(
+      amount = 500.0,
+      merchantOrRecipient = "Zomato",
+      originalMerchant = "Zomato",
+      category = "Food & Dining",
+      sender = "HDFC-BANK",
+      timestamp = debitTimestamp
+    )
+    val debitId = dao.insertExpense(debit)
+    assertTrue(debitId > 0L)
+
+    // Also record another debit with same amount (500.0) for Shell Petrol, to ensure merchant matching doesn't confuse them
+    val shellDebit = com.example.data.ExpenseEntity(
+      amount = 500.0,
+      merchantOrRecipient = "Shell Petrol",
+      originalMerchant = "Shell Petrol",
+      category = "Fuel",
+      sender = "HDFC-BANK",
+      timestamp = debitTimestamp + 3600000L // 1 hour later
+    )
+    dao.insertExpense(shellDebit)
+
+    // 2. An intimation SMS arrives first -> should be ignored completely
+    val intimationSms = "Your refund of Rs. 500 for Zomato order has been initiated. Refund ref no: 8891238. Amount will be credited in 2-4 days."
+    val intimationResult = com.example.service.ExpenseProcessingHelper.processRawSms(
+      context = context,
+      rawText = intimationSms,
+      sender = "ZOMATO",
+      timestamp = debitTimestamp + 7200000L
+    )
+    assertNull("Refund intimation must be ignored", intimationResult)
+
+    // 3. Now the actual bank settlement SMS arrives
+    val bankCreditSms = "Dear SBI User, your A/c ending 1234 has been credited by Rs. 500.00 on 08-Sep-26 towards refund from Zomato. UPI Ref 4123456789. Avl Bal: Rs 15,200.00."
+    val refundTimestamp = debitTimestamp + 10000000L
+    val refundSmsId = 88776655L
+
+    val refundResult = com.example.service.ExpenseProcessingHelper.processRawSms(
+      context = context,
+      rawText = bankCreditSms,
+      sender = "SBI",
+      timestamp = refundTimestamp,
+      smsId = refundSmsId
+    )
+    assertNotNull("Actual refund must be inserted", refundResult)
+    assertEquals(500.0, refundResult?.amount)
+    assertTrue(refundResult!!.isReversal)
+    assertEquals("Zomato", refundResult.merchantOrRecipient)
+    assertEquals("Food & Dining", refundResult.category)
+    assertEquals(refundSmsId, refundResult.smsId)
+
+    // 4. Ingesting duplicate via SMS sync (same smsId or same rawText or duplicate within 24h) must be skipped
+    val duplicateResult = com.example.service.ExpenseProcessingHelper.processRawSms(
+      context = context,
+      rawText = bankCreditSms,
+      sender = "SBI",
+      timestamp = refundTimestamp + 1000L,
+      smsId = refundSmsId
+    )
+    assertNull("Duplicate refund with same smsId must be skipped", duplicateResult)
+
+    val duplicateByContent = com.example.service.ExpenseProcessingHelper.processRawSms(
+      context = context,
+      rawText = bankCreditSms,
+      sender = "SBI",
+      timestamp = refundTimestamp + 2000L,
+      smsId = 0L
+    )
+    assertNull("Duplicate refund with same rawText within 24h must be skipped", duplicateByContent)
+  }
 }
 
