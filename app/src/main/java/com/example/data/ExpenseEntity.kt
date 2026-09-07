@@ -15,6 +15,7 @@ import java.util.Locale
     indices = [
         Index(value = ["monthKey"]),
         Index(value = ["timestamp"]),
+        Index(value = ["smsId"]),
         Index(value = ["sender", "timestamp", "amount"], unique = true)
     ]
 )

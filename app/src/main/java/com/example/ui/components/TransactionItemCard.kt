@@ -120,6 +120,14 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+private val MERCHANT_PLACEHOLDER_NAMES = setOf(
+    "merchant / payee",
+    "transfer recipient",
+    "unknown",
+    "refund / reversal",
+    "upi"
+)
+
 private val sharedTransactionNumberFormatter = NumberFormat.getNumberInstance(Locale.US).apply {
     minimumFractionDigits = 2
     maximumFractionDigits = 2
@@ -805,7 +813,11 @@ private fun TransactionDetailBottomSheet(
     var isRecurringState by remember(expense.id, expense.isRecurring) { mutableStateOf(expense.isRecurring) }
     val originalParsedMerchant = remember(expense.rawBody) {
         if (expense.rawBody.isNotBlank()) {
-            SmsParser.parse(expense.rawBody)?.title
+            val parsed = SmsParser.parse(expense.rawBody)?.title
+            // Only offer undo when the parser produced a genuine merchant name —
+            // not one of the known fallback/placeholder strings SmsParser returns
+            // when it cannot identify a real payee ("Merchant / Payee", etc.).
+            if (parsed != null && parsed.trim().lowercase() !in MERCHANT_PLACEHOLDER_NAMES) parsed else null
         } else null
     }
     val canUndoMerchant = originalParsedMerchant != null &&

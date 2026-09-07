@@ -848,5 +848,67 @@ class ExampleRobolectricTest {
       AiCoreCategorizer.testInferenceProvider = null
     }
   }
+
+  @Test
+  fun `test existsBySmsId and fast-path deduplication`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val app = context as SpendTrackerApplication
+    val dao = app.database.expenseDao()
+
+    val testSmsId = 987654321L
+    assertFalse(dao.existsBySmsId(testSmsId))
+    assertFalse(dao.existsBySmsId(0L))
+
+    val entity = com.example.data.ExpenseEntity(
+      smsId = testSmsId,
+      amount = 250.0,
+      merchantOrRecipient = "Test Cafe",
+      category = "Food & Dining",
+      sender = "VK-HDFCBK",
+      timestamp = 1725700000000L
+    )
+    dao.insertExpense(entity)
+
+    assertTrue(dao.existsBySmsId(testSmsId))
+    assertFalse(dao.existsBySmsId(12345L))
+
+    // Verify processRawSms short-circuits on known smsId
+    val duplicateResult = com.example.service.ExpenseProcessingHelper.processRawSms(
+      context = context,
+      rawText = "Rs 250.00 debited from A/c **1234 on 07-Sep at Test Cafe.",
+      sender = "VK-HDFCBK",
+      timestamp = 1725700000000L,
+      smsId = testSmsId
+    )
+    assertNull(duplicateResult)
+  }
+
+  @Test
+  fun `test placeholder merchant undo suppression logic`() {
+    val placeholders = setOf(
+      "merchant / payee",
+      "transfer recipient",
+      "unknown",
+      "refund / reversal",
+      "upi"
+    )
+
+    // A generic UPI message that SmsParser maps to "Merchant / Payee"
+    val genericUpiSms = "Dear UPI user A/C *1234 debited by 100.0 on 07-09-26. Ref 12345."
+    val parsed = SmsParser.parse(genericUpiSms, "HDFC")
+    assertNotNull(parsed)
+    val parsedTitle = parsed?.title
+
+    val isPlaceholder = parsedTitle != null && parsedTitle.trim().lowercase() in placeholders
+    assertTrue("Should be identified as placeholder merchant", isPlaceholder)
+
+    // A recognized merchant
+    val swiggySms = "Rs 450.00 debited from A/c **1234 on 06-Sep at Swiggy."
+    val swiggyParsed = SmsParser.parse(swiggySms, "HDFC")
+    assertNotNull(swiggyParsed)
+    val swiggyTitle = swiggyParsed?.title
+    val isSwiggyPlaceholder = swiggyTitle != null && swiggyTitle.trim().lowercase() in placeholders
+    assertFalse("Swiggy should NOT be identified as placeholder", isSwiggyPlaceholder)
+  }
 }
 

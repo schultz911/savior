@@ -69,6 +69,9 @@ interface ExpenseDao {
     @Query("UPDATE expenses SET isReversal = :isReversal WHERE id = :id")
     suspend fun updateIsReversal(id: Long, isReversal: Boolean)
 
+    @Query("SELECT COUNT(*) > 0 FROM expenses WHERE smsId = :smsId AND smsId > 0")
+    suspend fun existsBySmsId(smsId: Long): Boolean
+
     @Query("SELECT COUNT(*) > 0 FROM expenses WHERE sender = :sender AND timestamp = :timestamp AND amount = :amount")
     suspend fun existsByContent(sender: String, timestamp: Long, amount: Double): Boolean
 

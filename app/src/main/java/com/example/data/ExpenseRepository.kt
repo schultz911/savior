@@ -6,6 +6,7 @@ import com.example.sms.SampleSmsData
 import com.example.sms.SmsReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 
 class ExpenseRepository(
@@ -14,6 +15,7 @@ class ExpenseRepository(
     private val preferences: ExpensePreferences,
     private val merchantRuleDao: MerchantRuleDao? = null
 ) {
+    private val syncMutex = Mutex()
 
     val allExpenses: Flow<List<ExpenseEntity>> = expenseDao.getAllExpenses()
     val allMonthKeys: Flow<List<String>> = expenseDao.getAllMonthKeys()
@@ -152,31 +154,42 @@ class ExpenseRepository(
             return@withContext 0
         }
 
-        val lastSync = preferences.lastSyncTimestamp
-        val candidateMessages = SmsReader.readCandidateSmsMessages(context, lastSync, limit = 50)
-        var insertedCount = 0
+        // Guard against concurrent re-entrant syncs (app relaunch + pull-to-refresh + SmsCatchUpWorker
+        // firing simultaneously all read the same stale lastSyncTimestamp before any writes commit).
+        if (!syncMutex.tryLock()) {
+            return@withContext 0
+        }
 
-        for ((index, msg) in candidateMessages.withIndex()) {
-            onProgress?.invoke(index + 1, candidateMessages.size)
+        try {
+            val lastSync = preferences.lastSyncTimestamp
+            val candidateMessages = SmsReader.readCandidateSmsMessages(context, lastSync, limit = 50)
+            var insertedCount = 0
 
-            // Validate with AI (gemini-3.5-flash-lite) to confirm if actually spend/transfer and intelligently enhance
-            val inserted = com.example.service.ExpenseProcessingHelper.processRawSms(
-                context = context,
-                rawText = msg.body,
-                sender = msg.sender,
-                timestamp = msg.timestamp,
-                isBatchSync = true
-            )
-            if (inserted != null) {
-                insertedCount++
+            for ((index, msg) in candidateMessages.withIndex()) {
+                onProgress?.invoke(index + 1, candidateMessages.size)
+
+                // Validate with AI (gemini-3.5-flash-lite) to confirm if actually spend/transfer and intelligently enhance
+                val inserted = com.example.service.ExpenseProcessingHelper.processRawSms(
+                    context = context,
+                    rawText = msg.body,
+                    sender = msg.sender,
+                    timestamp = msg.timestamp,
+                    smsId = msg.smsId,
+                    isBatchSync = true
+                )
+                if (inserted != null) {
+                    insertedCount++
+                }
             }
-        }
 
-        preferences.lastSyncTimestamp = System.currentTimeMillis()
-        if (insertedCount > 0 && preferences.isPersistentNotificationEnabled) {
-            LiveExpenditureNotificationService.updateLiveExpenditure(context)
+            preferences.lastSyncTimestamp = System.currentTimeMillis()
+            if (insertedCount > 0 && preferences.isPersistentNotificationEnabled) {
+                LiveExpenditureNotificationService.updateLiveExpenditure(context)
+            }
+            insertedCount
+        } finally {
+            syncMutex.unlock()
         }
-        insertedCount
     }
 
     suspend fun importInitialSampleDataIfNeeded() = withContext(Dispatchers.IO) {

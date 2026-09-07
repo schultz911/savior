@@ -25,11 +25,21 @@ object ExpenseProcessingHelper {
         rawText: String,
         sender: String,
         timestamp: Long = System.currentTimeMillis(),
+        smsId: Long = 0L,
         isBatchSync: Boolean = false
     ): ExpenseEntity? = withContext(Dispatchers.IO) {
         val app = context.applicationContext as? SpendTrackerApplication ?: return@withContext null
         val prefs = app.preferences
         val apiKey = prefs.openRouterApiKey.trim()
+
+        // 0. Fast-path smsId deduplication — skip AI and parsing entirely for known SMS IDs.
+        if (smsId > 0L) {
+            val dao = app.database.expenseDao()
+            if (dao.existsBySmsId(smsId)) {
+                Log.d(TAG, "Fast-path smsId dedup: smsId=$smsId already stored, skipping.")
+                return@withContext null
+            }
+        }
 
         // 1. Check if it's a refund or reversal via deterministic local parser
         val localParsed = SmsParser.parse(rawText, sender)
@@ -61,7 +71,7 @@ object ExpenseProcessingHelper {
                     isExpense = true,
                     rawText = rawText
                 )
-                return@withContext processAndInsertExpense(context, parsed, sender, timestamp, isBatchSync)
+                return@withContext processAndInsertExpense(context, parsed, sender, timestamp, smsId, isBatchSync)
             }
         }
 
@@ -88,13 +98,13 @@ object ExpenseProcessingHelper {
                     isExpense = true,
                     rawText = rawText
                 )
-                return@withContext processAndInsertExpense(context, parsed, sender, timestamp, isBatchSync)
+                return@withContext processAndInsertExpense(context, parsed, sender, timestamp, smsId, isBatchSync)
             }
         }
 
         // 4. Tier 3: Enhanced Local Regex Parser (100% offline, universal compatibility)
         if (localParsed != null && localParsed.isExpense) {
-            return@withContext processAndInsertExpense(context, localParsed, sender, timestamp, isBatchSync)
+            return@withContext processAndInsertExpense(context, localParsed, sender, timestamp, smsId, isBatchSync)
         }
         return@withContext null
     }
@@ -172,6 +182,7 @@ object ExpenseProcessingHelper {
         parsed: ParsedSms,
         sender: String,
         timestamp: Long = System.currentTimeMillis(),
+        smsId: Long = 0L,
         isBatchSync: Boolean = false
     ): ExpenseEntity? = withContext(Dispatchers.IO) {
         val app = context.applicationContext as? SpendTrackerApplication ?: return@withContext null
@@ -181,6 +192,12 @@ object ExpenseProcessingHelper {
 
         val exists = dao.existsByContent(sender, timestamp, parsed.amount)
         if (exists) return@withContext null
+
+        // Fast-path smsId check
+        if (smsId > 0L && dao.existsBySmsId(smsId)) {
+            Log.d(TAG, "Fast-path smsId dedup in processAndInsert: smsId=$smsId already stored, skipping.")
+            return@withContext null
+        }
 
         val apiKey = prefs.openRouterApiKey.trim()
         val preferredCurrency = prefs.currency.ifEmpty { parsed.currency }
@@ -309,6 +326,7 @@ object ExpenseProcessingHelper {
         }
 
         val entity = ExpenseEntity(
+            smsId = smsId,
             amount = parsed.amount,
             currency = preferredCurrency,
             type = parsed.type,
