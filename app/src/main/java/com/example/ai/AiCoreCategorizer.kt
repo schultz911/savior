@@ -459,7 +459,10 @@ object AiCoreCategorizer {
         // C. Classification & Type Detection
         val isSelf = lowerText.contains("to own account") || lowerText.contains("self transfer") ||
                 lowerText.contains("transferred to your own") || lowerText.contains("linked account") ||
-                lowerText.contains("between your accounts")
+                lowerText.contains("between your accounts") || lowerText.contains("to self") ||
+                lowerText.contains("transfer to self") || lowerText.contains("paid to self") ||
+                lowerText.contains("to own a/c") || lowerText.contains("to self a/c") ||
+                lowerText.contains("to my account") || lowerText.contains("self acc")
 
         val hasMerchant = lowerText.contains(" at ") || lowerText.contains(" spent ") || lowerText.contains(" charged ") || lowerText.contains(" swiped ") || lowerText.contains(" purchase ")
         val isCreditCardBill = !hasMerchant && (
@@ -470,7 +473,9 @@ object AiCoreCategorizer {
             (lowerText.contains("payment received") && lowerText.contains("card")) ||
             lowerText.contains("bill payment for card") ||
             lowerText.contains("autopay for card") ||
-            lowerText.contains("paid towards credit card")
+            lowerText.contains("paid towards credit card") ||
+            lowerText.contains("paid to cred") ||
+            lowerText.contains("payment to cred")
         )
 
         val isP2p = lowerText.contains("sent to") || lowerText.contains("transferred to") ||
@@ -582,7 +587,19 @@ object AiCoreCategorizer {
         val combined = "$merchant $rawText".lowercase(Locale.US)
         return when {
             // Self
-            combined.contains("self transfer") || combined.contains("own account") || combined.contains("linked account") -> "Self"
+            combined.contains("self transfer") || combined.contains("own account") || combined.contains("linked account") ||
+                combined.contains("to self") || combined.contains("transfer to self") || combined.contains("paid to self") ||
+                combined.contains("to own") || combined.contains("to my account") || combined.contains("self a/c") -> "Self"
+            // Health & Wellness
+            combined.contains("pharma") || combined.contains("pharmacy") || combined.contains("chemist") ||
+                combined.contains("apollo") || combined.contains("pharmeasy") || combined.contains("1mg") ||
+                combined.contains("netmeds") || combined.contains("medplus") || combined.contains("hospital") ||
+                combined.contains("clinic") || combined.contains("cult.fit") || combined.contains("gym") ||
+                combined.contains("fitness") || combined.contains("lab") || combined.contains("doctor") ||
+                combined.contains("dr.") || combined.contains("diagnostic") || combined.contains("pathology") ||
+                combined.contains("dental") || combined.contains("medicine") || combined.contains("medicos") ||
+                combined.contains("medical") || combined.contains("healthcare") || combined.contains("optician") ||
+                combined.contains("lenskart") -> "Health & Wellness"
             // Groceries
             combined.contains("zepto") || combined.contains("blinkit") || combined.contains("instamart") ||
                 combined.contains("bigbasket") || combined.contains("bbnow") || combined.contains("dmart") ||
@@ -623,12 +640,6 @@ object AiCoreCategorizer {
                 combined.contains("h&m") || combined.contains("retail") || combined.contains("store") ||
                 combined.contains("mall") || combined.contains("croma") || combined.contains("reliance digital") ||
                 combined.contains("meesho") || combined.contains("tata cliq") -> "Shopping"
-            // Health & Wellness
-            combined.contains("apollo") || combined.contains("pharmeasy") || combined.contains("1mg") ||
-                combined.contains("netmeds") || combined.contains("medplus") || combined.contains("hospital") ||
-                combined.contains("clinic") || combined.contains("pharmacy") || combined.contains("cult.fit") ||
-                combined.contains("gym") || combined.contains("lab") || combined.contains("doctor") ||
-                combined.contains("dental") || combined.contains("medicine") -> "Health & Wellness"
             // Investments
             combined.contains("zerodha") || combined.contains("groww") || combined.contains("upstox") ||
                 combined.contains("coin") || combined.contains("mutual fund") || combined.contains("sip") ||
@@ -646,6 +657,7 @@ object AiCoreCategorizer {
             // Credit Card Bill ONLY if paying the bill itself
             combined.contains("towards your credit card") || combined.contains("towards credit card") ||
                 combined.contains("credit card bill") || combined.contains("card dues") ||
+                combined.contains("paid to cred") || combined.contains("payment to cred") ||
                 combined.contains("bill payment for card") -> "Credit Card Bill"
             // Transfers
             combined.contains("transfer") || combined.contains("vpa") || combined.contains("upi") ||

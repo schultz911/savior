@@ -29,7 +29,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.Flight
@@ -293,7 +292,19 @@ fun CalendarAnalyticsTab(
                 ExpenseFilter.SELF -> item.type == ExpenseType.SELF ||
                         item.category.equals("Self", ignoreCase = true)
             }
-            val matchesAccount = selectedAccount == null || item.accountInfo.contains(selectedAccount, ignoreCase = true)
+            val matchesAccount = when {
+                selectedAccount == null -> true
+                selectedAccount.equals("Credit Card Bills", ignoreCase = true) ->
+                    item.type == ExpenseType.CREDIT_CARD ||
+                            item.category.equals("Credit Card Bill", ignoreCase = true) ||
+                            item.accountInfo.contains("Credit", ignoreCase = true) ||
+                            item.accountInfo.contains("Card", ignoreCase = true)
+                selectedAccount.equals("Other / Cash", ignoreCase = true) ->
+                    item.accountInfo.isBlank() ||
+                            item.accountInfo.equals("null", ignoreCase = true) ||
+                            item.accountInfo.equals("Other / Cash", ignoreCase = true)
+                else -> item.accountInfo.contains(selectedAccount, ignoreCase = true)
+            }
             matchesFilter && matchesAccount
         }
     }

@@ -1288,10 +1288,9 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `test ai categorization caching saves rule and remembered preference`() = runBlocking {
+  fun `test categories assigned at parse time do not appear as custom rules in ruleDao`() = runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val app = context as SpendTrackerApplication
-    val prefs = app.preferences
     val ruleDao = app.database.merchantRuleDao()
 
     val testMerchant = "Kailash Parbat Restaurant"
@@ -1316,16 +1315,12 @@ class ExampleRobolectricTest {
       timestamp = System.currentTimeMillis()
     )
     assertNotNull(inserted)
+    assertEquals(testCategory, inserted!!.category)
 
-    // Verify preference caching
-    val remembered = prefs.getMerchantCategory(testMerchant)
-    assertEquals(testCategory, remembered)
-
-    // Verify automatic rule insertion
+    // Verify that categories parsed from SMS remain default and do NOT create custom rules in ruleDao
     val rules = ruleDao.getAllRulesSync()
     val matchingRule = rules.find { it.merchantPattern.equals(testMerchant, ignoreCase = true) }
-    assertNotNull("Rule must be automatically cached in ruleDao", matchingRule)
-    assertEquals(testCategory, matchingRule!!.assignedCategory)
+    assertNull("Categories assigned at parse time must NOT appear in custom rules section", matchingRule)
   }
 
   @Test
@@ -1460,6 +1455,27 @@ class ExampleRobolectricTest {
     assertNotNull(processed)
     assertEquals("Blue Tokai Coffee Roasters", processed!!.merchantOrRecipient)
     assertEquals("Blue Tokai Coffee Roasters", processed.originalMerchant)
+  }
+
+  @Test
+  fun `test credit card bill grouping and null account sanitization in instrument intelligence`() {
+    val cardType = com.example.ui.models.InstrumentType.fromAccountInfo("Credit Card Bills")
+    assertEquals(com.example.ui.models.InstrumentType.CARD, cardType)
+
+    val bankType = com.example.ui.models.InstrumentType.fromAccountInfo("A/c ••1234")
+    assertEquals(com.example.ui.models.InstrumentType.BANK_ACCOUNT, bankType)
+
+    val upiType = com.example.ui.models.InstrumentType.fromAccountInfo("UPI ••5678")
+    assertEquals(com.example.ui.models.InstrumentType.UPI, upiType)
+
+    val otherType = com.example.ui.models.InstrumentType.fromAccountInfo("Other / Cash")
+    assertEquals(com.example.ui.models.InstrumentType.OTHER, otherType)
+  }
+
+  @Test
+  fun `test version name is 1_0_4`() {
+    assertEquals("1.0.4", com.example.BuildConfig.VERSION_NAME)
+    assertEquals(5, com.example.BuildConfig.VERSION_CODE)
   }
 }
 

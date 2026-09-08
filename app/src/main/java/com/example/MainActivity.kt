@@ -131,9 +131,6 @@ import com.example.ui.components.BiometricLockOverlay
 import com.example.ui.components.MerchantDetailSheet
 import com.example.ui.components.SearchFilterBar
 import com.example.ai.OpenRouterCategorizer
-import androidx.core.content.pm.ShortcutInfoCompat
-import androidx.core.content.pm.ShortcutManagerCompat
-import androidx.core.graphics.drawable.IconCompat
 
 class MainActivity : FragmentActivity() {
 
@@ -143,7 +140,6 @@ class MainActivity : FragmentActivity() {
 
         val app = application as SpendTrackerApplication
         handleIntent(intent)
-        setupDynamicShortcuts()
 
         setContent {
             MyApplicationTheme {
@@ -217,36 +213,6 @@ class MainActivity : FragmentActivity() {
             } else if (intent.getStringExtra(EXTRA_NAVIGATE_TAB) == TAB_DASHBOARD) {
                 initialNavigateTab = SavioScreenTab.DASHBOARD
             }
-        }
-    }
-
-    private fun setupDynamicShortcuts() {
-        try {
-            val addCashShortcut = ShortcutInfoCompat.Builder(this, "shortcut_add_cash")
-                .setShortLabel(getString(R.string.shortcut_add_cash_short))
-                .setLongLabel(getString(R.string.shortcut_add_cash_long))
-                .setIcon(IconCompat.createWithResource(this, R.drawable.ic_shortcut_cash))
-                .setIntent(android.content.Intent(this, MainActivity::class.java).apply {
-                    action = ACTION_ADD_CASH
-                    putExtra(EXTRA_SHOW_MANUAL_ADD, true)
-                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
-                })
-                .build()
-
-            val syncSmsShortcut = ShortcutInfoCompat.Builder(this, "shortcut_sync_sms")
-                .setShortLabel(getString(R.string.shortcut_sync_sms_short))
-                .setLongLabel(getString(R.string.shortcut_sync_sms_long))
-                .setIcon(IconCompat.createWithResource(this, R.drawable.ic_shortcut_sync))
-                .setIntent(android.content.Intent(this, MainActivity::class.java).apply {
-                    action = ACTION_SYNC_SMS
-                    putExtra(EXTRA_TRIGGER_SYNC, true)
-                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
-                })
-                .build()
-
-            ShortcutManagerCompat.setDynamicShortcuts(this, listOf(addCashShortcut, syncSmsShortcut))
-        } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Failed to setup dynamic shortcuts", e)
         }
     }
 
@@ -939,7 +905,8 @@ fun SpendTrackerScreen(
                             hasNotificationPermission = hasNotificationPermission,
                             isSyncing = isSyncing,
                             onRequestPermissions = { requestRequiredPermissions() },
-                            onSyncInbox = { viewModel.syncSmsInbox() }
+                            onSyncInbox = { viewModel.syncSmsInbox() },
+                            onResetAndRescan = { viewModel.resetAndRescanInbox() }
                         )
                     }
 

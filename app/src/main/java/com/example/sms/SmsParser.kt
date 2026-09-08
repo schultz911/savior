@@ -291,13 +291,17 @@ object SmsParser {
         val isPaymentTowardsCard = (lower.contains("towards") && (lower.contains("card") || lower.contains("credit card"))) ||
                 lower.contains("credit card bill") ||
                 lower.contains("card dues") ||
-                lower.contains("bill payment") ||
+                lower.contains("bill payment for card") ||
                 lower.contains("autopay for card") ||
                 lower.contains("card repayment") ||
+                lower.contains("paid to cred") ||
+                lower.contains("payment to cred") ||
                 (lower.contains("payment received") && lower.contains("card"))
 
         val isCreditCardBill = isPaymentTowardsCard && !isCardPurchase
-        val isSelfTransfer = lower.contains("self") || lower.contains("own account") || lower.contains("to own")
+        val isSelfTransfer = lower.contains("self") || lower.contains("own account") ||
+                lower.contains("to own") || lower.contains("linked account") ||
+                lower.contains("between your accounts") || lower.contains("to my account")
 
         // Extract Amount and Currency
         val (amount, currency) = extractAmountAndCurrency(cleanBody) ?: return null
@@ -308,10 +312,10 @@ object SmsParser {
         val accountInfo = extractAccountInfo(cleanBody)
 
         // Extract Merchant / Recipient (Never use bank name or SMS sender)
-        val merchant = if (isCreditCardBill) {
-            "Credit Card Bill"
-        } else {
-            extractMerchant(cleanBody, isTransfer || isSelfTransfer)
+        val merchant = when {
+            isCreditCardBill -> "Credit Card Bill"
+            isSelfTransfer -> "Self Transfer"
+            else -> extractMerchant(cleanBody, isTransfer)
         }
 
         val lowerMerchant = merchant.lowercase(Locale.US)
@@ -321,20 +325,26 @@ object SmsParser {
             "general", "bills", "bescom", "electricity", "retail", "foods", "whole foods"
         ).any { lowerMerchant.contains(it) } || cleanBody.contains(" at ", ignoreCase = true)
 
+        val isEffectiveTransfer = isTransfer || merchant.contains("@") ||
+                lower.contains("sent to") || lower.contains("sent rs") || lower.contains("sent inr") ||
+                lower.contains("sent ₹") || lower.contains("transferred to") || lower.contains("transfer to") ||
+                lower.contains("paid to") || lower.contains("upi/p2p")
+
         // 4 Types: Merchants, P2P, Self, Credit Cards
         val expenseType = when {
             isCreditCardBill -> ExpenseType.CREDIT_CARD
             isSelfTransfer -> ExpenseType.SELF
             isStoreOrMerchant -> ExpenseType.MERCHANT
-            isTransfer -> ExpenseType.P2P
+            isEffectiveTransfer -> ExpenseType.P2P
             else -> ExpenseType.MERCHANT
         }
 
         // Categorize
-        val category = if (expenseType == ExpenseType.CREDIT_CARD) {
-            "Credit Card Bill"
-        } else {
-            categorize(cleanBody, merchant, expenseType)
+        val category = when (expenseType) {
+            ExpenseType.CREDIT_CARD -> "Credit Card Bill"
+            ExpenseType.SELF -> "Self"
+            ExpenseType.P2P -> "Transfers"
+            else -> categorize(cleanBody, merchant, expenseType)
         }
 
         return ParsedSms(
@@ -574,16 +584,73 @@ object SmsParser {
         val combined = "$text $merchant".lowercase(Locale.US)
 
         return when {
-            type == ExpenseType.CREDIT_CARD || combined.contains("credit card bill") || combined.contains("towards your credit card") -> "Credit Card Bill"
-            type == ExpenseType.SELF || combined.contains("self transfer") || combined.contains("own account") -> "Self"
-            combined.contains("whole foods") || combined.contains("trader joe") || combined.contains("walmart") || combined.contains("costco") || combined.contains("kroger") || combined.contains("target") || combined.contains("supermarket") || combined.contains("blinkit") || combined.contains("instamart") || combined.contains("zepto") || combined.contains("bigbasket") || combined.contains("general store") || combined.contains("kirana") -> "Groceries"
-            combined.contains("starbucks") || combined.contains("mcdonald") || combined.contains("chipotle") || combined.contains("restaurant") || combined.contains("cafe") || combined.contains("pizza") || combined.contains("burger") || combined.contains("dining") || combined.contains("coffee") || combined.contains("swiggy") || combined.contains("zomato") -> "Food & Dining"
-            combined.contains("uber") || combined.contains("lyft") || combined.contains("taxi") || combined.contains("gas") || combined.contains("shell") || combined.contains("chevron") || combined.contains("metro") || combined.contains("flight") || combined.contains("ola") || combined.contains("rapido") || combined.contains("irctc") || combined.contains("fuel") -> "Travel & Commute"
-            combined.contains("netflix") || combined.contains("spotify") || combined.contains("electric") || combined.contains("utility") || combined.contains("water") || combined.contains("bill") || combined.contains("recharge") || combined.contains("internet") || combined.contains("att") || combined.contains("verizon") || combined.contains("bescom") || combined.contains("airtel") || combined.contains("jio") -> "Bills & Utilities"
-            combined.contains("amazon") || combined.contains("apple") || combined.contains("ebay") || combined.contains("best buy") || combined.contains("nike") || combined.contains("zara") || combined.contains("flipkart") || combined.contains("myntra") || combined.contains("store") || combined.contains("mall") || combined.contains("shop") -> "Shopping"
-            type == ExpenseType.P2P || combined.contains("zelle") || combined.contains("venmo") || combined.contains("transfer") || combined.contains("imps") || combined.contains("neft") -> "Transfers"
-            combined.contains("food") -> "Food & Dining"
-            combined.contains("grocery") -> "Groceries"
+            type == ExpenseType.CREDIT_CARD || combined.contains("credit card bill") ||
+                combined.contains("towards your credit card") || combined.contains("card dues") ||
+                combined.contains("paid to cred") || combined.contains("payment to cred") -> "Credit Card Bill"
+
+            type == ExpenseType.SELF || combined.contains("self transfer") || combined.contains("own account") ||
+                combined.contains("to own") || combined.contains("to self") || combined.contains("linked account") ||
+                combined.contains("to my account") || combined.contains("self a/c") -> "Self"
+
+            combined.contains("pharma") || combined.contains("pharmacy") || combined.contains("chemist") ||
+                combined.contains("apollo") || combined.contains("pharmeasy") || combined.contains("1mg") ||
+                combined.contains("netmeds") || combined.contains("medplus") || combined.contains("hospital") ||
+                combined.contains("clinic") || combined.contains("doctor") || combined.contains("dr.") ||
+                combined.contains("diagnostic") || combined.contains("pathology") || combined.contains("lab") ||
+                combined.contains("medicine") || combined.contains("medicos") || combined.contains("medical") ||
+                combined.contains("cult.fit") || combined.contains("gym") || combined.contains("fitness") ||
+                combined.contains("dental") || combined.contains("healthcare") -> "Health & Wellness"
+
+            combined.contains("whole foods") || combined.contains("trader joe") || combined.contains("walmart") ||
+                combined.contains("costco") || combined.contains("kroger") || combined.contains("target") ||
+                combined.contains("supermarket") || combined.contains("blinkit") || combined.contains("instamart") ||
+                combined.contains("zepto") || combined.contains("bigbasket") || combined.contains("general store") ||
+                combined.contains("kirana") || combined.contains("provision") || combined.contains("grocery") -> "Groceries"
+
+            combined.contains("starbucks") || combined.contains("mcdonald") || combined.contains("chipotle") ||
+                combined.contains("restaurant") || combined.contains("cafe") || combined.contains("pizza") ||
+                combined.contains("burger") || combined.contains("dining") || combined.contains("coffee") ||
+                combined.contains("swiggy") || combined.contains("zomato") || combined.contains("food") ||
+                combined.contains("bakery") || combined.contains("dhaba") || combined.contains("biryani") -> "Food & Dining"
+
+            combined.contains("uber") || combined.contains("lyft") || combined.contains("taxi") ||
+                combined.contains("gas") || combined.contains("shell") || combined.contains("chevron") ||
+                combined.contains("metro") || combined.contains("flight") || combined.contains("ola") ||
+                combined.contains("rapido") || combined.contains("irctc") || combined.contains("fuel") ||
+                combined.contains("petrol") || combined.contains("diesel") || combined.contains("fastag") -> "Travel & Commute"
+
+            combined.contains("netflix") || combined.contains("spotify") || combined.contains("electric") ||
+                combined.contains("utility") || combined.contains("water") || combined.contains("bill") ||
+                combined.contains("recharge") || combined.contains("internet") || combined.contains("broadband") ||
+                combined.contains("bescom") || combined.contains("airtel") || combined.contains("jio") ||
+                combined.contains("vi") || combined.contains("dth") || combined.contains("tataplay") -> "Bills & Utilities"
+
+            combined.contains("amazon") || combined.contains("apple") || combined.contains("ebay") ||
+                combined.contains("best buy") || combined.contains("nike") || combined.contains("zara") ||
+                combined.contains("flipkart") || combined.contains("myntra") || combined.contains("store") ||
+                combined.contains("mall") || combined.contains("shop") || combined.contains("croma") ||
+                combined.contains("retail") || combined.contains("ajio") -> "Shopping"
+
+            combined.contains("bookmyshow") || combined.contains("pvr") || combined.contains("inox") ||
+                combined.contains("cinema") || combined.contains("movie") || combined.contains("steam") ||
+                combined.contains("playstation") || combined.contains("hotstar") || combined.contains("prime video") -> "Entertainment"
+
+            combined.contains("salon") || combined.contains("spa") || combined.contains("barber") ||
+                combined.contains("parlour") || combined.contains("grooming") || combined.contains("skincare") ||
+                combined.contains("cosmetics") || combined.contains("urban company") -> "Personal Care"
+
+            combined.contains("zerodha") || combined.contains("groww") || combined.contains("upstox") ||
+                combined.contains("mutual fund") || combined.contains("sip") || combined.contains("stocks") ||
+                combined.contains("angel one") || combined.contains("smallcase") -> "Investments"
+
+            combined.contains("coursera") || combined.contains("udemy") || combined.contains("unacademy") ||
+                combined.contains("school") || combined.contains("college") || combined.contains("university") ||
+                combined.contains("tuition") || combined.contains("fee") || combined.contains("books") -> "Education"
+
+            type == ExpenseType.P2P || combined.contains("zelle") || combined.contains("venmo") ||
+                combined.contains("transfer") || combined.contains("imps") || combined.contains("neft") ||
+                combined.contains("vpa") || combined.contains("sent to") || combined.contains("paid to") -> "Transfers"
+
             else -> "General Spend"
         }
     }

@@ -6,11 +6,11 @@ import com.example.SpendTrackerApplication
 import com.example.ai.AiCoreCategorizer
 import com.example.ai.OpenRouterCategorizer
 import com.example.data.ExpenseEntity
-import com.example.data.MerchantRuleEntity
 import com.example.sms.ParsedSms
 import com.example.sms.SmsParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.Locale
 
 object ExpenseProcessingHelper {
     private const val TAG = "ExpenseProcessingHelper"
@@ -379,21 +379,6 @@ object ExpenseProcessingHelper {
                     isUnrecognized = true
                 } else {
                     finalCategory = aiResult.category
-                    if (effectiveMerchant.isNotBlank() &&
-                        !effectiveMerchant.equals("Unknown", ignoreCase = true) &&
-                        !effectiveMerchant.equals("Merchant / Payee", ignoreCase = true)
-                    ) {
-                        prefs.saveMerchantCategory(effectiveMerchant, finalCategory)
-                        ruleDao.insertRule(
-                            MerchantRuleEntity(
-                                merchantPattern = effectiveMerchant,
-                                assignedCategory = finalCategory,
-                                normalizedAlias = effectiveMerchant,
-                                isRegex = false,
-                                createdAt = System.currentTimeMillis()
-                            )
-                        )
-                    }
                 }
             } else if (AiCoreCategorizer.isAiCoreAvailable(context) && (finalCategory.isBlank() || finalCategory.equals("General", ignoreCase = true) || finalCategory.equals("Uncategorized", ignoreCase = true))) {
                 val nanoResult = AiCoreCategorizer.categorizeSms(
@@ -408,21 +393,6 @@ object ExpenseProcessingHelper {
                     isUnrecognized = true
                 } else {
                     finalCategory = nanoResult.category
-                    if (effectiveMerchant.isNotBlank() &&
-                        !effectiveMerchant.equals("Unknown", ignoreCase = true) &&
-                        !effectiveMerchant.equals("Merchant / Payee", ignoreCase = true)
-                    ) {
-                        prefs.saveMerchantCategory(effectiveMerchant, finalCategory)
-                        ruleDao.insertRule(
-                            MerchantRuleEntity(
-                                merchantPattern = effectiveMerchant,
-                                assignedCategory = finalCategory,
-                                normalizedAlias = effectiveMerchant,
-                                isRegex = false,
-                                createdAt = System.currentTimeMillis()
-                            )
-                        )
-                    }
                 }
             } else {
                 // Local fallback logic: if local category is General Spend, treat as unrecognized
@@ -435,39 +405,55 @@ object ExpenseProcessingHelper {
             }
         }
 
-        // Cache persistence: If finalCategory was resolved by AI (Tier 1 Cloud or Tier 2 AICore) and is a recognized valid category,
-        // persist to merchant preferences and ruleDao so subsequent SMS from this merchant hit local rules immediately (>90% egress savings).
-        if (finalCategory.isNotBlank() &&
-            !finalCategory.equals("Uncategorized", ignoreCase = true) &&
-            !finalCategory.equals("General", ignoreCase = true) &&
-            !finalCategory.equals("General Spend", ignoreCase = true) &&
-            !finalCategory.equals("UNKNOWN", ignoreCase = true) &&
-            effectiveMerchant.isNotBlank() &&
-            !effectiveMerchant.equals("Unknown", ignoreCase = true) &&
-            !effectiveMerchant.equals("Merchant / Payee", ignoreCase = true) &&
-            !effectiveMerchant.equals("Transfer Recipient", ignoreCase = true) &&
-            prefs.getMerchantCategory(effectiveMerchant) == null
-        ) {
-            prefs.saveMerchantCategory(effectiveMerchant, finalCategory)
-            ruleDao.insertRule(
-                MerchantRuleEntity(
-                    merchantPattern = effectiveMerchant,
-                    assignedCategory = finalCategory,
-                    normalizedAlias = "",
-                    isRegex = false,
-                    createdAt = System.currentTimeMillis()
-                )
-            )
+        val lowerRaw = parsed.rawText.lowercase(Locale.US)
+        val isSelfPayment = parsed.type == com.example.data.ExpenseType.SELF ||
+                finalCategory.equals("Self", ignoreCase = true) ||
+                lowerRaw.contains("to own account") || lowerRaw.contains("self transfer") ||
+                lowerRaw.contains("transferred to your own") || lowerRaw.contains("linked account") ||
+                lowerRaw.contains("between your accounts") || lowerRaw.contains("to self") ||
+                lowerRaw.contains("transfer to self") || lowerRaw.contains("paid to self") ||
+                lowerRaw.contains("to own a/c") || lowerRaw.contains("to self a/c") ||
+                lowerRaw.contains("to my account")
+
+        val isExplicitCardPurchase = (lowerRaw.contains(" at ") || lowerRaw.contains(" swiped ") ||
+                lowerRaw.contains(" spent on card ") || lowerRaw.contains(" purchase ")) &&
+                !lowerRaw.contains("towards") && !lowerRaw.contains("bill") && !lowerRaw.contains("cred")
+
+        val isCreditCardPayment = !isExplicitCardPurchase && (
+                parsed.type == com.example.data.ExpenseType.CREDIT_CARD ||
+                finalCategory.equals("Credit Card Bill", ignoreCase = true) ||
+                lowerRaw.contains("towards your credit card") ||
+                lowerRaw.contains("towards credit card") ||
+                lowerRaw.contains("credit card bill") ||
+                lowerRaw.contains("card dues") ||
+                lowerRaw.contains("paid to cred") ||
+                lowerRaw.contains("payment to cred") ||
+                lowerRaw.contains("bill payment for card") ||
+                lowerRaw.contains("autopay for card") ||
+                (lowerRaw.contains("payment received") && lowerRaw.contains("card"))
+        )
+
+        val resolvedType = when {
+            isSelfPayment -> com.example.data.ExpenseType.SELF
+            isCreditCardPayment -> com.example.data.ExpenseType.CREDIT_CARD
+            else -> parsed.type
         }
 
-        // Purchases made at merchants/stores using a credit card must NEVER be categorized as a credit card bill!
-        if (parsed.type == com.example.data.ExpenseType.MERCHANT && finalCategory.equals("Credit Card Bill", ignoreCase = true)) {
-            finalCategory = "General Spend"
+        if (isSelfPayment) {
+            finalCategory = "Self"
+            isUnrecognized = false
+            if (effectiveMerchant.isBlank() || effectiveMerchant.equals("Unknown", ignoreCase = true) || effectiveMerchant.equals("Merchant / Payee", ignoreCase = true)) {
+                effectiveMerchant = "Self Transfer"
+            }
+        } else if (isCreditCardPayment) {
+            finalCategory = "Credit Card Bill"
+            isUnrecognized = false
+            if (effectiveMerchant.isBlank() || effectiveMerchant.equals("Unknown", ignoreCase = true) || effectiveMerchant.equals("Merchant / Payee", ignoreCase = true)) {
+                effectiveMerchant = "Credit Card Bill"
+            }
         }
 
         // Deduplicate credit card bill repayment SMSs in the same month based on the amount
-        val isCreditCardPayment = parsed.type == com.example.data.ExpenseType.CREDIT_CARD
-
         if (isCreditCardPayment) {
             val monthKey = ExpenseEntity.formatMonthKey(timestamp)
             val duplicateCount = dao.countCreditCardPaymentsInMonth(monthKey, parsed.amount)
@@ -487,7 +473,7 @@ object ExpenseProcessingHelper {
             smsId = smsId,
             amount = parsed.amount,
             currency = preferredCurrency,
-            type = parsed.type,
+            type = resolvedType,
             merchantOrRecipient = effectiveMerchant,
             originalMerchant = firstParsedMerchant,
             accountInfo = parsed.accountInfo,

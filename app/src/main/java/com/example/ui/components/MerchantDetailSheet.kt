@@ -70,7 +70,6 @@ import com.example.ui.theme.SavioBlacklistRed
 import com.example.ui.theme.SavioEmerald
 import com.example.ui.theme.SavioEmeraldBorder
 import com.example.ui.theme.SavioEmeraldContainer
-import com.example.ui.theme.SavioSlateBody
 import com.example.ui.theme.SavioSlateDark
 import com.example.ui.theme.SavioSlateMuted
 import com.example.ui.theme.SavioSpendRose

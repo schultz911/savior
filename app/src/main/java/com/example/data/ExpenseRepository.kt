@@ -173,6 +173,45 @@ class ExpenseRepository(
         }
     }
 
+    suspend fun rescanAllInbox(onProgress: ((current: Int, total: Int) -> Unit)? = null): Int = withContext(Dispatchers.IO) {
+        if (!SmsReader.hasReadSmsPermission(context)) {
+            return@withContext 0
+        }
+        if (!syncMutex.tryLock()) {
+            return@withContext 0
+        }
+        try {
+            clearAll()
+            preferences.lastSyncTimestamp = 0L
+            val candidateMessages = SmsReader.readCandidateSmsMessages(context, 0L, limit = 200)
+            var insertedCount = 0
+
+            for ((index, msg) in candidateMessages.withIndex()) {
+                onProgress?.invoke(index + 1, candidateMessages.size)
+
+                val inserted = com.example.service.ExpenseProcessingHelper.processRawSms(
+                    context = context,
+                    rawText = msg.body,
+                    sender = msg.sender,
+                    timestamp = msg.timestamp,
+                    smsId = msg.smsId,
+                    isBatchSync = true
+                )
+                if (inserted != null) {
+                    insertedCount++
+                }
+            }
+
+            preferences.lastSyncTimestamp = System.currentTimeMillis()
+            if (preferences.isPersistentNotificationEnabled) {
+                LiveExpenditureNotificationService.updateLiveExpenditure(context)
+            }
+            insertedCount
+        } finally {
+            syncMutex.unlock()
+        }
+    }
+
     suspend fun importInitialSampleDataIfNeeded() = withContext(Dispatchers.IO) {
         if (!preferences.hasImportedInitialSamples) {
             val samples = SampleSmsData.createInitialSampleExpenses(preferences.currency)

@@ -274,9 +274,9 @@ class ExpenseViewModel(
 
     private val filterCriteria = combine(
         combine(_selectedFilter, _searchQuery, _selectedCategoryFilter) { f, q, c -> Triple(f, q, c) },
-        combine(_selectedAmountRange, _onlyRecurringFilter, _selectedAccountFilter) { a, r, acc -> Triple(a, r, acc) }
-    ) { (f, q, c), (a, r, acc) ->
-        FilterCriteria(f, q, c, a, r, acc)
+        combine(_selectedAmountRange, _onlyRecurringFilter) { a, r -> Pair(a, r) }
+    ) { (f, q, c), (a, r) ->
+        FilterCriteria(f, q, c, a, r)
     }
 
     val filteredExpenses: StateFlow<List<ExpenseEntity>> = combine(
@@ -309,9 +309,8 @@ class ExpenseViewModel(
                 AmountRange.OVER_2000 -> item.amount > 2000.0
             }
             val matchesRecurring = !criteria.onlyRecurring || item.isRecurring
-            val matchesAccount = criteria.accountFilter == null || item.accountInfo.contains(criteria.accountFilter, ignoreCase = true)
 
-            matchesFilter && matchesQuery && matchesCategory && matchesAmount && matchesRecurring && matchesAccount
+            matchesFilter && matchesQuery && matchesCategory && matchesAmount && matchesRecurring
         }
     }
         .flowOn(Dispatchers.Default)
@@ -609,8 +608,13 @@ class ExpenseViewModel(
         }
         val netMonthTotal = valid.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0)
         val grouped = valid.groupBy {
-            val acc = it.accountInfo.trim()
-            if (acc.isNotBlank()) acc else "Other / Cash"
+            val raw = it.accountInfo.trim()
+            when {
+                it.type == ExpenseType.CREDIT_CARD || it.category.equals("Credit Card Bill", ignoreCase = true) -> "Credit Card Bills"
+                raw.equals("null", ignoreCase = true) -> "Other / Cash"
+                raw.isNotBlank() -> raw
+                else -> "Other / Cash"
+            }
         }
 
         grouped.map { (account, list) ->
@@ -807,6 +811,23 @@ class ExpenseViewModel(
                 } else {
                     "SMS scan complete. No new expenditures detected."
                 }
+            } catch (e: Exception) {
+                _syncFeedback.value = "Error scanning messages: ${e.localizedMessage}"
+            } finally {
+                _isSyncing.value = false
+            }
+        }
+    }
+
+    fun resetAndRescanInbox() {
+        viewModelScope.launch {
+            _isSyncing.value = true
+            _syncFeedback.value = "Resetting database & rescanning SMS inbox..."
+            try {
+                val count = repository.rescanAllInbox { current, total ->
+                    _syncFeedback.value = "Validating transactions with AI ($current/$total)..."
+                }
+                _syncFeedback.value = "Reset complete! Synced $count transaction(s) from SMS."
             } catch (e: Exception) {
                 _syncFeedback.value = "Error scanning messages: ${e.localizedMessage}"
             } finally {

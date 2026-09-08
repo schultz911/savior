@@ -23,8 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.NotificationsOff
@@ -52,10 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.GlassCardBg
 import com.example.ui.theme.GlassCardBorder
-import com.example.ui.theme.SavioBlacklistBg
-import com.example.ui.theme.SavioBlacklistRed
 import com.example.ui.theme.SavioEmerald
-import com.example.ui.theme.SavioEmeraldBorder
 import com.example.ui.theme.SavioEmeraldContainer
 import com.example.ui.theme.SavioSlateBody
 import com.example.ui.theme.SavioSlateDark

@@ -105,6 +105,18 @@
 
 ## 3. Approved and Implemented
 
+- **[Manifest vs Dynamic Shortcut Conflict Resolution (`MainActivity.kt`, `shortcuts.xml`)] (Executed & Validated)**:
+  - **Eradicated `IllegalArgumentException: Manifest shortcut ID=shortcut_sync_sms may not be manipulated via APIs`**: Removed redundant runtime `ShortcutManagerCompat.setDynamicShortcuts()` invocation in `MainActivity.onCreate()`. Static shortcuts (`shortcut_add_cash` and `shortcut_sync_sms`) are already declared in the manifest via `@xml/shortcuts` and managed automatically by the Android OS. Attempting to manipulate manifest shortcut IDs via `setDynamicShortcuts()` triggers an illegal argument exception under Android's immutable shortcut checks.
+  - **Cleaned Shortcut Category Metadata (`shortcuts.xml`)**: Removed misplaced `android.shortcut.conversation` categories from static app actions.
+  - **Cleaned Unused Imports (`MainActivity.kt`)**: Removed `ShortcutInfoCompat`, `ShortcutManagerCompat`, and `IconCompat`.
+  - **Automated Verification & Release Packaging**: Verified full Robolectric test suite (100% pass) and recompiled release binaries `savio-1.0.3.apk` and `savior-1.0.3.apk`.
+
+- **[Parse-Time Category Decoupling from Custom Merchant Rules] (Executed & Validated)**:
+  - **Decoupled Parse-Time Categories from Custom Rules (`ExpenseProcessingHelper.kt`)**: Removed automatic `ruleDao.insertRule()` and `prefs.saveMerchantCategory()` invocations during initial SMS parsing (both OpenRouter AI and AICore paths). Categories determined during SMS parsing remain defaults derived from the SMS and no longer populate the custom "Merchant Rules & Aliases" section in Settings.
+  - **Reserved Custom Rules for Explicit User Actions**: Custom merchant rules and aliases in `merchant_rules` table remain strictly reserved for explicit user actions (e.g. creating rules in Settings, or assigning a custom category/alias in `AssignCategoryDialog`).
+  - **Automated Verification**: Updated Robolectric test `test categories assigned at parse time do not appear as custom rules in ruleDao` verifying that parse-time categories do not insert rows into `ruleDao`. All unit tests passed (`BUILD SUCCESSFUL in 1m 39s`).
+  - **Rebuilt 1.0.3 Release Binaries**: Recompiled minified release APK with R8 (`savior-1.0.3.apk` and `savio-1.0.3.apk`, 4.3 MB).
+
 - **[Credit Card Purchase vs Bill Disambiguation, Exact Merchant Name Extraction & Upgraded AI Prompts (Vectors B & C)] (Executed & Validated)**:
   - **Credit Card Purchase vs Bill Disambiguation (`OpenRouterCategorizer.kt`, `AiCoreCategorizer.kt`, `SmsParser.kt`, `ExpenseProcessingHelper.kt`)**: Redesigned the parsing prompts and detection logic to strictly distinguish between a purchase made using a credit card (at merchants like Swiggy, Amazon, Uber, restaurants, or retail stores) and a credit card bill repayment (paying off statement dues). Purchases made with credit cards are now explicitly classified as `MERCHANT` with category reflecting the merchant (e.g. `Food & Dining`, `Shopping`), payment instrument as `Card ••<digits>`, and counted towards monthly spend. Bill repayments are classified as `CREDIT_CARD` with category `Credit Card Bill`.
   - **Exact Merchant Name Verbatim Extraction (`OpenRouterCategorizer.kt`, `AiCoreCategorizer.kt`, `ExpenseProcessingHelper.kt`)**: Instructed both OpenRouter and AICore prompts to extract the exact merchant/vendor name verbatim as written in the SMS without cleaning, shortening, or generalizing into generic brand names. Removed automatic alias assignment on category auto-caching in `ruleDao`, guaranteeing that the exact merchant name from the SMS appears in the transaction tab unless the user explicitly assigns an alias.

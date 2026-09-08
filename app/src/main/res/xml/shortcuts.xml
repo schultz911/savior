@@ -12,7 +12,6 @@
             android:targetClass="com.example.MainActivity">
             <extra android:name="extra_show_manual_add" android:value="true" />
         </intent>
-        <categories android:name="android.shortcut.conversation" />
     </shortcut>
     <shortcut
         android:shortcutId="shortcut_sync_sms"
@@ -26,6 +25,5 @@
             android:targetClass="com.example.MainActivity">
             <extra android:name="extra_trigger_sync" android:value="true" />
         </intent>
-        <categories android:name="android.shortcut.conversation" />
     </shortcut>
 </shortcuts>

@@ -50,10 +50,8 @@ import com.example.ui.theme.GlassCardBorder
 import com.example.ui.theme.SavioEmerald
 import com.example.ui.theme.SavioEmeraldBorder
 import com.example.ui.theme.SavioEmeraldContainer
-import com.example.ui.theme.SavioSlateBody
 import com.example.ui.theme.SavioSlateDark
 import com.example.ui.theme.SavioSlateMuted
-import com.example.ui.theme.SavioSlateSubtle
 import com.example.ui.theme.SavioSpendRose
 import com.example.ui.theme.SavioSpendRoseBg
 import java.text.NumberFormat
