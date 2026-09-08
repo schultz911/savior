@@ -125,6 +125,12 @@ object ExpenseProcessingHelper {
                     return@withContext handleRefund(context, refundParsed, sender, timestamp, smsId, isBatchSync)
                 }
 
+                // If local parser detected a confirmed refund that AICore missed or labeled as credit, honor the refund
+                if (localParsed?.isRefund == true && localParsed.amount > 0.0) {
+                    Log.d(TAG, "Local parser detected confirmed refund where AICore classified as non-expense/credit, routing to handleRefund.")
+                    return@withContext handleRefund(context, localParsed, sender, timestamp, smsId, isBatchSync)
+                }
+
                 if (!nanoParsed.isExpense) {
                     Log.d(TAG, "SMS classified by AICore as non-expense (${nanoParsed.classification}), ignoring: '$rawText'")
                     return@withContext null
@@ -427,6 +433,31 @@ object ExpenseProcessingHelper {
                     isUnrecognized = true
                 }
             }
+        }
+
+        // Cache persistence: If finalCategory was resolved by AI (Tier 1 Cloud or Tier 2 AICore) and is a recognized valid category,
+        // persist to merchant preferences and ruleDao so subsequent SMS from this merchant hit local rules immediately (>90% egress savings).
+        if (finalCategory.isNotBlank() &&
+            !finalCategory.equals("Uncategorized", ignoreCase = true) &&
+            !finalCategory.equals("General", ignoreCase = true) &&
+            !finalCategory.equals("General Spend", ignoreCase = true) &&
+            !finalCategory.equals("UNKNOWN", ignoreCase = true) &&
+            effectiveMerchant.isNotBlank() &&
+            !effectiveMerchant.equals("Unknown", ignoreCase = true) &&
+            !effectiveMerchant.equals("Merchant / Payee", ignoreCase = true) &&
+            !effectiveMerchant.equals("Transfer Recipient", ignoreCase = true) &&
+            prefs.getMerchantCategory(effectiveMerchant) == null
+        ) {
+            prefs.saveMerchantCategory(effectiveMerchant, finalCategory)
+            ruleDao.insertRule(
+                MerchantRuleEntity(
+                    merchantPattern = effectiveMerchant,
+                    assignedCategory = finalCategory,
+                    normalizedAlias = effectiveMerchant,
+                    isRegex = false,
+                    createdAt = System.currentTimeMillis()
+                )
+            )
         }
 
         // Deduplicate credit card payment SMSs in the same month based on the amount

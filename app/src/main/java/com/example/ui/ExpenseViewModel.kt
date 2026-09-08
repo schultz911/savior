@@ -71,6 +71,14 @@ data class SafeSpendPacing(
     val upcomingRecurringTotal: Double = 0.0
 )
 
+data class MonthlyTotalsSummary(
+    val monthlyTotal: Double = 0.0,
+    val transfersTotal: Double = 0.0,
+    val spendsTotal: Double = 0.0,
+    val creditCardsTotal: Double = 0.0,
+    val selfTotal: Double = 0.0
+)
+
 data class FilterCriteria(
     val filter: ExpenseFilter = ExpenseFilter.ALL,
     val query: String = "",
@@ -420,83 +428,82 @@ class ExpenseViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = SafeSpendPacing()
     )
-    // Monthly Total = all valid transactions from non-blacklisted merchants, excluding Self and Credit Card Bill
-    val monthlyTotal: StateFlow<Double> = combine(
+    // Single-pass aggregated monthly totals (80% reduction in loop passes and blacklist containment checks)
+    val monthlyTotalsSummary: StateFlow<MonthlyTotalsSummary> = combine(
         currentMonthExpenses,
         _blacklistedMerchants
     ) { list, blacklisted ->
-        val validList = list.filter {
-            !it.isExcluded &&
-            !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) &&
-            !isSelf(it) &&
-            !isCreditCard(it)
-        }
-        var total = 0.0
-        for (it in validList) {
-            if (it.isRefundOrReversal) {
-                total -= it.amount
+        var mTotal = 0.0
+        var tTotal = 0.0
+        var sTotal = 0.0
+        var ccTotal = 0.0
+        var selfTot = 0.0
+
+        for (it in list) {
+            if (it.isExcluded) continue
+            if (isBlacklistedMerchant(it.merchantOrRecipient, blacklisted)) continue
+
+            val isSelfItem = isSelf(it)
+            val isCcItem = isCreditCard(it)
+            val netAmount = (it.amount - it.refundedAmount).coerceAtLeast(0.0)
+
+            if (isSelfItem) {
+                selfTot += netAmount
+            } else if (isCcItem) {
+                ccTotal += netAmount
+            } else if (it.type == ExpenseType.P2P) {
+                tTotal += netAmount
+                mTotal += netAmount
             } else {
-                total += (it.amount - it.refundedAmount).coerceAtLeast(0.0)
+                // Merchant spend
+                if (it.isRefundOrReversal) {
+                    sTotal -= it.amount
+                    mTotal -= it.amount
+                } else {
+                    sTotal += netAmount
+                    mTotal += netAmount
+                }
             }
         }
-        total.coerceAtLeast(0.0)
+
+        MonthlyTotalsSummary(
+            monthlyTotal = mTotal.coerceAtLeast(0.0),
+            transfersTotal = tTotal.coerceAtLeast(0.0),
+            spendsTotal = sTotal.coerceAtLeast(0.0),
+            creditCardsTotal = ccTotal.coerceAtLeast(0.0),
+            selfTotal = selfTot.coerceAtLeast(0.0)
+        )
     }.flowOn(Dispatchers.Default).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = MonthlyTotalsSummary()
+    )
+
+    val monthlyTotal: StateFlow<Double> = monthlyTotalsSummary.map { it.monthlyTotal }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0.0
     )
 
-    val transfersTotal: StateFlow<Double> = combine(
-        currentMonthExpenses,
-        _blacklistedMerchants
-    ) { list, blacklisted ->
-        list.filter { !it.isExcluded && isTransfer(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
-            .sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
-    }.flowOn(Dispatchers.Default).stateIn(
+    val transfersTotal: StateFlow<Double> = monthlyTotalsSummary.map { it.transfersTotal }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0.0
     )
 
-    val spendsTotal: StateFlow<Double> = combine(
-        currentMonthExpenses,
-        _blacklistedMerchants
-    ) { list, blacklisted ->
-        val validList = list.filter { !it.isExcluded && isMerchantSpend(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
-        var total = 0.0
-        for (it in validList) {
-            if (it.isRefundOrReversal) {
-                total -= it.amount
-            } else {
-                total += (it.amount - it.refundedAmount).coerceAtLeast(0.0)
-            }
-        }
-        total.coerceAtLeast(0.0)
-    }.flowOn(Dispatchers.Default).stateIn(
+    val spendsTotal: StateFlow<Double> = monthlyTotalsSummary.map { it.spendsTotal }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0.0
     )
 
-    val creditCardsTotal: StateFlow<Double> = combine(
-        currentMonthExpenses,
-        _blacklistedMerchants
-    ) { list, blacklisted ->
-        list.filter { !it.isExcluded && isCreditCard(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
-            .sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
-    }.flowOn(Dispatchers.Default).stateIn(
+    val creditCardsTotal: StateFlow<Double> = monthlyTotalsSummary.map { it.creditCardsTotal }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0.0
     )
 
-    val selfTotal: StateFlow<Double> = combine(
-        currentMonthExpenses,
-        _blacklistedMerchants
-    ) { list, blacklisted ->
-        list.filter { !it.isExcluded && isSelf(it) && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) }
-            .sumOf { (it.amount - it.refundedAmount).coerceAtLeast(0.0) }
-    }.flowOn(Dispatchers.Default).stateIn(
+    val selfTotal: StateFlow<Double> = monthlyTotalsSummary.map { it.selfTotal }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0.0
@@ -649,13 +656,13 @@ class ExpenseViewModel(
 
         val spendByMonth = mutableMapOf<String, Double>()
         val hasDataMonthKeys = mutableSetOf<String>()
-        val normalizedBlacklist = blacklisted.map { it.trim().lowercase(Locale.US) }.toSet()
+        val normalizedBlacklist = normalizedBlacklistedMerchants.value
 
         for (exp in expenses) {
             hasDataMonthKeys.add(exp.monthKey)
             if (exp.isExcluded) continue
             val norm = exp.merchantOrRecipient.trim().lowercase(Locale.US)
-            if (norm.isNotBlank() && normalizedBlacklist.any { norm.contains(it) || it.contains(norm) }) continue
+            if (norm.isNotBlank() && normalizedBlacklist.isNotEmpty() && normalizedBlacklist.any { norm.contains(it) || it.contains(norm) }) continue
             if (isSelf(exp) || isCreditCard(exp)) continue
 
             val net = exp.effectiveSpendAmount
@@ -717,10 +724,11 @@ class ExpenseViewModel(
         )
 
     fun isBlacklistedMerchant(merchant: String, blacklisted: Set<String> = _blacklistedMerchants.value): Boolean {
+        val normalizedSet = normalizedBlacklistedMerchants.value
+        if (normalizedSet.isEmpty()) return false
         val norm = merchant.trim().lowercase(Locale.US)
         if (norm.isBlank()) return false
         // O(1) HashSet containment via pre-normalized lowercase set
-        val normalizedSet = normalizedBlacklistedMerchants.value
         return normalizedSet.any { norm.contains(it) || it.contains(norm) }
     }
 
@@ -1154,15 +1162,6 @@ class ExpenseViewModel(
         }
     }
 
-    fun restoreRecurringBill(merchant: String) {
-        viewModelScope.launch {
-            preferences.removeIgnoredRecurringMerchant(merchant)
-            _ignoredRecurringMerchants.value = preferences.getIgnoredRecurringMerchants()
-            _syncFeedback.value = "Restored '$merchant' to recurring radar"
-            LiveExpenditureNotificationService.updateLiveExpenditure(getApplication())
-        }
-    }
-
     fun deleteMonthData(monthKey: String) {
         viewModelScope.launch {
             val count = repository.deleteExpensesForMonth(monthKey)
@@ -1172,10 +1171,6 @@ class ExpenseViewModel(
             }
             LiveExpenditureNotificationService.updateLiveExpenditure(getApplication())
         }
-    }
-
-    fun getExpensesForMerchant(merchant: String): Flow<List<ExpenseEntity>> {
-        return repository.getExpensesForMerchant(merchant)
     }
 
     class Factory(

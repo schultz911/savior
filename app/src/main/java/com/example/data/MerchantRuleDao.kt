@@ -20,7 +20,4 @@ interface MerchantRuleDao {
 
     @Query("DELETE FROM merchant_rules WHERE id = :id")
     suspend fun deleteRule(id: Long)
-
-    @Query("SELECT * FROM merchant_rules WHERE LOWER(TRIM(merchantPattern)) = LOWER(TRIM(:merchant)) LIMIT 1")
-    suspend fun findExactRule(merchant: String): MerchantRuleEntity?
 }

@@ -60,7 +60,10 @@ class WeeklySpendDigestWorker(
                 it.type != ExpenseType.SELF &&
                 !it.category.equals("Self", ignoreCase = true) &&
                 !it.category.equals("Credit Card Bill", ignoreCase = true) &&
-                !blacklisted.any { b -> it.merchantOrRecipient.trim().lowercase(Locale.US).contains(b) }
+                !blacklisted.any { b ->
+                    val norm = it.merchantOrRecipient.trim().lowercase(Locale.US)
+                    norm.contains(b) || b.contains(norm)
+                }
             }
 
             var totalWeeklySpend = 0.0

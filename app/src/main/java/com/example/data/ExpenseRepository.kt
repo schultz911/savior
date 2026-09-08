@@ -19,7 +19,6 @@ class ExpenseRepository(
 
     val allExpenses: Flow<List<ExpenseEntity>> = expenseDao.getAllExpenses()
     val allMonthKeys: Flow<List<String>> = expenseDao.getAllMonthKeys()
-    val recurringExpenses: Flow<List<ExpenseEntity>> = expenseDao.getRecurringExpenses()
     val allMerchantRules: Flow<List<MerchantRuleEntity>> =
         merchantRuleDao?.getAllRules() ?: kotlinx.coroutines.flow.flowOf(emptyList())
 
@@ -69,13 +68,6 @@ class ExpenseRepository(
         }
     }
 
-    suspend fun applyRefund(id: Long, refundAmount: Double) = withContext(Dispatchers.IO) {
-        expenseDao.applyRefund(id, refundAmount)
-        if (preferences.isPersistentNotificationEnabled) {
-            LiveExpenditureNotificationService.updateLiveExpenditure(context)
-        }
-    }
-
     suspend fun setRefundedAmount(id: Long, refundAmount: Double) = withContext(Dispatchers.IO) {
         expenseDao.setRefundedAmount(id, refundAmount)
         if (preferences.isPersistentNotificationEnabled) {
@@ -86,9 +78,6 @@ class ExpenseRepository(
     suspend fun getExpensesSince(sinceTimestamp: Long): List<ExpenseEntity> = withContext(Dispatchers.IO) {
         expenseDao.getExpensesSinceSync(sinceTimestamp)
     }
-
-    fun getExpensesForMerchant(merchant: String): Flow<List<ExpenseEntity>> =
-        expenseDao.getExpensesForMerchant(merchant)
 
     suspend fun updateIsRecurring(id: Long, isRecurring: Boolean) = withContext(Dispatchers.IO) {
         expenseDao.updateIsRecurring(id, isRecurring)
@@ -107,14 +96,6 @@ class ExpenseRepository(
 
     fun getExpensesForMonth(monthKey: String): Flow<List<ExpenseEntity>> =
         expenseDao.getExpensesForMonth(monthKey)
-
-    suspend fun insertExpense(expense: ExpenseEntity): Long = withContext(Dispatchers.IO) {
-        val id = expenseDao.insertExpense(expense)
-        if (id > 0 && preferences.isPersistentNotificationEnabled) {
-            LiveExpenditureNotificationService.updateLiveExpenditure(context)
-        }
-        id
-    }
 
     suspend fun deleteExpense(id: Long) = withContext(Dispatchers.IO) {
         expenseDao.deleteExpenseById(id)
@@ -195,12 +176,7 @@ class ExpenseRepository(
     suspend fun importInitialSampleDataIfNeeded() = withContext(Dispatchers.IO) {
         if (!preferences.hasImportedInitialSamples) {
             val samples = SampleSmsData.createInitialSampleExpenses(preferences.currency)
-            for (item in samples) {
-                val exists = expenseDao.existsByContent(item.sender, item.timestamp, item.amount)
-                if (!exists) {
-                    expenseDao.insertExpense(item)
-                }
-            }
+            expenseDao.insertExpenses(samples)
             preferences.hasImportedInitialSamples = true
             if (preferences.isPersistentNotificationEnabled) {
                 LiveExpenditureNotificationService.updateLiveExpenditure(context)

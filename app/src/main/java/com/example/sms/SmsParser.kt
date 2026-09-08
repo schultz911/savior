@@ -116,8 +116,8 @@ object SmsParser {
         Pattern.compile("""(?i)(?:refund|reversal)\s+(?:initiated\s+by|done\s+(?:at|by))\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:has|is|on|via|dated|ref)\b|[.!,;]|$)"""),
 
         // 5. "credited back / refunded / reversed to card/ac from/at <Merchant>"
-        Pattern.compile("""(?i)(?:credited\s+(?:back\s+)?|refunded\s+|reversed\s+)(?:to\s+(?:your\s+)?(?:a/c|account|acct|card|wallet|vpa|upi|source)[^.]*?\s+)?(?:from|at|with)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:on|via|dated|ref|is\s+credited|avl|bal)\b|[.!,;]|$)"""),
-        Pattern.compile("""(?i)(?:rs\.?|inr|usd|[$€£])?\s*[0-9,.]+\s+(?:has\s+been\s+)?(?:refunded|reversed|credited\s+back)\s+(?:to\s+(?:your\s+)?(?:a/c|account|card|wallet|source)[^.]*?\s+)?(?:from|at|with)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:on|via|dated|ref|avl|bal)\b|[.!,;]|$)"""),
+        Pattern.compile("""(?i)(?:credited\s+(?:back\s+)?|refunded\s+|reversed\s+)(?:to\s+(?:your\s+)?(?:a/c|account|acct|card|wallet|vpa|upi|source)[^.]*?\s+)?(?:from|at|with)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:for|on|via|dated|ref|is\s+credited|avl|bal)\b|[.!,;]|$)"""),
+        Pattern.compile("""(?i)(?:rs\.?|inr|usd|[$€£])?\s*[0-9,.]+\s+(?:has\s+been\s+)?(?:refunded|reversed|credited\s+back)\s+(?:to\s+(?:your\s+)?(?:a/c|account|card|wallet|source)[^.]*?\s+)?(?:from|at|with)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:for|on|via|dated|ref|avl|bal)\b|[.!,;]|$)"""),
 
         // 6. "reversal of (upi) txn at/to/from/on <Merchant>"
         Pattern.compile("""(?i)(?:reversal\s+(?:of\s+(?:(?:upi\s+)?txn\s+)?(?:at|to|from|on|with)\s+)|reversed\s+(?:by|from|at)\s+)([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:on|dated|via|ref)\b|[.!,;]|$)"""),
@@ -391,10 +391,13 @@ object SmsParser {
             if (matcher.find()) {
                 val num = matcher.group(1)
                 if (!num.isNullOrBlank()) {
-                    val isUpi = pattern.pattern().contains("upi", ignoreCase = true) || text.contains("upi", ignoreCase = true)
-                    val isCard = text.contains("card", ignoreCase = true)
+                    val matchedText = matcher.group(0)?.lowercase(Locale.US) ?: ""
+                    val isCard = matchedText.contains("card") || (!matchedText.contains("a/c") && !matchedText.contains("account") && text.contains("card", ignoreCase = true))
+                    val isAccount = matchedText.contains("a/c") || matchedText.contains("account") || matchedText.contains("acct")
+                    val isUpi = pattern.pattern().contains("upi", ignoreCase = true) || (!isAccount && !isCard && text.contains("upi", ignoreCase = true))
                     val prefix = when {
                         isCard -> "Card ••"
+                        isAccount -> "A/c ••"
                         isUpi -> "UPI ••"
                         else -> "A/c ••"
                     }
@@ -509,6 +512,7 @@ object SmsParser {
         // Strip contextual prefixes like "order on ", "order at ", "cancelled ride with ", "ride with "
         clean = clean.replace(Regex("""(?i)^(?:cancelled\s+)?(?:order|ride|purchase|txn|transaction|booking)\s+(?:at|on|with|from|to)\s+"""), "")
             .replace(Regex("""(?i)^(?:at|on|from|to|with)\s+"""), "")
+            .replace(Regex("""(?i)\s+(?:for|towards)\s+(?:(?:your|the|cancelled)?\s*(?:order|ride|purchase|txn|transaction|booking).*)$"""), "")
             .trim()
 
         // Strip trailing reference numbers like "-01234" or "/9876"

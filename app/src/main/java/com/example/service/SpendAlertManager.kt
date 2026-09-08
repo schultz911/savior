@@ -249,7 +249,6 @@ object SpendAlertManager {
                     continue
                 }
 
-                createNotificationChannels(context)
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 val notifId = 4000 + Math.abs(bill.merchant.hashCode()) % 1000
 

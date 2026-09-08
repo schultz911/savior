@@ -1254,5 +1254,142 @@ class ExampleRobolectricTest {
     )
     assertNull("Duplicate refund with same rawText within 24h must be skipped", duplicateByContent)
   }
+
+  @Test
+  fun `test aicore on-device parsing and processing of confirmed refund`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    AiCoreCategorizer.testAvailabilityOverride = true
+    try {
+      val refundSms = "Rs 650.00 refunded to A/c ending 9821 from Swiggy for cancelled order. UPI Ref: 778899. Avl Bal: Rs 24,000."
+      val parsed = AiCoreCategorizer.parseSmsTransaction(context, refundSms, "HDFC")
+      assertNotNull(parsed)
+      assertTrue("Parsed message must be marked as refund", parsed!!.isRefund)
+      assertEquals(650.0, parsed.amount, 0.01)
+      assertEquals("Swiggy", parsed.merchant)
+      assertEquals("Refund", parsed.category)
+      assertFalse("Refund is not an outgoing expense", parsed.isExpense)
+
+      // Test end-to-end processing through ExpenseProcessingHelper with Tier 2 AICore
+      val processed = com.example.service.ExpenseProcessingHelper.processRawSms(
+        context = context,
+        rawText = refundSms,
+        sender = "HDFC-BANK",
+        timestamp = System.currentTimeMillis(),
+        smsId = 998877L
+      )
+      assertNotNull("AICore refund must be processed and recorded by handleRefund", processed)
+      assertTrue(processed!!.isReversal)
+      assertEquals("Swiggy", processed.merchantOrRecipient)
+      assertEquals(650.0, processed.amount, 0.01)
+    } finally {
+      AiCoreCategorizer.testAvailabilityOverride = null
+      AiCoreCategorizer.testInferenceProvider = null
+    }
+  }
+
+  @Test
+  fun `test ai categorization caching saves rule and remembered preference`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val app = context as SpendTrackerApplication
+    val prefs = app.preferences
+    val ruleDao = app.database.merchantRuleDao()
+
+    val testMerchant = "Kailash Parbat Restaurant"
+    val testCategory = "Food & Dining"
+
+    // Simulate AI parsing an SMS from this merchant
+    val parsed = com.example.sms.ParsedSms(
+      amount = 750.0,
+      currency = "₹",
+      type = ExpenseType.MERCHANT,
+      title = testMerchant,
+      accountInfo = "A/c ••3321",
+      category = testCategory,
+      isExpense = true,
+      rawText = "Paid Rs 750 at Kailash Parbat Restaurant on 08-Sep."
+    )
+
+    val inserted = com.example.service.ExpenseProcessingHelper.processAndInsertExpense(
+      context = context,
+      parsed = parsed,
+      sender = "BANK",
+      timestamp = System.currentTimeMillis()
+    )
+    assertNotNull(inserted)
+
+    // Verify preference caching
+    val remembered = prefs.getMerchantCategory(testMerchant)
+    assertEquals(testCategory, remembered)
+
+    // Verify automatic rule insertion
+    val rules = ruleDao.getAllRulesSync()
+    val matchingRule = rules.find { it.merchantPattern.equals(testMerchant, ignoreCase = true) }
+    assertNotNull("Rule must be automatically cached in ruleDao", matchingRule)
+    assertEquals(testCategory, matchingRule!!.assignedCategory)
+  }
+
+  @Test
+  fun `test backup and restore preserves smsId for fast-path deduplication`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val app = context as SpendTrackerApplication
+    val dao = app.database.expenseDao()
+    val prefs = app.preferences
+    val ruleDao = app.database.merchantRuleDao()
+
+    val uniqueSmsId = 5544332211L
+    val expense = com.example.data.ExpenseEntity(
+      smsId = uniqueSmsId,
+      amount = 320.0,
+      merchantOrRecipient = "Starbucks Coffee",
+      category = "Food & Dining",
+      sender = "HDFC",
+      timestamp = System.currentTimeMillis()
+    )
+    dao.insertExpense(expense)
+    assertTrue("Original expense must exist by smsId", dao.existsBySmsId(uniqueSmsId))
+
+    val baos = java.io.ByteArrayOutputStream()
+    val backupResult = com.example.util.DatabaseBackupHelper.createEncryptedBackup(
+      dao = dao,
+      preferences = prefs,
+      passphrase = "test-passphrase-123",
+      outputStream = baos,
+      ruleDao = ruleDao
+    )
+    assertTrue(backupResult.isSuccess)
+
+    // Clear database
+    dao.clearAll()
+    assertFalse("Cleared DB must not contain smsId", dao.existsBySmsId(uniqueSmsId))
+
+    // Restore from backup
+    val bais = java.io.ByteArrayInputStream(baos.toByteArray())
+    val restoreResult = com.example.util.DatabaseBackupHelper.restoreEncryptedBackup(
+      inputStream = bais,
+      passphrase = "test-passphrase-123",
+      dao = dao,
+      preferences = prefs,
+      ruleDao = ruleDao
+    )
+    assertTrue(restoreResult.isSuccess)
+
+    // Verify smsId is preserved and fast-path dedup works post-restore
+    assertTrue("Restored database must preserve smsId for fast-path deduplication", dao.existsBySmsId(uniqueSmsId))
+  }
+
+  @Test
+  fun `test account extraction distinguishes bank account from upi handle`() {
+    val bankAccountSms = "Rs 1,450.00 debited from A/c **4821 on 04-Sep at SWIGGY BANGALORE. UPI Ref: 489218291. Avl Bal: Rs 48,250.00."
+    val parsedBank = SmsParser.parse(bankAccountSms, "HDFC-BANK")
+    assertNotNull(parsedBank)
+    assertEquals("A/c ••4821", parsedBank!!.accountInfo)
+    assertEquals(com.example.ui.models.InstrumentType.BANK_ACCOUNT, com.example.ui.models.InstrumentType.fromAccountInfo(parsedBank.accountInfo))
+
+    val upiOnlySms = "Debited INR 450.00 via UPI to Sharma General Store on 05-Sep. UPI Ref: 98124901."
+    val parsedUpi = SmsParser.parse(upiOnlySms, "AXIS-UPI")
+    assertNotNull(parsedUpi)
+    assertEquals("UPI ••4901", parsedUpi!!.accountInfo)
+    assertEquals(com.example.ui.models.InstrumentType.UPI, com.example.ui.models.InstrumentType.fromAccountInfo(parsedUpi.accountInfo))
+  }
 }
 

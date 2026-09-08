@@ -866,6 +866,7 @@ fun TwelveMonthStackedBarGraph(
     val salaryFraction = remember(currentSalary, maxChartVal) {
         (currentSalary / maxChartVal).toFloat().coerceIn(0.08f, 0.95f)
     }
+    val salaryDashPathEffect = remember { PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f) }
 
     Column(modifier = modifier.fillMaxWidth()) {
         if (months.isEmpty()) {
@@ -919,7 +920,7 @@ fun TwelveMonthStackedBarGraph(
                                 start = Offset(0f, salaryLineY),
                                 end = Offset(size.width, salaryLineY),
                                 strokeWidth = 2.dp.toPx(),
-                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                                pathEffect = salaryDashPathEffect
                             )
                         },
                     horizontalArrangement = if (months.size <= 5) Arrangement.spacedBy(20.dp) else Arrangement.spacedBy(12.dp),

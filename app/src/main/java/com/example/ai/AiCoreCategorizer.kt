@@ -137,6 +137,7 @@ object AiCoreCategorizer {
             val json = JSONObject(jsonStr)
 
             val classification = json.optString("classification", "OTHER").trim().uppercase(Locale.US)
+            val isRefund = classification == "REFUND" || classification == "REVERSAL"
             val isExpense = when (classification) {
                 "MERCHANT", "SPEND", "DEBIT", "PURCHASE", "P2P", "TRANSFER", "SELF", "CREDIT_CARD" -> true
                 else -> false
@@ -151,11 +152,37 @@ object AiCoreCategorizer {
 
             val amount = json.optDouble("amount", 0.0)
 
+            if (isRefund && amount > 0.0) {
+                val rawCurrency = json.optString("currency", "₹").ifBlank { "₹" }
+                val currency = if (rawCurrency.equals("INR", ignoreCase = true)) "₹" else rawCurrency
+                var merchant = json.optString("merchant", "").trim()
+                if (merchant.isBlank() || merchant.equals("null", ignoreCase = true)) {
+                    merchant = "Refund / Reversal"
+                }
+                val rawAccount = if (json.has("accountInfo")) json.optString("accountInfo", "") else json.optString("account", "")
+                val accountInfo = rawAccount.trim().replace("**", "••")
+
+                return@withContext AiParsedTransaction(
+                    classification = classification,
+                    isExpense = false,
+                    isRefund = true,
+                    type = type,
+                    amount = amount,
+                    currency = currency,
+                    merchant = merchant,
+                    accountInfo = accountInfo,
+                    category = "Refund",
+                    isAiClassified = true,
+                    rawText = cleanText
+                )
+            }
+
             if (!isExpense || amount <= 0.0) {
                 Log.d(TAG, "AICore classified message as non-expense ($classification): '$cleanText'")
                 return@withContext AiParsedTransaction(
                     classification = classification.lowercase(Locale.US),
                     isExpense = false,
+                    isRefund = isRefund,
                     type = type,
                     amount = 0.0,
                     currency = "₹",
@@ -275,13 +302,13 @@ object AiCoreCategorizer {
             SMS: "$rawText"
             
             Extract:
-            1. classification: "MERCHANT", "P2P", "SELF", "CREDIT_CARD", "CREDIT", "INTIMATION", "AD", "OTP", or "OTHER"
-            2. isExpense: true only if MERCHANT, P2P, SELF, or CREDIT_CARD.
-            3. amount: numeric value of debit.
+            1. classification: "MERCHANT", "P2P", "SELF", "CREDIT_CARD", "CREDIT", "REFUND", "INTIMATION", "AD", "OTP", or "OTHER"
+            2. isExpense: true for MERCHANT, P2P, SELF, or CREDIT_CARD. false for REFUND, CREDIT, AD, OTP.
+            3. amount: numeric value of debit or refund.
             4. currency: symbol like "₹", "$", "€". Default "₹".
-            5. merchant: entity or person paid (NEVER the bank or carrier name like HDFC/SBI/AXIS/ICICI).
+            5. merchant: entity or person paid, or merchant issuing refund (NEVER the bank or carrier name like HDFC/SBI/AXIS/ICICI).
             6. accountInfo: e.g. "A/c ••1234" or "Card ••5678" or "UPI ••9012".
-            7. category: from [Transfers, Credit Card Bill, Self, Groceries, Food & Dining, Shopping, Bills & Utilities, Travel & Commute, Entertainment, Health & Wellness, Investments, Education, Personal Care].
+            7. category: from [Transfers, Credit Card Bill, Self, Groceries, Food & Dining, Shopping, Bills & Utilities, Travel & Commute, Entertainment, Health & Wellness, Investments, Education, Personal Care]. For REFUND, use "Refund".
             
             Return JSON only:
             {"classification":"MERCHANT","isExpense":true,"amount":100.0,"currency":"₹","merchant":"Store","accountInfo":"A/c ••1234","category":"Groceries"}
@@ -369,8 +396,30 @@ object AiCoreCategorizer {
             }.toString()
         }
 
+        // A.2. Confirmed Refund & Reversal Check (Interception before generic credit alert)
+        val isConfirmedRefund = !com.example.sms.SmsParser.isRefundIntimationOrPending(rawText) &&
+                listOf("refund", "refunded", "reversal", "reversed", "credited back", "returned").any { lowerText.contains(it) } &&
+                (lowerText.contains("a/c") || lowerText.contains("account") || lowerText.contains("card") || lowerText.contains("ending") || lowerText.contains("credited to"))
+
+        if (isConfirmedRefund) {
+            val amount = extractAmount(rawText)
+            if (amount > 0.0) {
+                val refundMerchant = com.example.sms.SmsParser.extractRefundMerchant(rawText)
+                val account = extractAccount(rawText)
+                return JSONObject().apply {
+                    put("classification", "REFUND")
+                    put("isExpense", false)
+                    put("amount", amount)
+                    put("currency", "₹")
+                    put("merchant", refundMerchant)
+                    put("accountInfo", account)
+                    put("category", "Refund")
+                }.toString()
+            }
+        }
+
         val isCredit = (lowerText.contains("credited") || lowerText.contains("deposited") ||
-                lowerText.contains("refund") || lowerText.contains("salary")) &&
+                lowerText.contains("salary")) &&
                 !lowerText.contains("debited") && !lowerText.contains("spent") && !lowerText.contains("paid")
 
         if (isCredit) {

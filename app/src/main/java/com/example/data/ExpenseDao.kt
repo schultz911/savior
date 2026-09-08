@@ -33,14 +33,8 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE id = :id LIMIT 1")
     suspend fun getExpenseById(id: Long): ExpenseEntity?
 
-    @Query("UPDATE expenses SET category = :newCategory WHERE id = :id")
-    suspend fun updateCategory(id: Long, newCategory: String)
-
     @Query("UPDATE expenses SET category = :newCategory, type = :newType WHERE id = :id")
     suspend fun updateCategoryAndType(id: Long, newCategory: String, newType: ExpenseType)
-
-    @Query("UPDATE expenses SET category = :newCategory WHERE LOWER(TRIM(merchantOrRecipient)) = LOWER(TRIM(:merchant))")
-    suspend fun updateCategoryForMerchant(merchant: String, newCategory: String)
 
     @Query("UPDATE expenses SET category = :newCategory, type = :newType WHERE LOWER(TRIM(merchantOrRecipient)) = LOWER(TRIM(:merchant))")
     suspend fun updateCategoryAndTypeForMerchant(merchant: String, newCategory: String, newType: ExpenseType)
@@ -54,22 +48,19 @@ interface ExpenseDao {
     @Query("SELECT SUM(CASE WHEN amount > refundedAmount THEN amount - refundedAmount ELSE 0.0 END) FROM expenses WHERE monthKey = :monthKey AND category = :category")
     suspend fun getTotalForCategoryInMonthSync(monthKey: String, category: String): Double?
 
-    @Query("SELECT * FROM expenses WHERE timestamp >= :minTimestamp AND timestamp <= :maxTimestamp AND (refundedAmount < amount) AND isReversal = 0 AND LOWER(category) != 'refund' AND (ABS(amount - :amount) < 0.01 OR (LENGTH(:merchantKeyword) > 2 AND LOWER(merchantOrRecipient) LIKE '%' || LOWER(:merchantKeyword) || '%')) ORDER BY timestamp DESC LIMIT 1")
-    suspend fun findMatchingDebitForRefund(amount: Double, merchantKeyword: String, minTimestamp: Long, maxTimestamp: Long): ExpenseEntity?
-
     @Query("""
         SELECT * FROM expenses 
         WHERE timestamp >= :minTimestamp 
-          AND timestamp <= :maxTimestamp 
-          AND isReversal = 0 
-          AND LOWER(category) != 'refund'
-          AND (LENGTH(:merchantKeyword) >= 2 AND (
-              LOWER(merchantOrRecipient) LIKE '%' || LOWER(:merchantKeyword) || '%'
-              OR LOWER(:merchantKeyword) LIKE '%' || LOWER(merchantOrRecipient) || '%'
-          ))
+        AND timestamp <= :maxTimestamp 
+        AND isReversal = 0 
+        AND LOWER(category) != 'refund'
+        AND (LENGTH(:merchantKeyword) >= 2 AND (
+            LOWER(merchantOrRecipient) LIKE '%' || LOWER(:merchantKeyword) || '%'
+            OR LOWER(:merchantKeyword) LIKE '%' || LOWER(merchantOrRecipient) || '%'
+        ))
         ORDER BY 
-          CASE WHEN ABS(amount - :amount) < 0.01 THEN 0 ELSE 1 END,
-          timestamp DESC 
+        CASE WHEN ABS(amount - :amount) < 0.01 THEN 0 ELSE 1 END,
+        timestamp DESC 
         LIMIT 1
     """)
     suspend fun findMatchingDebitByMerchant(
@@ -124,9 +115,6 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE timestamp >= :sinceTimestamp ORDER BY timestamp DESC")
     suspend fun getExpensesSinceSync(sinceTimestamp: Long): List<ExpenseEntity>
 
-    @Query("UPDATE expenses SET isReversal = :isReversal WHERE id = :id")
-    suspend fun updateIsReversal(id: Long, isReversal: Boolean)
-
     @Query("SELECT COUNT(*) > 0 FROM expenses WHERE smsId = :smsId AND smsId > 0")
     suspend fun existsBySmsId(smsId: Long): Boolean
 
@@ -149,16 +137,7 @@ interface ExpenseDao {
     suspend fun updateIsRecurringForMerchant(merchant: String, isRecurring: Boolean)
 
     @Query("SELECT * FROM expenses WHERE isRecurring = 1 ORDER BY timestamp DESC")
-    fun getRecurringExpenses(): Flow<List<ExpenseEntity>>
-
-    @Query("SELECT * FROM expenses WHERE isRecurring = 1 ORDER BY timestamp DESC")
     suspend fun getRecurringExpensesSync(): List<ExpenseEntity>
-
-    @Query("SELECT * FROM expenses WHERE LOWER(TRIM(merchantOrRecipient)) = LOWER(TRIM(:merchant)) ORDER BY timestamp DESC")
-    fun getExpensesForMerchant(merchant: String): Flow<List<ExpenseEntity>>
-
-    @Query("SELECT * FROM expenses WHERE LOWER(TRIM(merchantOrRecipient)) = LOWER(TRIM(:merchant)) ORDER BY timestamp DESC")
-    suspend fun getExpensesForMerchantSync(merchant: String): List<ExpenseEntity>
 
     @Query("DELETE FROM expenses WHERE id = :id")
     suspend fun deleteExpenseById(id: Long)

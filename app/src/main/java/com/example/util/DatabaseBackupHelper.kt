@@ -90,6 +90,7 @@ object DatabaseBackupHelper {
                 val expensesArray = JSONArray()
                 allExpenses.forEach { exp ->
                     val obj = JSONObject().apply {
+                        put("smsId", exp.smsId)
                         put("amount", exp.amount)
                         put("currency", exp.currency)
                         put("type", exp.type.name)
@@ -255,6 +256,7 @@ object DatabaseBackupHelper {
                 }
 
                 val entity = ExpenseEntity(
+                    smsId = obj.optLong("smsId", 0L),
                     amount = obj.getDouble("amount"),
                     currency = obj.optString("currency", preferences.currency),
                     type = type,

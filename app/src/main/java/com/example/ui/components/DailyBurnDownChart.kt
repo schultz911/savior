@@ -84,6 +84,8 @@ fun DailyBurnDownChart(
         label = "burndown_anim"
     )
 
+    val dashEffect = remember { PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f) }
+
     Card(
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = GlassCardBg),
@@ -233,7 +235,6 @@ fun DailyBurnDownChart(
 
                     // 1. Target Budget Reference Line (Dashed)
                     val targetY = yCoord(budget.toFloat())
-                    val dashEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
 
                     // Draw budget guideline
                     if (budget > 0) {

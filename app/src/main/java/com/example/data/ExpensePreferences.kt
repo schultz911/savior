@@ -103,18 +103,6 @@ class ExpensePreferences(context: Context) {
         return prefs.getString(KEY_MERCHANT_CAT_PREFIX + norm, null)
     }
 
-    fun getAllMerchantCategories(): Map<String, String> {
-        val all = prefs.all
-        val map = mutableMapOf<String, String>()
-        for ((key, value) in all) {
-            if (key.startsWith(KEY_MERCHANT_CAT_PREFIX) && value is String) {
-                val merchant = key.removePrefix(KEY_MERCHANT_CAT_PREFIX)
-                map[merchant] = value
-            }
-        }
-        return map
-    }
-
     // ==========================================
     // Merchant Blacklisting
     // ==========================================
