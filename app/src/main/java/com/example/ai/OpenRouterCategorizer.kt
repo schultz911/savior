@@ -31,6 +31,7 @@ data class CategorizationResult(
 object OpenRouterCategorizer {
     private const val TAG = "OpenRouterCategorizer"
     const val DEFAULT_MODEL = "google/gemini-3.5-flash-lite"
+    const val FALLBACK_MODEL = "google/gemini-2.5-flash-lite"
 
     // Standard SAVIO spend categories
     val KNOWN_CATEGORIES = listOf(
@@ -49,6 +50,47 @@ object OpenRouterCategorizer {
         "Personal Care"
     )
 
+    private suspend fun executeChatCompletion(
+        bearer: String,
+        chosenModel: String,
+        systemPrompt: String,
+        userPrompt: String,
+        maxTokens: Int
+    ): OpenRouterChatResponse {
+        val reasoningConfig = if (chosenModel.contains("gemini", ignoreCase = true) || chosenModel.contains("reasoning", ignoreCase = true)) {
+            OpenRouterReasoning(effort = "minimal")
+        } else {
+            null
+        }
+        val request = OpenRouterChatRequest(
+            model = chosenModel,
+            messages = listOf(
+                OpenRouterMessage(role = "system", content = systemPrompt),
+                OpenRouterMessage(role = "user", content = userPrompt)
+            ),
+            temperature = 0.0,
+            maxTokens = maxTokens,
+            reasoning = reasoningConfig
+        )
+        return try {
+            OpenRouterClient.api.createChatCompletion(
+                authorization = bearer,
+                request = request
+            )
+        } catch (e: retrofit2.HttpException) {
+            if ((e.code() == 404 || e.code() == 400) && chosenModel == DEFAULT_MODEL) {
+                Log.w(TAG, "Model $chosenModel returned HTTP ${e.code()}, retrying with fallback model $FALLBACK_MODEL")
+                val fallbackReasoning = OpenRouterReasoning(effort = "minimal")
+                OpenRouterClient.api.createChatCompletion(
+                    authorization = bearer,
+                    request = request.copy(model = FALLBACK_MODEL, reasoning = fallbackReasoning)
+                )
+            } else {
+                throw e
+            }
+        }
+    }
+
     /**
      * Parses and validates an SMS message using OpenRouter (gemini-3.5-flash-lite).
      * Rigorously confirms whether message is an actual OUTGOING EXPENDITURE vs CREDIT/INTIMATION/AD/OTP.
@@ -60,12 +102,12 @@ object OpenRouterCategorizer {
         apiKey: String,
         model: String = DEFAULT_MODEL
     ): AiParsedTransaction? = withContext(Dispatchers.IO) {
-        val cleanKey = apiKey.trim()
+        val cleanKey = apiKey.trim().removeSurrounding("\"").removeSurrounding("'").trim()
         if (cleanKey.isEmpty()) {
             return@withContext null
         }
 
-        val bearer = if (cleanKey.startsWith("Bearer ")) cleanKey else "Bearer $cleanKey"
+        val bearer = if (cleanKey.startsWith("Bearer ", ignoreCase = true)) cleanKey else "Bearer $cleanKey"
 
         val systemPrompt = """
 You are an expert financial transaction intelligence and validation engine for Savio₹ personal expense tracker.
@@ -114,23 +156,19 @@ SMS Body: "$rawText"
 """.trimIndent()
 
         try {
-            val chosenModel = if (model.isNotBlank()) model else DEFAULT_MODEL
-            val request = OpenRouterChatRequest(
-                model = chosenModel,
-                messages = listOf(
-                    OpenRouterMessage(role = "system", content = systemPrompt),
-                    OpenRouterMessage(role = "user", content = userPrompt)
-                ),
-                temperature = 0.0,
-                maxTokens = 200
+            val chosenModel = if (model.isNotBlank()) model.trim() else DEFAULT_MODEL
+            val response = executeChatCompletion(
+                bearer = bearer,
+                chosenModel = chosenModel,
+                systemPrompt = systemPrompt,
+                userPrompt = userPrompt,
+                maxTokens = 1000
             )
 
-            val response = OpenRouterClient.api.createChatCompletion(
-                authorization = bearer,
-                request = request
-            )
-
-            val rawResult = response.choices?.firstOrNull()?.message?.content?.trim() ?: ""
+            val choice = response.choices?.firstOrNull()?.message
+            val contentText = choice?.content?.trim() ?: ""
+            val reasoningText = choice?.reasoning?.trim() ?: ""
+            val rawResult = if (contentText.isNotBlank()) contentText else reasoningText
             Log.d(TAG, "OpenRouter full SMS parse response: '$rawResult'")
 
             if (rawResult.isBlank()) return@withContext null
@@ -147,7 +185,14 @@ SMS Body: "$rawText"
 
             val json = JSONObject(boundedJson)
             val classification = json.optString("classification", "OTHER").uppercase(Locale.US)
-            val amount = json.optDouble("amount", 0.0)
+            val rawAmount = json.opt("amount")
+            val amount = when (rawAmount) {
+                is Number -> rawAmount.toDouble()
+                is String -> rawAmount.replace(",", "").replace("₹", "").replace("$", "")
+                    .replace("Rs.", "", ignoreCase = true).replace("Rs", "", ignoreCase = true)
+                    .trim().toDoubleOrNull() ?: 0.0
+                else -> 0.0
+            }
             val currency = json.optString("currency", "₹").ifEmpty { "₹" }
             val merchant = json.optString("merchant", "Unknown").ifEmpty { "Unknown" }
             val accountInfo = json.optString("accountInfo", "")
@@ -159,10 +204,12 @@ SMS Body: "$rawText"
                            else "General Spend"
             }
 
-            val isRefund = classification == "REFUND"
+            val isRefund = classification == "REFUND" || classification == "REVERSAL"
             val isExpense = (classification == "MERCHANT" || classification == "SPEND" ||
                              classification == "P2P" || classification == "TRANSFER" ||
-                             classification == "SELF" || classification == "CREDIT_CARD") && amount > 0.0
+                             classification == "SELF" || classification == "CREDIT_CARD" ||
+                             classification == "DEBIT" || classification == "EXPENSE" ||
+                             classification == "PAYMENT" || classification == "PURCHASE") && amount > 0.0
 
             val expenseType = when (classification) {
                 "P2P", "TRANSFER" -> ExpenseType.P2P
@@ -171,6 +218,7 @@ SMS Body: "$rawText"
                 else -> {
                     if (category.equals("Self", ignoreCase = true)) ExpenseType.SELF
                     else if (category.equals("Credit Card Bill", ignoreCase = true)) ExpenseType.CREDIT_CARD
+                    else if (category.equals("Transfers", ignoreCase = true)) ExpenseType.P2P
                     else ExpenseType.MERCHANT
                 }
             }
@@ -188,6 +236,10 @@ SMS Body: "$rawText"
                 isAiClassified = true,
                 rawText = rawText
             )
+        } catch (e: retrofit2.HttpException) {
+            val errorBody = try { e.response()?.errorBody()?.string() } catch (_: Exception) { null }
+            Log.e(TAG, "OpenRouter HTTP ${e.code()} parse error: $errorBody", e)
+            null
         } catch (e: Exception) {
             Log.e(TAG, "Error in AI full parse: ${e.message}", e)
             null
@@ -205,7 +257,7 @@ SMS Body: "$rawText"
         apiKey: String,
         model: String = DEFAULT_MODEL
     ): CategorizationResult = withContext(Dispatchers.IO) {
-        val cleanKey = apiKey.trim()
+        val cleanKey = apiKey.trim().removeSurrounding("\"").removeSurrounding("'").trim()
         if (cleanKey.isEmpty()) {
             return@withContext CategorizationResult(
                 category = "UNKNOWN",
@@ -214,7 +266,7 @@ SMS Body: "$rawText"
             )
         }
 
-        val bearer = if (cleanKey.startsWith("Bearer ")) cleanKey else "Bearer $cleanKey"
+        val bearer = if (cleanKey.startsWith("Bearer ", ignoreCase = true)) cleanKey else "Bearer $cleanKey"
 
         val systemPrompt = """
 You are a precise financial transaction categorizer for the Savio₹ personal expense tracking application.
@@ -250,23 +302,19 @@ Output category:
 """.trimIndent()
 
         try {
-            val chosenModel = if (model.isNotBlank()) model else DEFAULT_MODEL
-            val request = OpenRouterChatRequest(
-                model = chosenModel,
-                messages = listOf(
-                    OpenRouterMessage(role = "system", content = systemPrompt),
-                    OpenRouterMessage(role = "user", content = userPrompt)
-                ),
-                temperature = 0.0,
-                maxTokens = 30
+            val chosenModel = if (model.isNotBlank()) model.trim() else DEFAULT_MODEL
+            val response = executeChatCompletion(
+                bearer = bearer,
+                chosenModel = chosenModel,
+                systemPrompt = systemPrompt,
+                userPrompt = userPrompt,
+                maxTokens = 500
             )
 
-            val response = OpenRouterClient.api.createChatCompletion(
-                authorization = bearer,
-                request = request
-            )
-
-            val rawResult = response.choices?.firstOrNull()?.message?.content?.trim() ?: ""
+            val choice = response.choices?.firstOrNull()?.message
+            val contentText = choice?.content?.trim() ?: ""
+            val reasoningText = choice?.reasoning?.trim() ?: ""
+            val rawResult = if (contentText.isNotBlank()) contentText else reasoningText
 
             if (rawResult.equals("UNKNOWN", ignoreCase = true) || rawResult.isBlank()) {
                 return@withContext CategorizationResult(
@@ -276,8 +324,9 @@ Output category:
                 )
             }
 
-            val matched = KNOWN_CATEGORIES.firstOrNull { it.equals(rawResult, ignoreCase = true) }
-                ?: KNOWN_CATEGORIES.firstOrNull { rawResult.contains(it, ignoreCase = true) }
+            val cleaned = rawResult.removeSurrounding("\"").removeSurrounding("'").replace("```", "").trim()
+            val matched = KNOWN_CATEGORIES.firstOrNull { it.equals(cleaned, ignoreCase = true) }
+                ?: KNOWN_CATEGORIES.firstOrNull { cleaned.contains(it, ignoreCase = true) }
 
             if (matched != null) {
                 CategorizationResult(
@@ -286,7 +335,7 @@ Output category:
                     confidence = 0.95f
                 )
             } else {
-                val sanitized = rawResult.filter { it.isLetterOrDigit() || it.isWhitespace() || it == '&' }.trim()
+                val sanitized = cleaned.filter { it.isLetterOrDigit() || it.isWhitespace() || it == '&' }.trim()
                 if (sanitized.length in 3..25) {
                     CategorizationResult(
                         category = sanitized,
@@ -301,6 +350,15 @@ Output category:
                     )
                 }
             }
+        } catch (e: retrofit2.HttpException) {
+            val errorBody = try { e.response()?.errorBody()?.string() } catch (_: Exception) { null }
+            Log.e(TAG, "OpenRouter HTTP ${e.code()} categorization error: $errorBody", e)
+            CategorizationResult(
+                category = "UNKNOWN",
+                isAiClassified = false,
+                confidence = 0f,
+                errorMessage = "HTTP ${e.code()}: $errorBody"
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Error categorizing via OpenRouter: ${e.message}", e)
             CategorizationResult(

@@ -863,9 +863,10 @@ class ExpenseViewModel(
     }
 
     fun updateApiKey(key: String) {
-        preferences.openRouterApiKey = key
-        _openRouterApiKey.value = key
-        _syncFeedback.value = if (key.isNotBlank()) "OpenRouter API Key saved" else "API Key cleared"
+        val trimmed = key.trim()
+        preferences.openRouterApiKey = trimmed
+        _openRouterApiKey.value = trimmed
+        _syncFeedback.value = if (trimmed.isNotBlank()) "OpenRouter API Key saved" else "API Key cleared"
     }
 
     fun updateCategoryLimits(limits: Map<String, Double>) {

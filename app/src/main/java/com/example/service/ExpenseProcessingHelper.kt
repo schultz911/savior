@@ -47,13 +47,10 @@ object ExpenseProcessingHelper {
             return@withContext null
         }
 
-        // 1. Check if it's a refund or reversal via deterministic local parser
+        // Local parser candidate for comparison or fallback
         val localParsed = SmsParser.parse(rawText, sender)
-        if (localParsed != null && localParsed.isRefund) {
-            return@withContext handleRefund(context, localParsed, sender, timestamp, smsId, isBatchSync)
-        }
 
-        // 2. Tier 1: Cloud AI (OpenRouter Gemini 3.5 Flash Lite) if API key is provided
+        // 1. Tier 1: Cloud AI (OpenRouter Gemini 3.5 Flash Lite) if API key is provided
         if (apiKey.isNotEmpty()) {
             val aiParsed = OpenRouterCategorizer.parseSmsTransaction(
                 rawText = rawText,
@@ -63,14 +60,17 @@ object ExpenseProcessingHelper {
             )
             if (aiParsed != null) {
                 // If AI classified this as a REFUND, route to the refund handler with the
-                // AI-extracted merchant name (e.g. "Zomato", "Flipkart") so it is recorded correctly.
+                // extracted merchant name (preferring specific merchant name if available)
                 if (aiParsed.isRefund && aiParsed.amount > 0.0) {
-                    Log.d(TAG, "SMS classified by Cloud AI as REFUND from '${aiParsed.merchant}', routing to handleRefund.")
+                    val specificAi = aiParsed.merchant.takeIf { SmsParser.isSpecificMerchant(it) }
+                    val specificLocal = localParsed?.title?.takeIf { SmsParser.isSpecificMerchant(it) }
+                    val refundMerchant = specificAi ?: specificLocal ?: "Refund / Reversal"
+                    Log.d(TAG, "SMS classified by Cloud AI as REFUND from '$refundMerchant', routing to handleRefund.")
                     val refundParsed = com.example.sms.ParsedSms(
                         amount = aiParsed.amount,
                         currency = aiParsed.currency,
                         type = aiParsed.type,
-                        title = aiParsed.merchant,
+                        title = refundMerchant,
                         accountInfo = aiParsed.accountInfo,
                         category = "Refund",
                         isExpense = false,
@@ -99,7 +99,7 @@ object ExpenseProcessingHelper {
             }
         }
 
-        // 3. Tier 2: On-Device AI (Android AICore / Gemini Nano) fallback if OpenRouter is empty or fails
+        // 2. Tier 2: On-Device AI (Android AICore / Gemini Nano) fallback if OpenRouter is empty or fails
         if (AiCoreCategorizer.isAiCoreAvailable(context)) {
             val nanoParsed = AiCoreCategorizer.parseSmsTransaction(
                 context = context,
@@ -107,6 +107,24 @@ object ExpenseProcessingHelper {
                 sender = sender
             )
             if (nanoParsed != null) {
+                if (nanoParsed.isRefund && nanoParsed.amount > 0.0) {
+                    val specificNano = nanoParsed.merchant.takeIf { SmsParser.isSpecificMerchant(it) }
+                    val specificLocal = localParsed?.title?.takeIf { SmsParser.isSpecificMerchant(it) }
+                    val refundMerchant = specificNano ?: specificLocal ?: "Refund / Reversal"
+                    val refundParsed = com.example.sms.ParsedSms(
+                        amount = nanoParsed.amount,
+                        currency = nanoParsed.currency,
+                        type = nanoParsed.type,
+                        title = refundMerchant,
+                        accountInfo = nanoParsed.accountInfo,
+                        category = "Refund",
+                        isExpense = false,
+                        rawText = rawText,
+                        isRefund = true
+                    )
+                    return@withContext handleRefund(context, refundParsed, sender, timestamp, smsId, isBatchSync)
+                }
+
                 if (!nanoParsed.isExpense) {
                     Log.d(TAG, "SMS classified by AICore as non-expense (${nanoParsed.classification}), ignoring: '$rawText'")
                     return@withContext null
@@ -126,9 +144,14 @@ object ExpenseProcessingHelper {
             }
         }
 
-        // 4. Tier 3: Enhanced Local Regex Parser (100% offline, universal compatibility)
-        if (localParsed != null && localParsed.isExpense) {
-            return@withContext processAndInsertExpense(context, localParsed, sender, timestamp, smsId, isBatchSync)
+        // 3. Tier 3: Enhanced Local Regex Parser (100% offline, universal compatibility)
+        if (localParsed != null) {
+            if (localParsed.isRefund) {
+                return@withContext handleRefund(context, localParsed, sender, timestamp, smsId, isBatchSync)
+            }
+            if (localParsed.isExpense) {
+                return@withContext processAndInsertExpense(context, localParsed, sender, timestamp, smsId, isBatchSync)
+            }
         }
         return@withContext null
     }
@@ -181,13 +204,7 @@ object ExpenseProcessingHelper {
         val minTimestamp = timestamp - lookbackMillis
         val maxTimestamp = timestamp + 3600000L
 
-        val hasSpecificMerchant = parsed.title.isNotBlank() &&
-                !parsed.title.equals("Merchant / Payee", ignoreCase = true) &&
-                !parsed.title.equals("Refund / Reversal", ignoreCase = true) &&
-                !parsed.title.equals("Transfer Recipient", ignoreCase = true) &&
-                !parsed.title.equals("Unknown", ignoreCase = true) &&
-                !parsed.title.startsWith("UPI (", ignoreCase = true) &&
-                parsed.title.any { it.isLetter() }
+        val hasSpecificMerchant = SmsParser.isSpecificMerchant(parsed.title)
 
         val matching: ExpenseEntity? = if (hasSpecificMerchant) {
             dao.findMatchingDebitByMerchant(
@@ -207,8 +224,15 @@ object ExpenseProcessingHelper {
         val preferredCurrency = prefs.currency.ifEmpty { parsed.currency }
         val effectiveMerchant = when {
             hasSpecificMerchant -> parsed.title.trim()
-            matching != null && matching.merchantOrRecipient.isNotBlank() -> matching.merchantOrRecipient.trim()
-            else -> "Refund / Reversal"
+            matching != null && SmsParser.isSpecificMerchant(matching.merchantOrRecipient) -> matching.merchantOrRecipient.trim()
+            else -> {
+                val extracted = SmsParser.extractRefundMerchant(parsed.rawText)
+                if (SmsParser.isSpecificMerchant(extracted)) {
+                    extracted
+                } else {
+                    "Refund / Reversal"
+                }
+            }
         }
         val effectiveType = matching?.type ?: com.example.data.ExpenseType.MERCHANT
 

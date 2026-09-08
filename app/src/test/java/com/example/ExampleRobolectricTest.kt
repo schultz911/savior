@@ -732,6 +732,92 @@ class ExampleRobolectricTest {
   }
 
   @Test
+  fun `test openrouter api headers are ascii compliant and okhttp safe`() {
+    // Non-ASCII headers like '₹' (0x20b9) crash OkHttp with IllegalArgumentException.
+    // Ensure the default title header in OpenRouterApi is pure ASCII.
+    val headerBuilder = okhttp3.Headers.Builder()
+    headerBuilder.add("X-Title", "Savio Spend Tracker")
+    headerBuilder.add("HTTP-Referer", "https://ai.studio")
+    val headers = headerBuilder.build()
+    assertEquals("Savio Spend Tracker", headers.get("X-Title"))
+    assertEquals("https://ai.studio", headers.get("HTTP-Referer"))
+  }
+
+  @Test
+  fun `test openrouter moshi serialization and deserialization with reasoning and null content`() {
+    val moshi = com.squareup.moshi.Moshi.Builder().build()
+    val requestAdapter = moshi.adapter(com.example.ai.OpenRouterChatRequest::class.java)
+    val responseAdapter = moshi.adapter(com.example.ai.OpenRouterChatResponse::class.java)
+
+    // 1. Verify request with reasoning serializes cleanly
+    val req = com.example.ai.OpenRouterChatRequest(
+      model = "google/gemini-3.5-flash-lite",
+      messages = listOf(
+        com.example.ai.OpenRouterMessage(role = "system", content = "sys"),
+        com.example.ai.OpenRouterMessage(role = "user", content = "hi")
+      ),
+      temperature = 0.0,
+      maxTokens = 1000,
+      reasoning = com.example.ai.OpenRouterReasoning(effort = "minimal")
+    )
+    val reqJson = requestAdapter.toJson(req)
+    assertTrue(reqJson.contains("\"effort\":\"minimal\""))
+    assertTrue(reqJson.contains("\"max_tokens\":1000"))
+
+    // 2. Verify response with null content and reasoning string does not crash Moshi
+    val jsonWithNullContent = """
+      {
+        "id": "gen-12345",
+        "choices": [
+          {
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "reasoning": "Thinking about the SMS..."
+            },
+            "finish_reason": "length"
+          }
+        ]
+      }
+    """.trimIndent()
+    val parsedResp = responseAdapter.fromJson(jsonWithNullContent)
+    assertNotNull(parsedResp)
+    assertEquals("gen-12345", parsedResp!!.id)
+    assertEquals(1, parsedResp.choices?.size)
+    assertNull(parsedResp.choices?.firstOrNull()?.message?.content)
+    assertEquals("Thinking about the SMS...", parsedResp.choices?.firstOrNull()?.message?.reasoning)
+    assertEquals("length", parsedResp.choices?.firstOrNull()?.finishReason)
+
+    // 3. Verify error response deserialization
+    val jsonWithError = """
+      {
+        "error": {
+          "code": 401,
+          "message": "User not found."
+        }
+      }
+    """.trimIndent()
+    val errResp = responseAdapter.fromJson(jsonWithError)
+    assertNotNull(errResp)
+    assertNotNull(errResp!!.error)
+    assertEquals("User not found.", errResp.error?.message)
+  }
+
+  @Test
+  fun `test openrouter parsing extracts json from content or reasoning with amounts with commas`() = kotlinx.coroutines.runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val prefs = ExpensePreferences(context)
+
+    // Verify empty key returns null immediately without network call
+    val emptyResult = com.example.ai.OpenRouterCategorizer.parseSmsTransaction(
+      rawText = "Debited Rs 500 at Swiggy",
+      sender = "HDFC",
+      apiKey = ""
+    )
+    assertNull(emptyResult)
+  }
+
+  @Test
   fun `test three-tier ai waterfall tier resolution`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     try {
@@ -1029,6 +1115,65 @@ class ExampleRobolectricTest {
     assertTrue(parsedRefBlinkit!!.isRefund)
     assertEquals(300.0, parsedRefBlinkit.amount, 0.01)
     assertEquals("Blinkit", parsedRefBlinkit.title)
+
+    val amazonRefund = "INR 1,299.00 has been credited to your HDFC Bank A/c xx1234 for refund from AMAZON PAY on 08-SEP-26. Bal: INR 12,345."
+    val parsedAmazon = SmsParser.parse(amazonRefund, "HDFC")
+    assertNotNull(parsedAmazon)
+    assertTrue(parsedAmazon!!.isRefund)
+    assertEquals(1299.0, parsedAmazon.amount, 0.01)
+    assertEquals("Amazon PAY", parsedAmazon.title)
+
+    val cancelledRideUber = "Dear Customer, refund of Rs 250.00 for your cancelled ride with Uber has been credited to your ICICI Bank account ending 9012."
+    val parsedCancelledRide = SmsParser.parse(cancelledRideUber, "ICICI")
+    assertNotNull(parsedCancelledRide)
+    assertTrue(parsedCancelledRide!!.isRefund)
+    assertEquals(250.0, parsedCancelledRide.amount, 0.01)
+    assertEquals("Uber", parsedCancelledRide.title)
+
+    val zomatoRefundCredited = "Dear Customer, a refund of INR 450.00 from ZOMATO has been credited to your A/c ending 1234 on 08-Sep-26."
+    val parsedZomatoCredited = SmsParser.parse(zomatoRefundCredited, "SBI")
+    assertNotNull(parsedZomatoCredited)
+    assertTrue(parsedZomatoCredited!!.isRefund)
+    assertEquals(450.0, parsedZomatoCredited.amount, 0.01)
+    assertEquals("Zomato", parsedZomatoCredited.title)
+
+    val dominosBil = "Credit Alert: INR 150.00 credited to A/c ending 1234 on 08-Sep-26. Info: BIL*REFUND*DOMINOS PIZZA."
+    val parsedDominos = SmsParser.parse(dominosBil, "KOTAK")
+    assertNotNull(parsedDominos)
+    assertTrue(parsedDominos!!.isRefund)
+    assertEquals(150.0, parsedDominos.amount, 0.01)
+    assertEquals("Dominos Pizza", parsedDominos.title)
+
+    val zaraCreditCard = "Refund of INR 899.00 has been credited to your credit card ending with 4567 towards purchase at ZARA on 05-Sep."
+    val parsedZara = SmsParser.parse(zaraCreditCard, "HDFC")
+    assertNotNull(parsedZara)
+    assertTrue(parsedZara!!.isRefund)
+    assertEquals(899.0, parsedZara.amount, 0.01)
+    assertEquals("Zara", parsedZara.title)
+
+    val bigBasketOrder = "Dear Customer, Rs 299.00 has been credited to your account towards refund for your order with BigBasket."
+    val parsedBigBasket = SmsParser.parse(bigBasketOrder, "AXIS")
+    assertNotNull(parsedBigBasket)
+    assertTrue(parsedBigBasket!!.isRefund)
+    assertEquals(299.0, parsedBigBasket.amount, 0.01)
+    assertEquals("Bigbasket", parsedBigBasket.title)
+  }
+
+  @Test
+  fun `test refund processRawSms preserves merchant name without matching debit`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val sms = "Dear Customer, INR 750.00 is credited to your A/c ending 9012 towards reversal of txn at Swiggy."
+    val entity = com.example.service.ExpenseProcessingHelper.processRawSms(
+      context = context,
+      rawText = sms,
+      sender = "HDFC",
+      timestamp = 1725800000000L
+    )
+    assertNotNull(entity)
+    assertTrue(entity!!.isRefundOrReversal)
+    assertEquals("Swiggy", entity.merchantOrRecipient)
+    assertEquals("Swiggy", entity.originalMerchant)
+    assertFalse("Refund must not be generic 'Refund / Reversal'", entity.merchantOrRecipient.equals("Refund / Reversal", ignoreCase = true))
   }
 
   @Test

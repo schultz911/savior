@@ -52,12 +52,12 @@ class ExpensePreferences(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_HAS_IMPORTED_SAMPLES, value).apply()
 
     var openRouterApiKey: String
-        get() = prefs.getString(KEY_OPENROUTER_API_KEY, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_OPENROUTER_API_KEY, value).apply()
+        get() = (prefs.getString(KEY_OPENROUTER_API_KEY, "") ?: "").trim()
+        set(value) = prefs.edit().putString(KEY_OPENROUTER_API_KEY, value.trim()).apply()
 
     var openRouterModel: String
-        get() = prefs.getString(KEY_OPENROUTER_MODEL, "google/gemini-3.5-flash-lite") ?: "google/gemini-3.5-flash-lite"
-        set(value) = prefs.edit().putString(KEY_OPENROUTER_MODEL, value).apply()
+        get() = prefs.getString(KEY_OPENROUTER_MODEL, "google/gemini-3.5-flash-lite")?.takeIf { it.isNotBlank() } ?: "google/gemini-3.5-flash-lite"
+        set(value) = prefs.edit().putString(KEY_OPENROUTER_MODEL, value.trim()).apply()
 
     var isAiCoreForceEnabled: Boolean
         get() = prefs.getBoolean(KEY_AICORE_FORCE_ENABLED, false)

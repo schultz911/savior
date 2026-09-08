@@ -98,26 +98,35 @@ object SmsParser {
 
     // Dedicated refund-merchant extraction patterns (ordered most-specific → least-specific)
     private val REFUND_MERCHANT_PATTERNS = listOf(
-        // 1. BIL*REFUND*FLIPKART or INFO: BIL-REV-SWIGGY style
-        Pattern.compile("""(?i)(?:bil|ips|inf|info|txn)[*_\s-]*(?:refund|rev|reversal|ret)[*_\s-]+([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s*(?:on\b|ref\b|avl\b|bal\b)|[.!,;]|$)"""),
-        // 2. "credited to your a/c from <Merchant>" / "credited to card from <Merchant>"
-        Pattern.compile("""(?i)credited\s+(?:back\s+)?(?:to\s+(?:your\s+)?(?:a/c|account|acct|card|wallet|vpa|upi)[^.]*?\s+)?(?:from|by|at)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|ref\b|is\s+credited|avl\b|bal\b)|[.!,;]|$)"""),
-        // 3. "refunded to <anything> by/from/at <Merchant>" or "refunded by <Merchant>"
-        Pattern.compile("""(?i)refunded\s+(?:to\s+(?:your\s+)?(?:a/c|account|acct|card|wallet|source)[^.]*?\s+)?(?:from|by|at|towards)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|ref\b|avl\b|bal\b)|[.!,;]|$)"""),
-        // 4. "reversal of txn at <Merchant>" / "reversal done at <Merchant>" / "reversed by <Merchant>"
-        Pattern.compile("""(?i)(?:reversal\s+(?:of\s+(?:(?:upi\s+)?txn\s+)?(?:at|to|from)\s+|done\s+(?:at|by)\s+)|reversed\s+(?:by|from|at)\s+)([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|dated\b|via\b|ref\b)|[.!,;]|$)"""),
-        // 5. "refund from <Merchant>" / "refund by <Merchant>" / "refund at <Merchant>"
-        Pattern.compile("""(?i)\brefund\s+(?:of\s+(?:rs\.?|inr|[$€£])?\s*[0-9,.]+\s+)?(?:from|by|at)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:is\b|has\b|on\b|via\b|ref\b|credited|avl\b)|[.!,;]|$)"""),
-        // 6. "<Amount> refunded/reversed/credited back from/by <Merchant>"
-        Pattern.compile("""(?i)(?:rs\.?|inr|[$€£])?\s*[0-9,.]+\s+(?:has\s+been\s+)?(?:refunded|reversed|credited\s+back)\s+(?:to\s+(?:your\s+)?(?:a/c|account|card|wallet)[^.]*?\s+)?(?:from|by|at)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:is\b|has\b|on\b|via\b|ref\b|avl\b)|[.!,;]|$)"""),
-        // 7. "towards refund from/by <Merchant>"
-        Pattern.compile("""(?i)towards\s+(?:refund|reversal)\s+(?:from|by|at)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|ref\b)|[.!,;]|$)"""),
-        // 8. "Your <Merchant> refund" / "<Merchant> refund of Rs X" (merchant appears before refund keyword)
+        // 1. BIL*REFUND*FLIPKART, BIL*FLIPKART*REFUND, INFO: BIL-REV-SWIGGY, NEFT-REFUND-MAKEMYTRIP
+        Pattern.compile("""(?i)(?:bil|ips|inf|info|txn|neft|imps|upi|rtgs)[*_\s-]*(?:refund|rev|reversal|ret)[*_\s-]+([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s+(?:on|via|dated|ref|avl|bal)\b|[.!,;]|$)"""),
+        Pattern.compile("""(?i)(?:bil|ips|inf|info|txn|neft|imps|upi|rtgs)[*_\s-]+([A-Za-z0-9&.\-_/ ]{2,30}?)[*_\s-]+(?:refund|rev|reversal|ret)(?:\s+(?:on|via|dated|ref|avl|bal)\b|[.!,;]|$)"""),
+
+        // 2. "towards refund / reversal / credit back / purchase / order"
+        Pattern.compile("""(?i)towards\s+(?:(?:refund|reversal|credit\s+back)\s+)?(?:of\s+(?:(?:upi\s+)?txn|transaction|order|purchase|ride|booking)\s+)?(?:from|by|at|on|to|with)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:on|via|dated|ref|avl|bal)\b|[.!,;]|$)"""),
+        Pattern.compile("""(?i)towards\s+(?:(?:refund|reversal|credit\s+back)\s+)?(?:for\s+)?(?:(?:your\s+)?(?:cancelled\s+)?(?:order|ride|purchase|txn|transaction|booking)\s+(?:at|on|from|to|with)\s+)([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:on|via|dated|ref|avl|bal)\b|[.!,;]|$)"""),
+        Pattern.compile("""(?i)towards\s+(?:your\s+)?(?:order|purchase|txn|transaction|ride|booking)\s+(?:at|on|from|to|with)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:on|via|dated|ref|avl|bal)\b|[.!,;]|$)"""),
+
+        // 3. "refund for <order/ride/purchase> at/on/with/from <Merchant>" or "refund of <Amount> for <order> at <Merchant>"
+        Pattern.compile("""(?i)\brefund\s+(?:of\s+(?:rs\.?|inr|usd|[$€£])?\s*[0-9,.]+\s+)?(?:for\s+.{1,35}?\b(?:at|on|from|to|with)\s+|(?:from|at|with)\s+)([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:is|has|on|via|dated|ref|credited|avl|bal)\b|[.!,;]|$)"""),
+        Pattern.compile("""(?i)\brefund\s+for\s+(?:(?:your\s+)?(?:cancelled\s+)?(?:order|ride|purchase|txn|transaction|booking)\s+(?:at|on|from|to|with)\s+)?([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:of\s+(?:rs\.?|inr|usd|[$€£])|is|has|on|via|dated|ref|credited|avl|bal)\b|[.!,;]|$)"""),
+        Pattern.compile("""(?i)\brefund\s+(?:from|at)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)\s+(?:of\s+(?:rs\.?|inr|usd|[$€£])?\s*[0-9,.]+\s+)?(?:\s+(?:is|has|on|via|dated|ref|credited|avl|bal)\b|[.!,;]|$)"""),
+
+        // 4. "refund initiated by <Merchant>" / "reversed by <Merchant>"
+        Pattern.compile("""(?i)(?:refund|reversal)\s+(?:initiated\s+by|done\s+(?:at|by))\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:has|is|on|via|dated|ref)\b|[.!,;]|$)"""),
+
+        // 5. "credited back / refunded / reversed to card/ac from/at <Merchant>"
+        Pattern.compile("""(?i)(?:credited\s+(?:back\s+)?|refunded\s+|reversed\s+)(?:to\s+(?:your\s+)?(?:a/c|account|acct|card|wallet|vpa|upi|source)[^.]*?\s+)?(?:from|at|with)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:on|via|dated|ref|is\s+credited|avl|bal)\b|[.!,;]|$)"""),
+        Pattern.compile("""(?i)(?:rs\.?|inr|usd|[$€£])?\s*[0-9,.]+\s+(?:has\s+been\s+)?(?:refunded|reversed|credited\s+back)\s+(?:to\s+(?:your\s+)?(?:a/c|account|card|wallet|source)[^.]*?\s+)?(?:from|at|with)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:on|via|dated|ref|avl|bal)\b|[.!,;]|$)"""),
+
+        // 6. "reversal of (upi) txn at/to/from/on <Merchant>"
+        Pattern.compile("""(?i)(?:reversal\s+(?:of\s+(?:(?:upi\s+)?txn\s+)?(?:at|to|from|on|with)\s+)|reversed\s+(?:by|from|at)\s+)([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:on|dated|via|ref)\b|[.!,;]|$)"""),
+
+        // 7. "Your <Merchant> refund"
         Pattern.compile("""(?i)\byour\s+([A-Za-z][A-Za-z0-9&.\- ]{1,25}?)\s+(?:refund|cashback|reversal)\b"""),
-        // 9. "refund for (order|purchase|txn) at/on/from <Merchant>"
-        Pattern.compile("""(?i)\brefund\s+for\s+(?:(?:your\s+)?(?:order|purchase|txn|transaction)\s+(?:at|on|from|to)\s+)?([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:is\b|has\b|on\b|via\b|ref\b|credited)|[.!,;]|$)"""),
-        // 10. "cashback from <Merchant>" / "cashback by <Merchant>"
-        Pattern.compile("""(?i)\bcashback\s+(?:of\s+(?:rs\.?|inr|[$€£])?\s*[0-9,.]+\s+)?(?:from|by|at)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|has\b|is\b|credited)|[.!,;]|$)""")
+
+        // 8. "cashback from/at <Merchant>"
+        Pattern.compile("""(?i)\bcashback\s+(?:of\s+(?:rs\.?|inr|usd|[$€£])?\s*[0-9,.]+\s+)?(?:from|at|by\s+(?!(?:rs\.?|inr|usd|[$€£]|\d)))\s*([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:on|via|has|is|credited)\b|[.!,;]|$)""")
     )
 
     fun isRefundIntimationOrPending(text: String): Boolean {
@@ -418,20 +427,38 @@ object SmsParser {
      * Runs exhaustive refund-specific patterns first, then falls back to the
      * generic merchant extractor. Only returns "Refund / Reversal" as a true last resort.
      */
-    private fun extractRefundMerchant(text: String): String {
+    fun isSpecificMerchant(name: String?): Boolean {
+        if (name.isNullOrBlank()) return false
+        val clean = name.trim()
+        if (clean.length < 2 || clean.length > 35) return false
+        if (!clean.any { it.isLetter() }) return false
+        val lower = clean.lowercase(Locale.US)
+        val genericWords = setOf(
+            "refund", "reversal", "refund / reversal", "merchant / payee", "transfer recipient",
+            "unknown", "your", "a c", "account", "card", "rs", "inr", "usd", "cashback",
+            "order", "txn", "transaction", "purchase", "booking", "source", "upi", "vpa",
+            "cancelled ride", "cancelled", "payment", "spend", "general", "bank"
+        )
+        if (genericWords.contains(lower)) return false
+        if (lower.startsWith("rs ") || lower.startsWith("inr ") || lower.startsWith("usd ") || lower.startsWith("rs.")) return false
+        if (lower.startsWith("upi (") && lower.endsWith(")")) return false
+        if (isBankName(clean)) return false
+        return true
+    }
+
+    /**
+     * Dedicated refund merchant extractor.
+     * Runs exhaustive refund-specific patterns first, then falls back to the
+     * generic merchant extractor. Only returns "Refund / Reversal" as a true last resort.
+     */
+    fun extractRefundMerchant(text: String): String {
         // 1. Try all dedicated refund-specific patterns first
         for (pattern in REFUND_MERCHANT_PATTERNS) {
             val matcher = pattern.matcher(text)
             while (matcher.find()) {
                 val match = matcher.group(1)?.trim() ?: ""
                 val clean = cleanMerchantName(match)
-                if (clean.length in 2..35 && !isBankName(clean) && clean.any { it.isLetter() }
-                    && !clean.startsWith("UPI (", ignoreCase = true)
-                    && !clean.equals("Refund", ignoreCase = true)
-                    && !clean.equals("Reversal", ignoreCase = true)
-                    && !clean.equals("your", ignoreCase = true)
-                    && !clean.equals("a c", ignoreCase = true)
-                ) {
+                if (isSpecificMerchant(clean)) {
                     return clean
                 }
             }
@@ -440,7 +467,7 @@ object SmsParser {
         // 2. Fall back to generic merchant extractor (covers POS/spend patterns that may
         //    appear in reversal SMS like "reversal at <merchant>")
         val genericResult = extractMerchant(text, false)
-        if (genericResult != "Merchant / Payee") {
+        if (isSpecificMerchant(genericResult)) {
             return genericResult
         }
 
@@ -478,6 +505,14 @@ object SmsParser {
             .replace(SPECIAL_CHARS_REGEX, " ")
             .trim()
             .trimEnd('.', ',', ';', ':', '-', ' ')
+
+        // Strip contextual prefixes like "order on ", "order at ", "cancelled ride with ", "ride with "
+        clean = clean.replace(Regex("""(?i)^(?:cancelled\s+)?(?:order|ride|purchase|txn|transaction|booking)\s+(?:at|on|with|from|to)\s+"""), "")
+            .replace(Regex("""(?i)^(?:at|on|from|to|with)\s+"""), "")
+            .trim()
+
+        // Strip trailing reference numbers like "-01234" or "/9876"
+        clean = clean.replace(Regex("""[-/]\d{4,}$"""), "").trim()
 
         // Capitalize words nicely
         val words = clean.split(" ")

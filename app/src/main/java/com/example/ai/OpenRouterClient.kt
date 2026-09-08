@@ -13,27 +13,42 @@ import java.util.concurrent.TimeUnit
 
 @JsonClass(generateAdapter = true)
 data class OpenRouterMessage(
-    @param:Json(name = "role") val role: String,
-    @param:Json(name = "content") val content: String
+    @param:Json(name = "role") val role: String? = "user",
+    @param:Json(name = "content") val content: String? = "",
+    @param:Json(name = "reasoning") val reasoning: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class OpenRouterReasoning(
+    @param:Json(name = "effort") val effort: String = "minimal"
 )
 
 @JsonClass(generateAdapter = true)
 data class OpenRouterChatRequest(
     @param:Json(name = "model") val model: String = "google/gemini-3.5-flash-lite",
     @param:Json(name = "messages") val messages: List<OpenRouterMessage>,
-    @param:Json(name = "temperature") val temperature: Double = 0.1,
-    @param:Json(name = "max_tokens") val maxTokens: Int = 200
+    @param:Json(name = "temperature") val temperature: Double = 0.0,
+    @param:Json(name = "max_tokens") val maxTokens: Int = 1000,
+    @param:Json(name = "reasoning") val reasoning: OpenRouterReasoning? = null
 )
 
 @JsonClass(generateAdapter = true)
 data class OpenRouterChatChoice(
-    @param:Json(name = "message") val message: OpenRouterMessage?
+    @param:Json(name = "message") val message: OpenRouterMessage?,
+    @param:Json(name = "finish_reason") val finishReason: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class OpenRouterError(
+    @param:Json(name = "code") val code: Any? = null,
+    @param:Json(name = "message") val message: String? = null
 )
 
 @JsonClass(generateAdapter = true)
 data class OpenRouterChatResponse(
-    @param:Json(name = "id") val id: String?,
-    @param:Json(name = "choices") val choices: List<OpenRouterChatChoice>?
+    @param:Json(name = "id") val id: String? = null,
+    @param:Json(name = "choices") val choices: List<OpenRouterChatChoice>? = null,
+    @param:Json(name = "error") val error: OpenRouterError? = null
 )
 
 interface OpenRouterApi {
@@ -41,7 +56,7 @@ interface OpenRouterApi {
     suspend fun createChatCompletion(
         @Header("Authorization") authorization: String,
         @Header("HTTP-Referer") referer: String = "https://ai.studio",
-        @Header("X-Title") title: String = "Savio₹ Spend Tracker",
+        @Header("X-Title") title: String = "Savio Spend Tracker",
         @Body request: OpenRouterChatRequest
     ): OpenRouterChatResponse
 }
