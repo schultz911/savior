@@ -144,6 +144,7 @@ object AiCoreCategorizer {
             }
 
             val type = when (classification) {
+                "MERCHANT", "SPEND", "DEBIT", "PURCHASE" -> ExpenseType.MERCHANT
                 "P2P", "TRANSFER" -> ExpenseType.P2P
                 "SELF" -> ExpenseType.SELF
                 "CREDIT_CARD" -> ExpenseType.CREDIT_CARD
@@ -220,6 +221,10 @@ object AiCoreCategorizer {
                 }
             }
 
+            if (type == ExpenseType.MERCHANT && category.equals("Credit Card Bill", ignoreCase = true)) {
+                category = "General Spend"
+            }
+
             AiParsedTransaction(
                 classification = classification,
                 isExpense = true,
@@ -264,10 +269,12 @@ object AiCoreCategorizer {
                 Amount: $currency$amount
                 SMS: "$rawText"
                 
-                Choose exactly one from:
-                [Transfers, Credit Card Bill, Self, Groceries, Food & Dining, Shopping, Bills & Utilities, Travel & Commute, Entertainment, Health & Wellness, Investments, Education, Personal Care]
-                
-                Return JSON only:
+            Choose exactly one from:
+            [Transfers, Credit Card Bill, Self, Groceries, Food & Dining, Shopping, Bills & Utilities, Travel & Commute, Entertainment, Health & Wellness, Investments, Education, Personal Care]
+            
+            Rule: A purchase made using a credit card at a store/merchant is categorized by what was bought, NEVER as "Credit Card Bill"!
+            
+            Return JSON only:
                 {"category": "Chosen Category", "confidence": 0.95}
             """.trimIndent()
 
@@ -302,16 +309,25 @@ object AiCoreCategorizer {
             SMS: "$rawText"
             
             Extract:
-            1. classification: "MERCHANT", "P2P", "SELF", "CREDIT_CARD", "CREDIT", "REFUND", "INTIMATION", "AD", "OTP", or "OTHER"
+            1. classification:
+               - "MERCHANT": Outgoing spend, debit, or purchase at a store, vendor, restaurant, or service.
+                 CRITICAL: Purchases made using a credit card (e.g. Swiggy, Amazon, Uber, store) are ALWAYS "MERCHANT", NOT "CREDIT_CARD"!
+               - "CREDIT_CARD": ONLY when paying off a credit card bill/statement/dues.
+               - "P2P": Money sent to a person via UPI/NEFT/IMPS.
+               - "SELF": Transfer between own bank accounts.
+               - "REFUND": A confirmed refund or reversal credited back.
+               - "CREDIT", "INTIMATION", "AD", "OTP", or "OTHER".
             2. isExpense: true for MERCHANT, P2P, SELF, or CREDIT_CARD. false for REFUND, CREDIT, AD, OTP.
             3. amount: numeric value of debit or refund.
             4. currency: symbol like "₹", "$", "€". Default "₹".
-            5. merchant: entity or person paid, or merchant issuing refund (NEVER the bank or carrier name like HDFC/SBI/AXIS/ICICI).
-            6. accountInfo: e.g. "A/c ••1234" or "Card ••5678" or "UPI ••9012".
-            7. category: from [Transfers, Credit Card Bill, Self, Groceries, Food & Dining, Shopping, Bills & Utilities, Travel & Commute, Entertainment, Health & Wellness, Investments, Education, Personal Care]. For REFUND, use "Refund".
+            5. merchant: Extract the EXACT merchant, store, vendor, or recipient name VERBATIM as written in the SMS (e.g. "SWIGGY BANGALORE", "AMAZON INDIA", "BLUE TOKAI COFFEE"). Do not abbreviate or summarize.
+            6. accountInfo: e.g. "Card ••1234" or "A/c ••5678" or "UPI ••9012".
+            7. category: from [Transfers, Credit Card Bill, Self, Groceries, Food & Dining, Shopping, Bills & Utilities, Travel & Commute, Entertainment, Health & Wellness, Investments, Education, Personal Care].
+               - For purchases made with a credit card, categorize by the merchant (e.g. "Food & Dining", "Shopping"), NEVER "Credit Card Bill"!
+               - Use "Credit Card Bill" ONLY when paying off the card bill itself.
             
             Return JSON only:
-            {"classification":"MERCHANT","isExpense":true,"amount":100.0,"currency":"₹","merchant":"Store","accountInfo":"A/c ••1234","category":"Groceries"}
+            {"classification":"MERCHANT","isExpense":true,"amount":100.0,"currency":"₹","merchant":"Store","accountInfo":"Card ••1234","category":"Groceries"}
         """.trimIndent()
     }
 
@@ -445,16 +461,24 @@ object AiCoreCategorizer {
                 lowerText.contains("transferred to your own") || lowerText.contains("linked account") ||
                 lowerText.contains("between your accounts")
 
-        val isCreditCard = lowerText.contains("credit card payment") || lowerText.contains("paid towards credit card") ||
-                lowerText.contains("cc payment") || (lowerText.contains("card ending") && lowerText.contains("payment received")) ||
-                lowerText.contains("bill payment for card")
+        val hasMerchant = lowerText.contains(" at ") || lowerText.contains(" spent ") || lowerText.contains(" charged ") || lowerText.contains(" swiped ") || lowerText.contains(" purchase ")
+        val isCreditCardBill = !hasMerchant && (
+            lowerText.contains("towards your credit card") ||
+            lowerText.contains("towards credit card") ||
+            lowerText.contains("credit card bill") ||
+            lowerText.contains("card dues") ||
+            (lowerText.contains("payment received") && lowerText.contains("card")) ||
+            lowerText.contains("bill payment for card") ||
+            lowerText.contains("autopay for card") ||
+            lowerText.contains("paid towards credit card")
+        )
 
         val isP2p = lowerText.contains("sent to") || lowerText.contains("transferred to") ||
                 lowerText.contains("upi/p2p") || (lowerText.contains("vpa") && lowerText.contains("paid to"))
 
         val classification = when {
             isSelf -> "SELF"
-            isCreditCard -> "CREDIT_CARD"
+            isCreditCardBill -> "CREDIT_CARD"
             isP2p -> "P2P"
             else -> "MERCHANT"
         }
@@ -492,8 +516,8 @@ object AiCoreCategorizer {
     private val ACCOUNT_PATTERN_CARD_AC = Regex("""(?:a/c|acct|ac|card)\s*(?:no\.?)?\s*[*•xX]*(\d{3,4})""", RegexOption.IGNORE_CASE)
     private val ACCOUNT_PATTERN_ENDING = Regex("""ending\s*(?:in)?\s*[*•xX]*(\d{3,4})""", RegexOption.IGNORE_CASE)
 
-    private val MERCHANT_PATTERN_AT_TO = Regex("""(?:at|to|info:?|vpa)\s+([A-Za-z0-9\s.&'-]+?)(?:\s+on|\s+ref|\s+upi|\s+txn|\s+via|\s+balance|\s+avail|\.|$)""", RegexOption.IGNORE_CASE)
-    private val MERCHANT_PATTERN_PAID_TO = Regex("""paid\s+(?:rs\.?|inr|₹)?\s*[\d,.]*\s*to\s+([A-Za-z0-9\s.&'-]+?)(?:\s+on|\s+ref|\.|$)""", RegexOption.IGNORE_CASE)
+    private val MERCHANT_PATTERN_AT_TO = Regex("""(?:\bat|\bto|info:?|vpa)\s+([A-Za-z0-9\s.&'-]+?)(?:\s+(?:on|ref|upi|txn|via|balance|avail)\b|[.!,;]|$)""", RegexOption.IGNORE_CASE)
+    private val MERCHANT_PATTERN_PAID_TO = Regex("""paid\s+(?:rs\.?|inr|₹)?\s*[\d,.]*\s*to\s+([A-Za-z0-9\s.&'-]+?)(?:\s+(?:on|ref)\b|[.!,;]|$)""", RegexOption.IGNORE_CASE)
     private val MERCHANT_PATTERNS = listOf(MERCHANT_PATTERN_AT_TO, MERCHANT_PATTERN_PAID_TO)
     private val MERCHANT_CLEAN_PREFIX = Regex("""^(?:vpa|upi|imps|neft|pos|txn)\s*[-:]?\s*""", RegexOption.IGNORE_CASE)
 
@@ -519,7 +543,17 @@ object AiCoreCategorizer {
         }
         val endMatch = ACCOUNT_PATTERN_ENDING.find(rawText)
         if (endMatch != null) {
-            return "••${endMatch.groupValues[1]}"
+            val digits = endMatch.groupValues[1]
+            val isCard = rawText.contains("card", ignoreCase = true)
+            val isAccount = rawText.contains("a/c", ignoreCase = true) || rawText.contains("account", ignoreCase = true)
+            val isUpi = !isCard && !isAccount && rawText.contains("upi", ignoreCase = true)
+            val prefix = when {
+                isCard -> "Card ••"
+                isAccount -> "A/c ••"
+                isUpi -> "UPI ••"
+                else -> "••"
+            }
+            return "$prefix$digits"
         }
         return ""
     }
@@ -548,9 +582,7 @@ object AiCoreCategorizer {
         val combined = "$merchant $rawText".lowercase(Locale.US)
         return when {
             // Self
-            combined.contains("self") || combined.contains("own account") || combined.contains("linked account") -> "Self"
-            // Credit Card Bill
-            combined.contains("credit card") || combined.contains("card payment") || combined.contains("cc bill") -> "Credit Card Bill"
+            combined.contains("self transfer") || combined.contains("own account") || combined.contains("linked account") -> "Self"
             // Groceries
             combined.contains("zepto") || combined.contains("blinkit") || combined.contains("instamart") ||
                 combined.contains("bigbasket") || combined.contains("bbnow") || combined.contains("dmart") ||
@@ -611,6 +643,10 @@ object AiCoreCategorizer {
             combined.contains("salon") || combined.contains("spa") || combined.contains("barber") ||
                 combined.contains("parlour") || combined.contains("grooming") || combined.contains("skincare") ||
                 combined.contains("cosmetics") || combined.contains("urban company") -> "Personal Care"
+            // Credit Card Bill ONLY if paying the bill itself
+            combined.contains("towards your credit card") || combined.contains("towards credit card") ||
+                combined.contains("credit card bill") || combined.contains("card dues") ||
+                combined.contains("bill payment for card") -> "Credit Card Bill"
             // Transfers
             combined.contains("transfer") || combined.contains("vpa") || combined.contains("upi") ||
                 combined.contains("sent to") || combined.contains("paid to") -> "Transfers"

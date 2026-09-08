@@ -349,7 +349,7 @@ object ExpenseProcessingHelper {
             }
             if (matches) {
                 matchedRuleCategory = rule.assignedCategory
-                if (rule.normalizedAlias.isNotBlank()) {
+                if (rule.normalizedAlias.isNotBlank() && !rule.normalizedAlias.equals(rule.merchantPattern, ignoreCase = true)) {
                     effectiveMerchant = rule.normalizedAlias.trim()
                 }
                 break
@@ -453,17 +453,20 @@ object ExpenseProcessingHelper {
                 MerchantRuleEntity(
                     merchantPattern = effectiveMerchant,
                     assignedCategory = finalCategory,
-                    normalizedAlias = effectiveMerchant,
+                    normalizedAlias = "",
                     isRegex = false,
                     createdAt = System.currentTimeMillis()
                 )
             )
         }
 
-        // Deduplicate credit card payment SMSs in the same month based on the amount
-        val isCreditCardPayment = parsed.type == com.example.data.ExpenseType.CREDIT_CARD ||
-                finalCategory.equals("Credit Card Bill", ignoreCase = true) ||
-                parsed.category.equals("Credit Card Bill", ignoreCase = true)
+        // Purchases made at merchants/stores using a credit card must NEVER be categorized as a credit card bill!
+        if (parsed.type == com.example.data.ExpenseType.MERCHANT && finalCategory.equals("Credit Card Bill", ignoreCase = true)) {
+            finalCategory = "General Spend"
+        }
+
+        // Deduplicate credit card bill repayment SMSs in the same month based on the amount
+        val isCreditCardPayment = parsed.type == com.example.data.ExpenseType.CREDIT_CARD
 
         if (isCreditCardPayment) {
             val monthKey = ExpenseEntity.formatMonthKey(timestamp)

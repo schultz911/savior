@@ -1391,5 +1391,75 @@ class ExampleRobolectricTest {
     assertEquals("UPI ••4901", parsedUpi!!.accountInfo)
     assertEquals(com.example.ui.models.InstrumentType.UPI, com.example.ui.models.InstrumentType.fromAccountInfo(parsedUpi.accountInfo))
   }
+
+  @Test
+  fun `test credit card purchase is classified as merchant spend and not credit card bill`() {
+    // 1. Purchase at merchant with credit card must be MERCHANT and categorized by merchant
+    val cardSpendSms = "Thank you for using your HDFC Bank Credit Card ending 4821 for payment of Rs 1,450.00 at SWIGGY BANGALORE on 04-Sep. Avl Limit: Rs 48,250.00."
+    val parsedSpend = SmsParser.parse(cardSpendSms, "HDFC")
+    assertNotNull(parsedSpend)
+    assertEquals(ExpenseType.MERCHANT, parsedSpend!!.type)
+    assertEquals("Food & Dining", parsedSpend.category)
+    assertEquals("Card ••4821", parsedSpend.accountInfo)
+    assertTrue("Merchant name must be preserved from SMS", parsedSpend.title.contains("SWIGGY BANGALORE", ignoreCase = true))
+
+    // 2. Spent on Axis Card at Amazon
+    val axisCardAmazon = "Spent INR 6,890.00 on Axis Card ending 1004 at AMAZON INDIA on 01-Sep. Avl Limit: Rs 1,85,000.00."
+    val parsedAmazon = SmsParser.parse(axisCardAmazon, "AXIS-BANK")
+    assertNotNull(parsedAmazon)
+    assertEquals(ExpenseType.MERCHANT, parsedAmazon!!.type)
+    assertEquals("Shopping", parsedAmazon.category)
+    assertEquals("Card ••1004", parsedAmazon.accountInfo)
+    assertTrue(parsedAmazon.title.contains("AMAZON INDIA", ignoreCase = true))
+
+    // 3. Payment received towards Credit Card is CREDIT_CARD bill repayment
+    val cardBillSms = "Payment received of INR 8,500.00 towards your HDFC Bank Credit Card ending 4821 on 02-Sep."
+    val parsedBill = SmsParser.parse(cardBillSms, "HDFC-CARD")
+    assertNotNull(parsedBill)
+    assertEquals(ExpenseType.CREDIT_CARD, parsedBill!!.type)
+    assertEquals("Credit Card Bill", parsedBill.category)
+  }
+
+  @Test
+  fun `test aicore distinguishes credit card purchase from credit card bill`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    AiCoreCategorizer.testAvailabilityOverride = true
+    try {
+      // 1. Credit card purchase
+      val cardPurchase = "Rs 1,450.00 spent on your HDFC Credit Card ending 4821 at SWIGGY BANGALORE on 04-Sep."
+      val parsedPurchase = AiCoreCategorizer.parseSmsTransaction(context, cardPurchase, "HDFC")
+      assertNotNull(parsedPurchase)
+      assertEquals(ExpenseType.MERCHANT, parsedPurchase!!.type)
+      assertEquals("Food & Dining", parsedPurchase.category)
+      assertEquals("Card ••4821", parsedPurchase.accountInfo)
+      assertTrue(parsedPurchase.merchant.contains("SWIGGY BANGALORE", ignoreCase = true))
+
+      // 2. Credit card bill repayment
+      val billSms = "INR 8,500.00 payment received towards your HDFC Credit Card ending 4821."
+      val parsedBill = AiCoreCategorizer.parseSmsTransaction(context, billSms, "HDFC")
+      assertNotNull(parsedBill)
+      assertEquals(ExpenseType.CREDIT_CARD, parsedBill!!.type)
+      assertEquals("Credit Card Bill", parsedBill.category)
+    } finally {
+      AiCoreCategorizer.testAvailabilityOverride = null
+      AiCoreCategorizer.testInferenceProvider = null
+    }
+  }
+
+  @Test
+  fun `test exact merchant name is preserved in transaction without unwanted auto-alias`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val exactSms = "Rs 350.00 paid to BLUE TOKAI COFFEE ROASTERS on 04-Sep from A/c ending 1234."
+    val processed = com.example.service.ExpenseProcessingHelper.processRawSms(
+      context = context,
+      rawText = exactSms,
+      sender = "HDFC",
+      timestamp = System.currentTimeMillis(),
+      smsId = 88112233L
+    )
+    assertNotNull(processed)
+    assertEquals("Blue Tokai Coffee Roasters", processed!!.merchantOrRecipient)
+    assertEquals("Blue Tokai Coffee Roasters", processed.originalMerchant)
+  }
 }
 

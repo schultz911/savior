@@ -110,44 +110,82 @@ object OpenRouterCategorizer {
         val bearer = if (cleanKey.startsWith("Bearer ", ignoreCase = true)) cleanKey else "Bearer $cleanKey"
 
         val systemPrompt = """
-You are an expert financial transaction intelligence and validation engine for Savio₹ personal expense tracker.
-Your mission: Analyze the incoming SMS message, validate whether it represents an ACTUAL OUTGOING EXPENDITURE, and intelligently enhance the transaction details into clean, structured JSON.
+You are an expert financial transaction extraction engine for Savio₹ personal expense tracker.
+Your mission: Analyze the incoming SMS message, extract all transaction details accurately into STRICT JSON.
 
-VALIDATION & CLASSIFICATION CRITERIA:
-1. "MERCHANT": An actual outgoing payment, purchase, or debit made to a business, merchant, store, utility, online service, restaurant, groceries, or vendor (e.g. Swiggy, Amazon, Uber, POS swipe, merchant UPI).
-2. "P2P": Outgoing money transferred to another person, friend, contact, family member, landlord, peer-to-peer UPI transfer, NEFT, IMPS, or wire.
-3. "SELF": Outgoing transfer between own accounts (e.g. self transfer, account-to-account transfer).
-4. "CREDIT_CARD": Payment made towards a credit card bill, card statement repayment, or credit card dues.
-5. "CREDIT": Incoming money credited, deposited, salary received, cashback, or loan disbursement -> (isExpense: FALSE).
-6. "REFUND": A confirmed refund, reversal, or money credited back from a merchant/service -> (isExpense: FALSE). CRITICAL: For REFUND, the "merchant" field MUST be the company/service that issued the refund (e.g. "Zomato", "Flipkart", "Amazon", "Uber"), NOT the bank. Extract it from phrases like "refund from", "refunded by", "reversed by", "credited back from".
-7. "INTIMATION": Non-transactional bank notification, available balance update, credit limit alert, statement generated, bill due reminder -> (isExpense: FALSE).
-8. "AD": Promotional advertisement, credit card offer, loan pre-approval, cashback scheme, marketing -> (isExpense: FALSE).
-9. "OTP": One-time password, verification PIN, security code -> (isExpense: FALSE).
-10. "OTHER": Irrelevant spam, personal message, or unidentifiable message -> (isExpense: FALSE).
+CLASSIFICATION & VALIDATION RULES:
+1. "MERCHANT": An actual outgoing payment, purchase, or debit made to a store, business, vendor, restaurant, app, utility, or service.
+   CRITICAL — PURCHASES MADE USING A CREDIT CARD ARE "MERCHANT" PURCHASES!
+   When an SMS indicates that money was spent, charged, debited, or paid USING a credit card at a merchant (e.g. Swiggy, Amazon, Uber, restaurant, supermarket, retail store, online purchase):
+   - classification is ALWAYS "MERCHANT" (NOT "CREDIT_CARD"!)
+   - isExpense is true
+   - merchant is the EXACT merchant/store name from the SMS (e.g. "SWIGGY BANGALORE", "AMAZON INDIA")
+   - accountInfo is the card reference, e.g. "Card ••4821"
+   - category is what was bought (e.g. "Food & Dining", "Shopping", "Groceries", "Travel & Commute"), NEVER "Credit Card Bill"!
 
-ENHANCEMENT RULES:
-- Amount: Extract the exact numerical value of the transaction. Never truncate or misread digits (e.g., Rs.50000.00 is 50000.00, Rs.500.00 is 500.00). Do not confuse with available balance!
-- Currency: Detect currency symbol ("₹", "$", "€", "£", etc.). Default to "₹" for Indian banking SMS.
-- Merchant: Extract the actual person or business being paid (or for REFUND: the business issuing the refund).
-  CRITICAL: NEVER use the message sender, carrier, or bank name (e.g. HDFC, ICICI, SBI, AXIS, KOTAK, Bank, VM-HDFCBK) as the merchant name. Always parse the actual person, store, or service being paid from the message body (e.g. from 'to VPA', 'paid to', 'spent at', 'transfer to', 'refund from', 'reversed by', etc.). If it's a self-transfer, use 'Self Transfer'. If it's a credit card bill, use 'Credit Card Bill'. If unknown, use 'Merchant / Payee' or 'Transfer Recipient'.
-- AccountInfo: Detect card or account info (e.g. 'Card ••1234', 'A/c ••5678', 'UPI ••9012').
-- Category: Assign the most accurate category from:
-  ["Transfers", "Credit Card Bill", "Self", "Groceries", "Food & Dining", "Shopping", "Bills & Utilities", "Travel & Commute", "Entertainment", "Health & Wellness", "Investments", "Education", "Personal Care"].
-  * NEVER use "UPI" as a category. UPI is strictly a payment method.
-  * If paying a credit card bill, categorize as "Credit Card Bill".
-  * If transferring to own account, categorize as "Self".
-  * If transferring to another person/contact, categorize as "Transfers".
-  * For REFUND classification, set category to "Refund".
+2. "CREDIT_CARD": ONLY for paying off a credit card bill, card statement dues, or card account repayment (e.g. "Payment received towards your credit card ending 4821", "Auto-debit for credit card bill successful", "Bill payment for card ending 1234").
+   - classification is "CREDIT_CARD"
+   - isExpense is true
+   - merchant is the credit card bill name (e.g. "HDFC Credit Card Bill")
+   - category is "Credit Card Bill"
+
+3. "P2P": Outgoing money transferred to another person/contact via UPI, NEFT, IMPS, Zelle, Venmo, or wire.
+   - classification is "P2P"
+   - isExpense is true
+   - merchant is the recipient's exact name or VPA handle (e.g. "Ramesh Kumar" or "rahul@okaxis")
+   - category is "Transfers"
+
+4. "SELF": Transfer between own bank accounts.
+   - classification is "SELF"
+   - isExpense is true
+   - merchant is "Self Transfer"
+   - category is "Self"
+
+5. "REFUND": A confirmed refund or reversal credited back from a merchant.
+   - classification is "REFUND"
+   - isExpense is false
+   - merchant is the exact company/service that issued the refund (e.g. "Swiggy", "Zomato", "Amazon")
+   - category is "Refund"
+
+6. "CREDIT": Salary, general deposit, interest credited. (isExpense: false)
+7. "INTIMATION", "AD", "OTP", "OTHER": Non-transactional bank notifications, balance alerts, ads, OTPs. (isExpense: false)
+
+MERCHANT EXTRACTION RULES:
+- Extract the EXACT merchant, vendor, store, or recipient name VERBATIM as written in the SMS (e.g. "SWIGGY BANGALORE", "AMAZON INDIA", "BLUE TOKAI COFFEE", "SHELL PETROL PUMP", "ZEPTO COMMERCE").
+- DO NOT summarize, abbreviate, titlecase, or replace with generic brand names. Keep the exact merchant name from the SMS text because the user will assign aliases themselves in the app.
+- NEVER use the bank or carrier sender name (e.g. HDFC, ICICI, SBI, AXIS, KOTAK, Bank, VM-HDFCBK) as the merchant name.
+- If paying a credit card bill: use the card bill name (e.g. "HDFC Credit Card Bill").
+- If transferring to self: use "Self Transfer".
+- If unknown: use "Merchant / Payee" or "Transfer Recipient".
+
+ACCOUNT INFO:
+- Detect card or account info with 4-digit mask (e.g. "Card ••4821", "A/c ••3391", "UPI ••9012").
+
+PERMITTED CATEGORIES:
+["Transfers", "Credit Card Bill", "Self", "Groceries", "Food & Dining", "Shopping", "Bills & Utilities", "Travel & Commute", "Entertainment", "Health & Wellness", "Investments", "Education", "Personal Care"]
+- NEVER use "Credit Card Bill" for purchases made at a store/merchant with a credit card!
+
+FEW-SHOT EXAMPLES:
+SMS: "Spent INR 6,890.00 on Axis Card ending 1004 at AMAZON INDIA on 01-Sep. Avl Limit: Rs 1,85,000.00."
+Output: {"classification":"MERCHANT","amount":6890.00,"currency":"₹","merchant":"AMAZON INDIA","accountInfo":"Card ••1004","category":"Shopping"}
+
+SMS: "Thank you for using HDFC Bank Credit Card ending 4821 for payment of Rs 1,450.00 at SWIGGY BANGALORE on 04-Sep. Avl Limit: Rs 48,250.00."
+Output: {"classification":"MERCHANT","amount":1450.00,"currency":"₹","merchant":"SWIGGY BANGALORE","accountInfo":"Card ••4821","category":"Food & Dining"}
+
+SMS: "Payment received of INR 8,500.00 towards your HDFC Bank Credit Card ending 4821 on 02-Sep."
+Output: {"classification":"CREDIT_CARD","amount":8500.00,"currency":"₹","merchant":"HDFC Credit Card Bill","accountInfo":"Card ••4821","category":"Credit Card Bill"}
+
+SMS: "Auto-debit of Rs 12,300.00 towards your SBI Credit Card ending 5512 was successful."
+Output: {"classification":"CREDIT_CARD","amount":12300.00,"currency":"₹","merchant":"SBI Credit Card Bill","accountInfo":"Card ••5512","category":"Credit Card Bill"}
+
+SMS: "Dear SBI User, your A/c XX3391 debited by Rs 5,000.00 on 03-Sep towards Transfer to Ramesh Kumar. UPI Ref 382910."
+Output: {"classification":"P2P","amount":5000.00,"currency":"₹","merchant":"Ramesh Kumar","accountInfo":"A/c ••3391","category":"Transfers"}
+
+SMS: "Rs 650.00 refunded to A/c ending 9821 from Swiggy for cancelled order. UPI Ref: 778899."
+Output: {"classification":"REFUND","amount":650.00,"currency":"₹","merchant":"Swiggy","accountInfo":"A/c ••9821","category":"Refund"}
 
 OUTPUT FORMAT (Output STRICT RAW JSON ONLY, no markdown fences, no code blocks):
-{
-  "classification": "MERCHANT" | "P2P" | "SELF" | "CREDIT_CARD" | "CREDIT" | "REFUND" | "INTIMATION" | "AD" | "OTP" | "OTHER",
-  "amount": 1250.00,
-  "currency": "₹",
-  "merchant": "Clean Merchant or Recipient Name",
-  "accountInfo": "Card ••1234 or A/c ••5678 or UPI ••9012",
-  "category": "Category Name"
-}
+{"classification":"...","amount":0.0,"currency":"₹","merchant":"...","accountInfo":"...","category":"..."}
 """.trimIndent()
 
         val userPrompt = """
@@ -212,6 +250,7 @@ SMS Body: "$rawText"
                              classification == "PAYMENT" || classification == "PURCHASE") && amount > 0.0
 
             val expenseType = when (classification) {
+                "MERCHANT", "SPEND", "DEBIT", "PURCHASE" -> ExpenseType.MERCHANT
                 "P2P", "TRANSFER" -> ExpenseType.P2P
                 "SELF" -> ExpenseType.SELF
                 "CREDIT_CARD" -> ExpenseType.CREDIT_CARD
@@ -221,6 +260,10 @@ SMS Body: "$rawText"
                     else if (category.equals("Transfers", ignoreCase = true)) ExpenseType.P2P
                     else ExpenseType.MERCHANT
                 }
+            }
+
+            if (expenseType == ExpenseType.MERCHANT && category.equals("Credit Card Bill", ignoreCase = true)) {
+                category = "General Spend"
             }
 
             AiParsedTransaction(
@@ -291,6 +334,7 @@ Rules:
 2. Never use "UPI" as a category. UPI is only a payment method.
 3. If the message is ambiguous, generic, cannot be determined, or is not an identifiable purchase, output ONLY "UNKNOWN".
 4. Do not add explanations, prefixes, punctuation or quotes.
+5. CRITICAL: A purchase made USING a credit card at a store or merchant (e.g. Swiggy, Amazon, Uber, restaurant, supermarket) MUST be categorized by what was bought (e.g. Food & Dining, Shopping, Travel & Commute). NEVER categorize a purchase as "Credit Card Bill" just because a credit card was used! Use "Credit Card Bill" ONLY when paying off the credit card bill itself.
 """.trimIndent()
 
         val userPrompt = """

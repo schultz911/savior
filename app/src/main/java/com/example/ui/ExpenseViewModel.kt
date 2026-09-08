@@ -909,7 +909,7 @@ class ExpenseViewModel(
 
             if (target != null && target.merchantOrRecipient.isNotBlank()) {
                 val merchant = target.merchantOrRecipient.trim()
-                val effectiveAlias = if (!alias.isNullOrBlank()) alias.trim() else merchant
+                val effectiveAlias = if (!alias.isNullOrBlank()) alias.trim() else ""
                 preferences.saveMerchantCategory(merchant, category)
                 if (saveAsRule) {
                     ruleDao.insertRule(
@@ -923,6 +923,10 @@ class ExpenseViewModel(
                     )
                 }
                 dao.updateCategoryAndTypeForMerchant(merchant, category, newType)
+                if (effectiveAlias.isNotBlank() && !effectiveAlias.equals(merchant, ignoreCase = true)) {
+                    dao.updateMerchantName(expenseId, effectiveAlias)
+                    dao.updateMerchantNameForMatching(merchant, effectiveAlias)
+                }
                 _syncFeedback.value = "Rule saved: '$merchant' categorized as '$category'"
             } else {
                 _syncFeedback.value = "Category assigned: $category"

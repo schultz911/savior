@@ -69,19 +69,19 @@ object SmsParser {
         // 4. Refund of Rs X from <Merchant> or Rs X refunded to ... from/by/at/for <Merchant>
         Pattern.compile("""(?i)(?:refund\s+(?:of\s+)?(?:rs\.?|inr|[$€£])?\s*[0-9,.]+\s+from\s+|(?:amount\s+of\s+)?(?:rs\.?|inr|[$€£])?\s*[0-9,.]+\s+(?:has\s+been\s+)?refunded\s+(?:to\s+.{0,35}?\s+)?(?:from|by|at|for)\s+)([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:is\s+credited|credited|on\b|via\b|using\b|ref\b|avl\b)|[.!,;]|$)"""),
         // 5. Transfer to / paid to / towards / in favor of
-        Pattern.compile("""(?i)(?:towards\s+transfer\s+to|transfer(?:red)?\s+to|sent\s+to|paid\s+to|via\s+upi\s+to|by\s+upi\s+to|upi\s+to|to\s+vpa|in\s+favor\s+of)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|upi\s+ref\b|ref\s+no\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
+        Pattern.compile("""(?i)(?:towards\s+transfer\s+to|transfer(?:red)?\s+to|sent\s+to|paid\s+to|via\s+upi\s+to|by\s+upi\s+to|upi\s+to|to\s+vpa|in\s+favor\s+of)\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:on|via|using|upi\s+ref|ref\s+no|ref|avl|bal|dated)\b|[.!,;]|$)"""),
         // 6. Sent / paid / transferred ... to
-        Pattern.compile("""(?i)(?:sent|paid|transferred)\s+.{0,45}?\bto\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|upi\s+ref\b|ref\s+no\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
+        Pattern.compile("""(?i)(?:sent|paid|transferred)\s+.{0,45}?\bto\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:on|via|using|upi\s+ref|ref\s+no|ref|avl|bal|dated)\b|[.!,;]|$)"""),
         // 7. Zelle / UPI / Venmo to
-        Pattern.compile("""(?i)(?:with|via)\s+(?:zelle|upi|venmo)\s+to\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s*(?:on\b|via\b|using\b|ref\b)|[.!,;]|$)"""),
+        Pattern.compile("""(?i)(?:with|via)\s+(?:zelle|upi|venmo)\s+to\s+([A-Za-z0-9&.\-_/@ ]{2,35}?)(?:\s+(?:on|via|using|ref)\b|[.!,;]|$)"""),
         // 8. UPI P2M / P2A
         Pattern.compile("""(?i)(?:upi/(?:p2m|p2a)/[0-9]+/)([A-Za-z0-9&.\-_/ ]{2,30})"""),
-        // 9. Spent at / purchase at / charged at / swiped at / refunded at
-        Pattern.compile("""(?i)(?:spent\s+at|purchase\s+at|charged\s+at|swiped\s+at|approved\s+at|refunded\s+at|at)\s+([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s*(?:on\b|via\b|for\b|using\b|ref\b|avl\b|bal\b|dated\b)|[.!,;]|$)"""),
+        // 9. Spent at / purchase at / charged at / swiped at / approved at / refunded at
+        Pattern.compile("""(?i)(?:spent\s+at|purchase\s+at|charged\s+at|swiped\s+at|approved\s+at|refunded\s+at|\bat)\s+([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s+(?:on|via|for|using|ref|avl|bal|dated)\b|[.!,;]|$)"""),
         // 10. Debited ... to
-        Pattern.compile("""(?i)(?:debited\s+.{0,40}\s+to)\s+([A-Za-z0-9&.\-_/@ ]{2,30}?)(?:\s*(?:on\b|via\b|using\b|ref\b)|[.!,;]|$)"""),
+        Pattern.compile("""(?i)(?:debited\s+.{0,40}\s+to)\s+([A-Za-z0-9&.\-_/@ ]{2,30}?)(?:\s+(?:on|via|using|ref)\b|[.!,;]|$)"""),
         // 11. General info prefix
-        Pattern.compile("""(?i)(?:info[:\s]+)([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s*(?:on\b|ref\b|avl\b)|[.!,;]|$)""")
+        Pattern.compile("""(?i)(?:info[:\s]+)([A-Za-z0-9&.\-_/ ]{2,30}?)(?:\s+(?:on|ref|avl)\b|[.!,;]|$)""")
     )
 
     // Pre-compiled hot-path patterns
@@ -280,7 +280,23 @@ object SmsParser {
             }
         }
 
-        val isCreditCardBill = lower.contains("credit card") && (lower.contains("bill") || lower.contains("payment") || lower.contains("due") || lower.contains("repayment"))
+        val isCardPurchase = cleanBody.contains(" at ", ignoreCase = true) ||
+                lower.contains("spent on") ||
+                lower.contains("purchase of") ||
+                lower.contains("charged on") ||
+                lower.contains("swiped") ||
+                lower.contains("pos txn") ||
+                lower.contains("paid at")
+
+        val isPaymentTowardsCard = (lower.contains("towards") && (lower.contains("card") || lower.contains("credit card"))) ||
+                lower.contains("credit card bill") ||
+                lower.contains("card dues") ||
+                lower.contains("bill payment") ||
+                lower.contains("autopay for card") ||
+                lower.contains("card repayment") ||
+                (lower.contains("payment received") && lower.contains("card"))
+
+        val isCreditCardBill = isPaymentTowardsCard && !isCardPurchase
         val isSelfTransfer = lower.contains("self") || lower.contains("own account") || lower.contains("to own")
 
         // Extract Amount and Currency
@@ -292,7 +308,11 @@ object SmsParser {
         val accountInfo = extractAccountInfo(cleanBody)
 
         // Extract Merchant / Recipient (Never use bank name or SMS sender)
-        val merchant = extractMerchant(cleanBody, isTransfer || isSelfTransfer)
+        val merchant = if (isCreditCardBill) {
+            "Credit Card Bill"
+        } else {
+            extractMerchant(cleanBody, isTransfer || isSelfTransfer)
+        }
 
         val lowerMerchant = merchant.lowercase(Locale.US)
         val isStoreOrMerchant = listOf(
@@ -311,7 +331,11 @@ object SmsParser {
         }
 
         // Categorize
-        val category = categorize(cleanBody, merchant, expenseType)
+        val category = if (expenseType == ExpenseType.CREDIT_CARD) {
+            "Credit Card Bill"
+        } else {
+            categorize(cleanBody, merchant, expenseType)
+        }
 
         return ParsedSms(
             amount = amount,
@@ -550,7 +574,7 @@ object SmsParser {
         val combined = "$text $merchant".lowercase(Locale.US)
 
         return when {
-            type == ExpenseType.CREDIT_CARD || combined.contains("credit card bill") || combined.contains("card payment") -> "Credit Card Bill"
+            type == ExpenseType.CREDIT_CARD || combined.contains("credit card bill") || combined.contains("towards your credit card") -> "Credit Card Bill"
             type == ExpenseType.SELF || combined.contains("self transfer") || combined.contains("own account") -> "Self"
             combined.contains("whole foods") || combined.contains("trader joe") || combined.contains("walmart") || combined.contains("costco") || combined.contains("kroger") || combined.contains("target") || combined.contains("supermarket") || combined.contains("blinkit") || combined.contains("instamart") || combined.contains("zepto") || combined.contains("bigbasket") || combined.contains("general store") || combined.contains("kirana") -> "Groceries"
             combined.contains("starbucks") || combined.contains("mcdonald") || combined.contains("chipotle") || combined.contains("restaurant") || combined.contains("cafe") || combined.contains("pizza") || combined.contains("burger") || combined.contains("dining") || combined.contains("coffee") || combined.contains("swiggy") || combined.contains("zomato") -> "Food & Dining"
