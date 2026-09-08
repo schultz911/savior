@@ -130,7 +130,10 @@ interface ExpenseDao {
     @Query("SELECT COUNT(*) > 0 FROM expenses WHERE smsId = :smsId AND smsId > 0")
     suspend fun existsBySmsId(smsId: Long): Boolean
 
-    @Query("SELECT COUNT(*) > 0 FROM expenses WHERE sender = :sender AND timestamp = :timestamp AND amount = :amount")
+    @Query("SELECT COUNT(*) > 0 FROM expenses WHERE rawBody = :rawBody AND sender = :sender AND timestamp >= :minTimestamp AND timestamp <= :maxTimestamp")
+    suspend fun existsByRawBody(rawBody: String, sender: String, minTimestamp: Long, maxTimestamp: Long): Boolean
+
+    @Query("SELECT COUNT(*) > 0 FROM expenses WHERE sender = :sender AND ABS(timestamp - :timestamp) <= 5000 AND ABS(amount - :amount) < 0.01")
     suspend fun existsByContent(sender: String, timestamp: Long, amount: Double): Boolean
 
     @Query("SELECT COUNT(*) FROM expenses WHERE monthKey = :monthKey AND (type = 'CREDIT_CARD' OR LOWER(category) = 'credit card bill') AND ABS(amount - :amount) < 0.01")

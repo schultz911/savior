@@ -173,7 +173,7 @@ object DatabaseBackupHelper {
                 byteBuffer.position(MAGIC_HEADER.size)
             } else {
                 if (!allowLegacyWithoutHeader || isKnownNonBackupFormat(allBytes)) {
-                    return@withContext Result.failure(IllegalArgumentException("Invalid or corrupted Savio backup file."))
+                    return@withContext Result.failure(IllegalArgumentException("Invalid or corrupted Savio₹ backup file."))
                 }
             }
 

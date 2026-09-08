@@ -41,7 +41,7 @@ interface OpenRouterApi {
     suspend fun createChatCompletion(
         @Header("Authorization") authorization: String,
         @Header("HTTP-Referer") referer: String = "https://ai.studio",
-        @Header("X-Title") title: String = "SAVIO Spend Tracker",
+        @Header("X-Title") title: String = "Savio₹ Spend Tracker",
         @Body request: OpenRouterChatRequest
     ): OpenRouterChatResponse
 }

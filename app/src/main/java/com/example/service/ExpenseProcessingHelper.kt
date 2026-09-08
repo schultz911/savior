@@ -62,6 +62,24 @@ object ExpenseProcessingHelper {
                 model = prefs.openRouterModel
             )
             if (aiParsed != null) {
+                // If AI classified this as a REFUND, route to the refund handler with the
+                // AI-extracted merchant name (e.g. "Zomato", "Flipkart") so it is recorded correctly.
+                if (aiParsed.isRefund && aiParsed.amount > 0.0) {
+                    Log.d(TAG, "SMS classified by Cloud AI as REFUND from '${aiParsed.merchant}', routing to handleRefund.")
+                    val refundParsed = com.example.sms.ParsedSms(
+                        amount = aiParsed.amount,
+                        currency = aiParsed.currency,
+                        type = aiParsed.type,
+                        title = aiParsed.merchant,
+                        accountInfo = aiParsed.accountInfo,
+                        category = "Refund",
+                        isExpense = false,
+                        rawText = rawText,
+                        isRefund = true
+                    )
+                    return@withContext handleRefund(context, refundParsed, sender, timestamp, smsId, isBatchSync)
+                }
+
                 if (!aiParsed.isExpense) {
                     Log.d(TAG, "SMS classified by Cloud AI as non-expense (${aiParsed.classification}), ignoring: '$rawText'")
                     return@withContext null
@@ -254,13 +272,25 @@ object ExpenseProcessingHelper {
         val ruleDao = app.database.merchantRuleDao()
         val prefs = app.preferences
 
-        val exists = dao.existsByContent(sender, timestamp, parsed.amount)
-        if (exists) return@withContext null
-
-        // Fast-path smsId check
+        // 0. Fast-path smsId check (indexed O(1)) — primary deduplication guard
         if (smsId > 0L && dao.existsBySmsId(smsId)) {
             Log.d(TAG, "Fast-path smsId dedup in processAndInsert: smsId=$smsId already stored, skipping.")
             return@withContext null
+        }
+
+        // 1. Content-based dedup: same sender + ±5s timestamp + same amount
+        val exists = dao.existsByContent(sender, timestamp, parsed.amount)
+        if (exists) return@withContext null
+
+        // 2. Raw-body fuzzy dedup for live SMS with smsId=0 that may race with syncInbox.
+        //    Matches identical message body from the same sender within the last 60 seconds.
+        if (smsId == 0L && parsed.rawText.length > 10) {
+            val sixtySecondsAgo = timestamp - 60_000L
+            val sixtySecondsAhead = timestamp + 60_000L
+            if (dao.existsByRawBody(parsed.rawText, sender, sixtySecondsAgo, sixtySecondsAhead)) {
+                Log.d(TAG, "Raw-body fuzzy dedup hit for sender=$sender, skipping duplicate.")
+                return@withContext null
+            }
         }
 
         val apiKey = prefs.openRouterApiKey.trim()

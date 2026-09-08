@@ -33,7 +33,7 @@ object SpendAlertManager {
 
             val channel = NotificationChannel(
                 CHANNEL_ALERTS,
-                "SAVIO Budget & Category Alerts",
+                "Savio₹ Budget & Category Alerts",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Alerts for unrecognized transactions, 80% category budget warning, and overshoots"

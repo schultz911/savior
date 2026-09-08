@@ -560,7 +560,7 @@ fun SpendTrackerScreen(
                     ) {
                         Image(
                             painter = painterResource(id = R.drawable.ic_savio_logo),
-                            contentDescription = "Savio Logo",
+                            contentDescription = "Savio₹ Logo",
                             modifier = Modifier.size(42.dp)
                         )
                     }

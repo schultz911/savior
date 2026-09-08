@@ -8,9 +8,10 @@ import org.json.JSONObject
 import java.util.Locale
 
 data class AiParsedTransaction(
-    val classification: String, // "SPEND", "TRANSFER", "CREDIT", "INTIMATION", "AD", "OTP", "OTHER"
-    val isExpense: Boolean,     // true only for SPEND or TRANSFER
-    val type: ExpenseType,      // SPEND or TRANSFER
+    val classification: String, // "MERCHANT", "P2P", "SELF", "CREDIT_CARD", "CREDIT", "REFUND", "INTIMATION", "AD", "OTP", "OTHER"
+    val isExpense: Boolean,     // true only for outgoing expenditure types
+    val isRefund: Boolean = false, // true for REFUND classification
+    val type: ExpenseType,      // MERCHANT, P2P, SELF, or CREDIT_CARD
     val amount: Double,
     val currency: String,
     val merchant: String,
@@ -75,17 +76,18 @@ VALIDATION & CLASSIFICATION CRITERIA:
 2. "P2P": Outgoing money transferred to another person, friend, contact, family member, landlord, peer-to-peer UPI transfer, NEFT, IMPS, or wire.
 3. "SELF": Outgoing transfer between own accounts (e.g. self transfer, account-to-account transfer).
 4. "CREDIT_CARD": Payment made towards a credit card bill, card statement repayment, or credit card dues.
-5. "CREDIT": Incoming money credited, deposited, salary received, refund, cashback, or loan disbursement -> (isExpense: FALSE).
-6. "INTIMATION": Non-transactional bank notification, available balance update, credit limit alert, statement generated, bill due reminder -> (isExpense: FALSE).
-7. "AD": Promotional advertisement, credit card offer, loan pre-approval, cashback scheme, marketing -> (isExpense: FALSE).
-8. "OTP": One-time password, verification PIN, security code -> (isExpense: FALSE).
-9. "OTHER": Irrelevant spam, personal message, or unidentifiable message -> (isExpense: FALSE).
+5. "CREDIT": Incoming money credited, deposited, salary received, cashback, or loan disbursement -> (isExpense: FALSE).
+6. "REFUND": A confirmed refund, reversal, or money credited back from a merchant/service -> (isExpense: FALSE). CRITICAL: For REFUND, the "merchant" field MUST be the company/service that issued the refund (e.g. "Zomato", "Flipkart", "Amazon", "Uber"), NOT the bank. Extract it from phrases like "refund from", "refunded by", "reversed by", "credited back from".
+7. "INTIMATION": Non-transactional bank notification, available balance update, credit limit alert, statement generated, bill due reminder -> (isExpense: FALSE).
+8. "AD": Promotional advertisement, credit card offer, loan pre-approval, cashback scheme, marketing -> (isExpense: FALSE).
+9. "OTP": One-time password, verification PIN, security code -> (isExpense: FALSE).
+10. "OTHER": Irrelevant spam, personal message, or unidentifiable message -> (isExpense: FALSE).
 
 ENHANCEMENT RULES:
 - Amount: Extract the exact numerical value of the transaction. Never truncate or misread digits (e.g., Rs.50000.00 is 50000.00, Rs.500.00 is 500.00). Do not confuse with available balance!
 - Currency: Detect currency symbol ("₹", "$", "€", "£", etc.). Default to "₹" for Indian banking SMS.
-- Merchant: Extract the actual person or business being paid.
-  CRITICAL: NEVER use the message sender, carrier, or bank name (e.g. HDFC, ICICI, SBI, AXIS, KOTAK, Bank, VM-HDFCBK) as the merchant name. Always parse the actual person, store, or service being paid from the message body (e.g. from 'to VPA', 'paid to', 'spent at', 'transfer to', etc.). If it's a self-transfer, use 'Self Transfer'. If it's a credit card bill, use 'Credit Card Bill'. If unknown, use 'Merchant / Payee' or 'Transfer Recipient'.
+- Merchant: Extract the actual person or business being paid (or for REFUND: the business issuing the refund).
+  CRITICAL: NEVER use the message sender, carrier, or bank name (e.g. HDFC, ICICI, SBI, AXIS, KOTAK, Bank, VM-HDFCBK) as the merchant name. Always parse the actual person, store, or service being paid from the message body (e.g. from 'to VPA', 'paid to', 'spent at', 'transfer to', 'refund from', 'reversed by', etc.). If it's a self-transfer, use 'Self Transfer'. If it's a credit card bill, use 'Credit Card Bill'. If unknown, use 'Merchant / Payee' or 'Transfer Recipient'.
 - AccountInfo: Detect card or account info (e.g. 'Card ••1234', 'A/c ••5678', 'UPI ••9012').
 - Category: Assign the most accurate category from:
   ["Transfers", "Credit Card Bill", "Self", "Groceries", "Food & Dining", "Shopping", "Bills & Utilities", "Travel & Commute", "Entertainment", "Health & Wellness", "Investments", "Education", "Personal Care"].
@@ -93,10 +95,11 @@ ENHANCEMENT RULES:
   * If paying a credit card bill, categorize as "Credit Card Bill".
   * If transferring to own account, categorize as "Self".
   * If transferring to another person/contact, categorize as "Transfers".
+  * For REFUND classification, set category to "Refund".
 
 OUTPUT FORMAT (Output STRICT RAW JSON ONLY, no markdown fences, no code blocks):
 {
-  "classification": "MERCHANT" | "P2P" | "SELF" | "CREDIT_CARD" | "CREDIT" | "INTIMATION" | "AD" | "OTP" | "OTHER",
+  "classification": "MERCHANT" | "P2P" | "SELF" | "CREDIT_CARD" | "CREDIT" | "REFUND" | "INTIMATION" | "AD" | "OTP" | "OTHER",
   "amount": 1250.00,
   "currency": "₹",
   "merchant": "Clean Merchant or Recipient Name",
@@ -156,6 +159,7 @@ SMS Body: "$rawText"
                            else "General Spend"
             }
 
+            val isRefund = classification == "REFUND"
             val isExpense = (classification == "MERCHANT" || classification == "SPEND" ||
                              classification == "P2P" || classification == "TRANSFER" ||
                              classification == "SELF" || classification == "CREDIT_CARD") && amount > 0.0
@@ -174,6 +178,7 @@ SMS Body: "$rawText"
             AiParsedTransaction(
                 classification = classification,
                 isExpense = isExpense,
+                isRefund = isRefund,
                 type = expenseType,
                 amount = amount,
                 currency = currency,

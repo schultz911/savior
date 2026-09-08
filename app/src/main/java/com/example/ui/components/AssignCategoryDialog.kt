@@ -170,7 +170,7 @@ fun AssignCategoryDialog(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Savio will remember '${expense.merchantOrRecipient}' and automatically tag future transactions with deterministic accuracy.",
+                        text = "Savio₹ will remember '${expense.merchantOrRecipient}' and automatically tag future transactions with deterministic accuracy.",
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontSize = 12.sp,
                             lineHeight = 16.sp

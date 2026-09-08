@@ -1860,7 +1860,7 @@ fun SettingsScreen(
                 )
 
                 Text(
-                    text = "v1.0.1 (Stable)",
+                    text = "v1.0.2 (Stable)",
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Normal,
                         fontSize = 12.sp
