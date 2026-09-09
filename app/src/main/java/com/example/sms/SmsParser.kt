@@ -330,30 +330,30 @@ object SmsParser {
                 lower.contains("sent ₹") || lower.contains("transferred to") || lower.contains("transfer to") ||
                 lower.contains("paid to") || lower.contains("upi/p2p")
 
-        // 4 Types: Merchants, P2P, Self, Credit Cards
-        val expenseType = when {
+        // Categorize & Resolve Expense Type
+        val detectedCategory = when {
+            isCreditCardBill -> "Credit Card Bill"
+            isSelfTransfer -> "Self"
+            else -> categorize(cleanBody, merchant, if (isEffectiveTransfer) ExpenseType.P2P else ExpenseType.MERCHANT)
+        }
+
+        val finalExpenseType = when {
             isCreditCardBill -> ExpenseType.CREDIT_CARD
             isSelfTransfer -> ExpenseType.SELF
+            detectedCategory == "Transfers" -> ExpenseType.P2P
+            detectedCategory != "General Spend" -> ExpenseType.MERCHANT
             isStoreOrMerchant -> ExpenseType.MERCHANT
             isEffectiveTransfer -> ExpenseType.P2P
             else -> ExpenseType.MERCHANT
         }
 
-        // Categorize
-        val category = when (expenseType) {
-            ExpenseType.CREDIT_CARD -> "Credit Card Bill"
-            ExpenseType.SELF -> "Self"
-            ExpenseType.P2P -> "Transfers"
-            else -> categorize(cleanBody, merchant, expenseType)
-        }
-
         return ParsedSms(
             amount = amount,
             currency = currency,
-            type = expenseType,
+            type = finalExpenseType,
             title = merchant,
             accountInfo = accountInfo,
-            category = category,
+            category = detectedCategory,
             isExpense = true,
             rawText = cleanBody
         )
@@ -592,9 +592,39 @@ object SmsParser {
                 combined.contains("to own") || combined.contains("to self") || combined.contains("linked account") ||
                 combined.contains("to my account") || combined.contains("self a/c") -> "Self"
 
+            combined.contains("openrouter") || combined.contains("railway") || combined.contains("exitlag") ||
+                combined.contains("torbox") || combined.contains("onedrive") || combined.contains("google play") ||
+                combined.contains("play store") || combined.contains("google storage") || combined.contains("google one") ||
+                combined.contains("quillbot") || combined.contains("openai") || combined.contains("chatgpt") ||
+                combined.contains("claude") || combined.contains("anthropic") || combined.contains("github") ||
+                combined.contains("cursor") || combined.contains("copilot") || combined.contains("replit") ||
+                combined.contains("vercel") || combined.contains("netlify") || combined.contains("heroku") ||
+                combined.contains("render") || combined.contains("supabase") || combined.contains("firebase") ||
+                combined.contains("aws") || combined.contains("amazon web services") || combined.contains("digitalocean") ||
+                combined.contains("linode") || combined.contains("cloudflare") || combined.contains("godaddy") ||
+                combined.contains("namecheap") || combined.contains("hostinger") || combined.contains("notion") ||
+                combined.contains("slack") || combined.contains("zoom") || combined.contains("canva") ||
+                combined.contains("adobe") || combined.contains("midjourney") || combined.contains("figma") ||
+                combined.contains("linear") || combined.contains("jira") || combined.contains("atlassian") ||
+                combined.contains("dropbox") || combined.contains("1password") || combined.contains("bitwarden") ||
+                combined.contains("nordvpn") || combined.contains("expressvpn") || combined.contains("surfshark") ||
+                combined.contains("proton") || combined.contains("microsoft 365") || combined.contains("office 365") ||
+                combined.contains("jetbrains") || combined.contains("grammarly") || combined.contains("laundrymate") ||
+                combined.contains("urban company") || combined.contains("icloud") || combined.contains("apple services") ||
+                combined.contains("electric") || combined.contains("utility") || combined.contains("water") ||
+                combined.contains("gas bill") || combined.contains("piped gas") || combined.contains("lpg") ||
+                combined.contains("cylinder") || combined.contains("indane") || combined.contains("hp gas") ||
+                combined.contains("bharat gas") || combined.contains("bill") || combined.contains("recharge") ||
+                combined.contains("internet") || combined.contains("broadband") || combined.contains("bescom") ||
+                combined.contains("airtel") || combined.contains("jio") || combined.contains(" vi ") ||
+                combined.contains("vi recharge") || combined.contains("vodafone") ||
+                combined.contains("dth") || combined.contains("tataplay") || combined.contains("subscription") ||
+                combined.contains("software") || combined.contains("saas") || combined.contains("hosting") ||
+                combined.contains("cloud") -> "Bills & Utilities"
+
             combined.contains("pharma") || combined.contains("pharmacy") || combined.contains("chemist") ||
                 combined.contains("apollo") || combined.contains("pharmeasy") || combined.contains("1mg") ||
-                combined.contains("netmeds") || combined.contains("medplus") || combined.contains("hospital") ||
+                combined.contains("netmeds") || combined.contains("medplus") || (combined.contains("hospital") && !combined.contains("hospitality")) ||
                 combined.contains("clinic") || combined.contains("doctor") || combined.contains("dr.") ||
                 combined.contains("diagnostic") || combined.contains("pathology") || combined.contains("lab") ||
                 combined.contains("medicine") || combined.contains("medicos") || combined.contains("medical") ||
@@ -604,36 +634,35 @@ object SmsParser {
             combined.contains("whole foods") || combined.contains("trader joe") || combined.contains("walmart") ||
                 combined.contains("costco") || combined.contains("kroger") || combined.contains("target") ||
                 combined.contains("supermarket") || combined.contains("blinkit") || combined.contains("instamart") ||
+                combined.contains("swiggy instamart") ||
                 combined.contains("zepto") || combined.contains("bigbasket") || combined.contains("general store") ||
                 combined.contains("kirana") || combined.contains("provision") || combined.contains("grocery") -> "Groceries"
 
             combined.contains("starbucks") || combined.contains("mcdonald") || combined.contains("chipotle") ||
                 combined.contains("restaurant") || combined.contains("cafe") || combined.contains("pizza") ||
                 combined.contains("burger") || combined.contains("dining") || combined.contains("coffee") ||
-                combined.contains("swiggy") || combined.contains("zomato") || combined.contains("food") ||
-                combined.contains("bakery") || combined.contains("dhaba") || combined.contains("biryani") -> "Food & Dining"
+                (combined.contains("swiggy") && !combined.contains("instamart")) || combined.contains("zomato") || combined.contains("food") ||
+                combined.contains("bakery") || combined.contains("dhaba") || combined.contains("biryani") ||
+                combined.contains("hospitality") -> "Food & Dining"
 
             combined.contains("uber") || combined.contains("lyft") || combined.contains("taxi") ||
-                combined.contains("gas") || combined.contains("shell") || combined.contains("chevron") ||
+                combined.contains("gas station") || combined.contains("shell") || combined.contains("chevron") ||
                 combined.contains("metro") || combined.contains("flight") || combined.contains("ola") ||
                 combined.contains("rapido") || combined.contains("irctc") || combined.contains("fuel") ||
-                combined.contains("petrol") || combined.contains("diesel") || combined.contains("fastag") -> "Travel & Commute"
+                combined.contains("petrol") || combined.contains("diesel") || combined.contains("cng") ||
+                combined.contains("fastag") -> "Travel & Commute"
 
-            combined.contains("netflix") || combined.contains("spotify") || combined.contains("electric") ||
-                combined.contains("utility") || combined.contains("water") || combined.contains("bill") ||
-                combined.contains("recharge") || combined.contains("internet") || combined.contains("broadband") ||
-                combined.contains("bescom") || combined.contains("airtel") || combined.contains("jio") ||
-                combined.contains("vi") || combined.contains("dth") || combined.contains("tataplay") -> "Bills & Utilities"
+            combined.contains("bookmyshow") || combined.contains("pvr") || combined.contains("inox") ||
+                combined.contains("cinema") || combined.contains("movie") || combined.contains("steam") ||
+                combined.contains("playstation") || combined.contains("hotstar") || combined.contains("prime video") ||
+                combined.contains("netflix") || combined.contains("spotify") || combined.contains("youtube") ||
+                combined.contains("disney") || combined.contains("xbox") || combined.contains("gaming") -> "Entertainment"
 
             combined.contains("amazon") || combined.contains("apple") || combined.contains("ebay") ||
                 combined.contains("best buy") || combined.contains("nike") || combined.contains("zara") ||
                 combined.contains("flipkart") || combined.contains("myntra") || combined.contains("store") ||
                 combined.contains("mall") || combined.contains("shop") || combined.contains("croma") ||
                 combined.contains("retail") || combined.contains("ajio") -> "Shopping"
-
-            combined.contains("bookmyshow") || combined.contains("pvr") || combined.contains("inox") ||
-                combined.contains("cinema") || combined.contains("movie") || combined.contains("steam") ||
-                combined.contains("playstation") || combined.contains("hotstar") || combined.contains("prime video") -> "Entertainment"
 
             combined.contains("salon") || combined.contains("spa") || combined.contains("barber") ||
                 combined.contains("parlour") || combined.contains("grooming") || combined.contains("skincare") ||

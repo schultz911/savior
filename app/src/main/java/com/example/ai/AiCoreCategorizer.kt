@@ -323,8 +323,11 @@ object AiCoreCategorizer {
             5. merchant: Extract the EXACT merchant, store, vendor, or recipient name VERBATIM as written in the SMS (e.g. "SWIGGY BANGALORE", "AMAZON INDIA", "BLUE TOKAI COFFEE"). Do not abbreviate or summarize.
             6. accountInfo: e.g. "Card ••1234" or "A/c ••5678" or "UPI ••9012".
             7. category: from [Transfers, Credit Card Bill, Self, Groceries, Food & Dining, Shopping, Bills & Utilities, Travel & Commute, Entertainment, Health & Wellness, Investments, Education, Personal Care].
+               - All online purchased services, digital subscriptions, software tools, cloud hosting, and AI APIs (OpenRouter, Railway, Exitlag, Torbox, OneDrive, Google Play, Quillbot, GitHub, AWS, ChatGPT) MUST be categorized as "Bills & Utilities", NEVER "Shopping"!
                - For purchases made with a credit card, categorize by the merchant (e.g. "Food & Dining", "Shopping"), NEVER "Credit Card Bill"!
                - Use "Credit Card Bill" ONLY when paying off the card bill itself.
+               - "Hospitality" (hotels, dining, hospitality management) MUST be categorized as "Food & Dining", NEVER "Health & Wellness"! Differentiate medical "hospital" from "hospitality".
+               - "Swiggy Instamart" or "Instamart" MUST be categorized as "Groceries", NEVER "Food & Dining"! (Regular Swiggy food orders are "Food & Dining").
             
             Return JSON only:
             {"classification":"MERCHANT","isExpense":true,"amount":100.0,"currency":"₹","merchant":"Store","accountInfo":"Card ••1234","category":"Groceries"}
@@ -590,10 +593,40 @@ object AiCoreCategorizer {
             combined.contains("self transfer") || combined.contains("own account") || combined.contains("linked account") ||
                 combined.contains("to self") || combined.contains("transfer to self") || combined.contains("paid to self") ||
                 combined.contains("to own") || combined.contains("to my account") || combined.contains("self a/c") -> "Self"
+            // Bills & Utilities (utilities, recharges, and all online services/software subscriptions)
+            combined.contains("bescom") || combined.contains("electricity") || combined.contains("water") ||
+                combined.contains("gas") || combined.contains("broadband") || combined.contains("wifi") ||
+                combined.contains("jio") || combined.contains("airtel") || combined.contains(" vi ") ||
+                combined.contains("vi recharge") || combined.contains("vodafone") || combined.contains("recharge") ||
+                combined.contains("billdesk") || combined.contains("postpaid") || combined.contains("dth") ||
+                combined.contains("tata sky") || combined.contains("tataplay") || combined.contains("utility") ||
+                combined.contains("bill") ||
+                combined.contains("openrouter") || combined.contains("railway") || combined.contains("exitlag") ||
+                combined.contains("torbox") || combined.contains("onedrive") || combined.contains("google play") ||
+                combined.contains("play store") || combined.contains("google storage") || combined.contains("google one") ||
+                combined.contains("quillbot") || combined.contains("openai") || combined.contains("chatgpt") ||
+                combined.contains("claude") || combined.contains("anthropic") || combined.contains("github") ||
+                combined.contains("cursor") || combined.contains("copilot") || combined.contains("replit") ||
+                combined.contains("vercel") || combined.contains("netlify") || combined.contains("heroku") ||
+                combined.contains("render") || combined.contains("supabase") || combined.contains("firebase") ||
+                combined.contains("aws") || combined.contains("amazon web services") || combined.contains("digitalocean") ||
+                combined.contains("linode") || combined.contains("cloudflare") || combined.contains("godaddy") ||
+                combined.contains("namecheap") || combined.contains("hostinger") || combined.contains("notion") ||
+                combined.contains("slack") || combined.contains("zoom") || combined.contains("canva") ||
+                combined.contains("adobe") || combined.contains("midjourney") || combined.contains("figma") ||
+                combined.contains("linear") || combined.contains("jira") || combined.contains("atlassian") ||
+                combined.contains("dropbox") || combined.contains("1password") || combined.contains("bitwarden") ||
+                combined.contains("nordvpn") || combined.contains("expressvpn") || combined.contains("surfshark") ||
+                combined.contains("proton") || combined.contains("microsoft 365") || combined.contains("office 365") ||
+                combined.contains("jetbrains") || combined.contains("grammarly") || combined.contains("laundrymate") ||
+                combined.contains("urban company") || combined.contains("icloud") || combined.contains("apple services") ||
+                combined.contains("vpn") || combined.contains("subscription") || combined.contains("software") ||
+                combined.contains("saas") || combined.contains("hosting") || combined.contains("cloud") ||
+                combined.contains("cloud service") -> "Bills & Utilities"
             // Health & Wellness
             combined.contains("pharma") || combined.contains("pharmacy") || combined.contains("chemist") ||
                 combined.contains("apollo") || combined.contains("pharmeasy") || combined.contains("1mg") ||
-                combined.contains("netmeds") || combined.contains("medplus") || combined.contains("hospital") ||
+                combined.contains("netmeds") || combined.contains("medplus") || (combined.contains("hospital") && !combined.contains("hospitality")) ||
                 combined.contains("clinic") || combined.contains("cult.fit") || combined.contains("gym") ||
                 combined.contains("fitness") || combined.contains("lab") || combined.contains("doctor") ||
                 combined.contains("dr.") || combined.contains("diagnostic") || combined.contains("pathology") ||
@@ -602,17 +635,19 @@ object AiCoreCategorizer {
                 combined.contains("lenskart") -> "Health & Wellness"
             // Groceries
             combined.contains("zepto") || combined.contains("blinkit") || combined.contains("instamart") ||
+                combined.contains("swiggy instamart") ||
                 combined.contains("bigbasket") || combined.contains("bbnow") || combined.contains("dmart") ||
                 combined.contains("spencer") || combined.contains("supermarket") || combined.contains("grocery") ||
                 combined.contains("kirana") || combined.contains("provision") || combined.contains("milk") ||
                 combined.contains("vegetable") -> "Groceries"
             // Food & Dining
-            combined.contains("swiggy") || combined.contains("zomato") || combined.contains("starbucks") ||
+            (combined.contains("swiggy") && !combined.contains("instamart")) || combined.contains("zomato") || combined.contains("starbucks") ||
                 combined.contains("mcdonald") || combined.contains("kfc") || combined.contains("burger king") ||
                 combined.contains("domino") || combined.contains("pizza") || combined.contains("subway") ||
                 combined.contains("cafe") || combined.contains("restaurant") || combined.contains("dine") ||
                 combined.contains("bakery") || combined.contains("food") || combined.contains("biryani") ||
-                combined.contains("dhaba") || combined.contains("chai") || combined.contains("coffee") -> "Food & Dining"
+                combined.contains("dhaba") || combined.contains("chai") || combined.contains("coffee") ||
+                combined.contains("hospitality") -> "Food & Dining"
             // Travel & Commute
             combined.contains("uber") || combined.contains("ola") || combined.contains("rapido") ||
                 combined.contains("metro") || combined.contains("irctc") || combined.contains("makemytrip") ||
@@ -621,13 +656,6 @@ object AiCoreCategorizer {
                 combined.contains("fuel") || combined.contains("petrol") || combined.contains("diesel") ||
                 combined.contains("indian oil") || combined.contains("bharat petroleum") || combined.contains("hpcl") ||
                 combined.contains("shell") || combined.contains("fastag") || combined.contains("toll") -> "Travel & Commute"
-            // Bills & Utilities
-            combined.contains("bescom") || combined.contains("electricity") || combined.contains("water") ||
-                combined.contains("gas") || combined.contains("broadband") || combined.contains("wifi") ||
-                combined.contains("jio") || combined.contains("airtel") || combined.contains("vi") ||
-                combined.contains("vodafone") || combined.contains("recharge") || combined.contains("billdesk") ||
-                combined.contains("postpaid") || combined.contains("dth") || combined.contains("tata sky") ||
-                combined.contains("tataplay") || combined.contains("utility") || combined.contains("bill") -> "Bills & Utilities"
             // Entertainment
             combined.contains("bookmyshow") || combined.contains("netflix") || combined.contains("spotify") ||
                 combined.contains("prime video") || combined.contains("hotstar") || combined.contains("disney") ||

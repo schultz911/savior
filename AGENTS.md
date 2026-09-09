@@ -105,6 +105,21 @@
 
 ## 3. Approved and Implemented
 
+- **[Version 1.1.5 Production Release Packaging & AI Categorization Precision] (Executed & Validated)**:
+  - **Categorization Refinements (`OpenRouterCategorizer.kt`)**: Added dedicated matching for Patreon to `Bills & Utilities`, Ctrlx to `Food & Dining`, Nobero to `Shopping`, and Hotel/Resort to `Travel & Commute`. Refined substring handling for hospitality and updated system prompt category mapping guides.
+  - **Version 1.1.5 Alignment & Clean Packaging (`app/build.gradle.kts`, `ExampleRobolectricTest.kt`)**: Bumped `versionCode = 11` and `versionName = "1.1.5"`. Verified full Robolectric test suite with 100% pass rate. Assembled minified, resource-shrunk release APK (4.3 MB) and deployed `savio-1.1.5.apk`, `savior-1.1.5.apk`, `savio.apk`, and `savior.apk` in both root and `public/`.
+
+- **[Hospitality vs Hospital & Swiggy Instamart Disambiguation across All 3 Tiers, and v1.1.2 Production Release Packaging] (Executed & Validated)**:
+  - **Hospitality vs Hospital Disambiguation (`OpenRouterCategorizer.kt`, `AiCoreCategorizer.kt`, `SmsParser.kt`)**: Separated "hospitality" (hotels, resorts, event dining -> `Food & Dining`) from "hospital" (healthcare, clinics, diagnostics -> `Health & Wellness`) with negative lookahead guards and phrase boundary rules, eliminating false healthcare classifications.
+  - **Swiggy Instamart vs Food Delivery Disambiguation (`OpenRouterCategorizer.kt`, `AiCoreCategorizer.kt`, `SmsParser.kt`)**: Corrected grocery quick-commerce orders ("Swiggy Instamart", "Instamart") to classify under `Groceries`, while general restaurant deliveries ("Swiggy") remain under `Food & Dining`.
+  - **Version 1.1.2 Alignment & Clean Packaging**: Purged stale `savio-1.1.1.apk`, `savior-1.1.1.apk`, and `public/savio-1.0.4.apk`. Recompiled with R8 minification and resource shrinking, passed all 60 Robolectric unit tests, and packaged `savio-1.1.2.apk`, `savior-1.1.2.apk`, `savio.apk`, and `savior.apk` (4.3 MB) in both project root and `public/`.
+
+- **[Online Services & Subscriptions Classification into Bills & Utilities across All 3 Tiers (Local, On-Device, Cloud)] (Executed & Validated)**:
+  - **Tier 1 Cloud AI Intelligence (`OpenRouterCategorizer.kt`)**: Updated `normalizeCategory`, LLM system prompt, and few-shot examples to classify all payments for online purchased services, SaaS tools, developer APIs, and software subscriptions (e.g., OpenRouter, Torbox, Railway, Exitlag, OneDrive, Google Play, Quillbot, GitHub, AWS, ChatGPT, Claude, Vercel, Supabase, Notion, Zoom, Canva, Adobe, Bitwarden, VPNs, Microsoft 365, JetBrains, LaundryMate, Urban Company) under `Bills & Utilities` instead of `Shopping`.
+  - **Tier 2 On-Device AICore Gemini Nano Intelligence (`AiCoreCategorizer.kt`)**: Updated `buildNanoParsingPrompt` and `detectCategory` with explicit rules and comprehensive keyword matching directing all online services and subscriptions to `Bills & Utilities`.
+  - **Tier 3 Local Fallback Engine (`SmsParser.kt`)**: Updated regex categorization and resolved expense type handling so that online services and digital subscriptions are recognized directly as `MERCHANT` expenses under `Bills & Utilities`.
+  - **Automated Verification & Release Packaging**: Added comprehensive unit tests in `ExampleRobolectricTest.kt` validating online services categorization across all three tiers (100% test pass). Rebuilt minified release binaries `savio-1.1.0.apk` and `savior-1.1.0.apk`.
+
 - **[Manifest vs Dynamic Shortcut Conflict Resolution (`MainActivity.kt`, `shortcuts.xml`)] (Executed & Validated)**:
   - **Eradicated `IllegalArgumentException: Manifest shortcut ID=shortcut_sync_sms may not be manipulated via APIs`**: Removed redundant runtime `ShortcutManagerCompat.setDynamicShortcuts()` invocation in `MainActivity.onCreate()`. Static shortcuts (`shortcut_add_cash` and `shortcut_sync_sms`) are already declared in the manifest via `@xml/shortcuts` and managed automatically by the Android OS. Attempting to manipulate manifest shortcut IDs via `setDynamicShortcuts()` triggers an illegal argument exception under Android's immutable shortcut checks.
   - **Cleaned Shortcut Category Metadata (`shortcuts.xml`)**: Removed misplaced `android.shortcut.conversation` categories from static app actions.

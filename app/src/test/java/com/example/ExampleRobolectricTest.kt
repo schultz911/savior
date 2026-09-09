@@ -1473,9 +1473,200 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `test version name is 1_0_4`() {
-    assertEquals("1.0.4", com.example.BuildConfig.VERSION_NAME)
-    assertEquals(5, com.example.BuildConfig.VERSION_CODE)
+  fun `test version name is 1_1_5`() {
+    assertEquals("1.1.5", com.example.BuildConfig.VERSION_NAME)
+    assertEquals(11, com.example.BuildConfig.VERSION_CODE)
+  }
+
+  @Test
+  fun `test expanded generic category identifiers in OpenRouterCategorizer`() {
+    // Food & Dining
+    assertEquals("Food & Dining", com.example.ai.OpenRouterCategorizer.normalizeCategory("Bistro", "The Table", "Paid at The Table"))
+    assertEquals("Food & Dining", com.example.ai.OpenRouterCategorizer.normalizeCategory("Eatery", "Downtown Diner", "Spent at Downtown Diner"))
+    assertEquals("Food & Dining", com.example.ai.OpenRouterCategorizer.normalizeCategory("Bakery", "Artisan Bakery", "Paid for bread"))
+    
+    // Groceries
+    assertEquals("Groceries", com.example.ai.OpenRouterCategorizer.normalizeCategory("Supermarket", "Spar", "Spent at Spar"))
+    assertEquals("Groceries", com.example.ai.OpenRouterCategorizer.normalizeCategory("Daily Essentials", "Local Kirana", "Milk and veggies"))
+    assertEquals("Groceries", com.example.ai.OpenRouterCategorizer.normalizeCategory("Dairy", "Nandini Milk Parlour", "Paid for milk"))
+    
+    // Travel & Commute
+    assertEquals("Travel & Commute", com.example.ai.OpenRouterCategorizer.normalizeCategory("Transit", "Delhi Metro", "Metro smart card recharge"))
+    assertEquals("Travel & Commute", com.example.ai.OpenRouterCategorizer.normalizeCategory("Aviation", "Air India", "Flight ticket booked"))
+    assertEquals("Travel & Commute", com.example.ai.OpenRouterCategorizer.normalizeCategory("Fuel", "Indian Oil", "Petrol pump payment"))
+    
+    // Bills & Utilities
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("Broadband", "ACT Fibernet", "Internet bill payment"))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("Electricity", "BESCOM", "Power bill payment"))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("Service Payment", "Urban Company", "Home service repair"))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("Subscription", "OpenRouter", "USD 10.00 debited for OPENROUTER.AI"))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("Services", "Torbox", "USD 20.00 paid to TORBOX.APP"))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("Online Service", "Railway", "Charged on Railway.app"))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("Digital Services", "Exitlag", "Paid for Exitlag"))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("Cloud Storage", "OneDrive", "Microsoft OneDrive subscription"))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("App Purchase", "Google Play", "Google Play subscription"))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("Software", "Quillbot", "Quillbot Premium purchase"))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("Developer Tools", "GitHub", "GitHub Copilot subscription"))
+    
+    // Shopping
+    assertEquals("Shopping", com.example.ai.OpenRouterCategorizer.normalizeCategory("Apparel", "H&M Store", "Clothing purchase"))
+    assertEquals("Shopping", com.example.ai.OpenRouterCategorizer.normalizeCategory("Footwear", "Bata", "Shoes purchase"))
+    assertEquals("Shopping", com.example.ai.OpenRouterCategorizer.normalizeCategory("Electronics", "Croma", "Laptop purchased"))
+    
+    // Entertainment
+    assertEquals("Entertainment", com.example.ai.OpenRouterCategorizer.normalizeCategory("OTT", "Netflix", "Monthly subscription"))
+    assertEquals("Entertainment", com.example.ai.OpenRouterCategorizer.normalizeCategory("Multiplex", "PVR Cinemas", "Movie tickets"))
+    assertEquals("Entertainment", com.example.ai.OpenRouterCategorizer.normalizeCategory("Gaming", "Steam", "Game purchase"))
+    
+    // Personal Care
+    assertEquals("Personal Care", com.example.ai.OpenRouterCategorizer.normalizeCategory("Barber", "Toni & Guy", "Haircut service"))
+    assertEquals("Personal Care", com.example.ai.OpenRouterCategorizer.normalizeCategory("Skincare", "Kama Ayurveda", "Face wash"))
+    
+    // Investments
+    assertEquals("Investments", com.example.ai.OpenRouterCategorizer.normalizeCategory("Brokerage", "Zerodha", "SIP installment"))
+    assertEquals("Investments", com.example.ai.OpenRouterCategorizer.normalizeCategory("Equity", "Groww", "Stock purchase"))
+    
+    // Education
+    assertEquals("Education", com.example.ai.OpenRouterCategorizer.normalizeCategory("Academy", "Coursera", "Data science course"))
+    assertEquals("Education", com.example.ai.OpenRouterCategorizer.normalizeCategory("Coaching", "Allen", "Tuition fee payment"))
+  }
+
+  @Test
+  fun `test online services and subscriptions are classified as Bills and Utilities across all tiers`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+
+    // Tier 3: Local SmsParser
+    val smsOpenRouter = "USD 10.00 spent on your Card ending 4821 at OPENROUTER.AI on 04-Sep."
+    val parsedOpenRouter = com.example.sms.SmsParser.parse(smsOpenRouter, "BANK")
+    assertNotNull(parsedOpenRouter)
+    assertEquals("Bills & Utilities", parsedOpenRouter!!.category)
+
+    val smsTorbox = "USD 20.00 paid to TORBOX.APP from Card ending 1234 on 05-Sep."
+    val parsedTorbox = com.example.sms.SmsParser.parse(smsTorbox, "BANK")
+    assertNotNull(parsedTorbox)
+    assertEquals("Bills & Utilities", parsedTorbox!!.category)
+
+    val smsGooglePlay = "INR 499.00 debited from A/c ending 5678 for Google Play subscription on 06-Sep."
+    val parsedGooglePlay = com.example.sms.SmsParser.parse(smsGooglePlay, "BANK")
+    assertNotNull(parsedGooglePlay)
+    assertEquals("Bills & Utilities", parsedGooglePlay!!.category)
+
+    val smsOneDrive = "Rs 149.00 paid for Microsoft OneDrive storage on Card ending 9988."
+    val parsedOneDrive = com.example.sms.SmsParser.parse(smsOneDrive, "BANK")
+    assertNotNull(parsedOneDrive)
+    assertEquals("Bills & Utilities", parsedOneDrive!!.category)
+
+    val smsQuillbot = "USD 9.95 charged at QUILLBOT.COM on Card ending 4321."
+    val parsedQuillbot = com.example.sms.SmsParser.parse(smsQuillbot, "BANK")
+    assertNotNull(parsedQuillbot)
+    assertEquals("Bills & Utilities", parsedQuillbot!!.category)
+
+    // Tier 2: AiCoreCategorizer detectCategory
+    assertEquals("Bills & Utilities", com.example.ai.AiCoreCategorizer.detectCategory(smsOpenRouter, "OPENROUTER.AI"))
+    assertEquals("Bills & Utilities", com.example.ai.AiCoreCategorizer.detectCategory(smsTorbox, "TORBOX.APP"))
+    assertEquals("Bills & Utilities", com.example.ai.AiCoreCategorizer.detectCategory(smsGooglePlay, "Google Play"))
+    assertEquals("Bills & Utilities", com.example.ai.AiCoreCategorizer.detectCategory(smsOneDrive, "OneDrive"))
+    assertEquals("Bills & Utilities", com.example.ai.AiCoreCategorizer.detectCategory(smsQuillbot, "Quillbot"))
+    assertEquals("Bills & Utilities", com.example.ai.AiCoreCategorizer.detectCategory("Paid for Railway hosting", "Railway"))
+    assertEquals("Bills & Utilities", com.example.ai.AiCoreCategorizer.detectCategory("Exitlag subscription renewed", "Exitlag"))
+
+    // Tier 1: OpenRouter normalizeCategory
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("UNKNOWN", "OPENROUTER.AI", smsOpenRouter))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("Shopping", "OPENROUTER.AI", smsOpenRouter))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("Entertainment", "OPENROUTER.AI", smsOpenRouter))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("UNKNOWN", "TORBOX.APP", smsTorbox))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("Shopping", "TORBOX.APP", smsTorbox))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("UNKNOWN", "Google Play", smsGooglePlay))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("Entertainment", "Google Play", smsGooglePlay))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("UNKNOWN", "Quillbot", smsQuillbot))
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("Shopping", "Quillbot", smsQuillbot))
+  }
+
+  @Test
+  fun `test swiggy instamart is groceries while regular swiggy is food and dining across all tiers`() {
+    val smsInstamart1 = "Rs 450.00 debited from A/c XX4821 on 05-Sep at SWIGGY INSTAMART. UPI Ref: 998811."
+    val smsInstamart2 = "Spent Rs 620.00 on HDFC Card ending 1234 at INSTAMART BANGALORE on 05-Sep."
+    val smsSwiggyFood = "Paid Rs 380.00 to SWIGGY BANGALORE from A/c XX4821 on 05-Sep. UPI Ref: 112233."
+
+    // Tier 3: SmsParser
+    val parsedInstamart1 = com.example.sms.SmsParser.parse(smsInstamart1, "BANK")
+    assertNotNull(parsedInstamart1)
+    assertEquals("Groceries", parsedInstamart1!!.category)
+
+    val parsedInstamart2 = com.example.sms.SmsParser.parse(smsInstamart2, "BANK")
+    assertNotNull(parsedInstamart2)
+    assertEquals("Groceries", parsedInstamart2!!.category)
+
+    val parsedSwiggy = com.example.sms.SmsParser.parse(smsSwiggyFood, "BANK")
+    assertNotNull(parsedSwiggy)
+    assertEquals("Food & Dining", parsedSwiggy!!.category)
+
+    // Tier 2: AiCoreCategorizer detectCategory
+    assertEquals("Groceries", com.example.ai.AiCoreCategorizer.detectCategory("SWIGGY INSTAMART", smsInstamart1))
+    assertEquals("Groceries", com.example.ai.AiCoreCategorizer.detectCategory("INSTAMART", smsInstamart2))
+    assertEquals("Food & Dining", com.example.ai.AiCoreCategorizer.detectCategory("SWIGGY BANGALORE", smsSwiggyFood))
+
+    // Tier 1: OpenRouterCategorizer normalizeCategory
+    // Even if initial category was inferred as Food & Dining due to "Swiggy", it must be corrected to Groceries
+    assertEquals("Groceries", com.example.ai.OpenRouterCategorizer.normalizeCategory("UNKNOWN", "SWIGGY INSTAMART", smsInstamart1))
+    assertEquals("Groceries", com.example.ai.OpenRouterCategorizer.normalizeCategory("Food & Dining", "SWIGGY INSTAMART", smsInstamart1))
+    assertEquals("Groceries", com.example.ai.OpenRouterCategorizer.normalizeCategory("UNKNOWN", "INSTAMART", smsInstamart2))
+    assertEquals("Food & Dining", com.example.ai.OpenRouterCategorizer.normalizeCategory("UNKNOWN", "SWIGGY BANGALORE", smsSwiggyFood))
+    assertEquals("Food & Dining", com.example.ai.OpenRouterCategorizer.normalizeCategory("Food & Dining", "SWIGGY", "Debited Rs 250 at Swiggy"))
+  }
+
+  @Test
+  fun `test hospitality is food and dining while hospital is health and wellness across all tiers`() {
+    val smsHospitality = "Debited Rs 3,200.00 on HDFC Card ending 4821 at TAJ HOSPITALITY on 05-Sep."
+    val smsHospitalityServices = "Paid Rs 1,800.00 at GREEN PARK HOSPITALITY SERVICES on 05-Sep from A/c XX9988."
+    val smsHospital = "Paid Rs 4,500.00 at APOLLO HOSPITAL on 05-Sep from A/c XX1234."
+    val smsClinic = "Spent Rs 850.00 at DR MOHAN CLINIC on 05-Sep."
+
+    // Tier 3: SmsParser
+    val parsedHospitality = com.example.sms.SmsParser.parse(smsHospitality, "BANK")
+    assertNotNull(parsedHospitality)
+    assertEquals("Food & Dining", parsedHospitality!!.category)
+
+    val parsedHospitalityServices = com.example.sms.SmsParser.parse(smsHospitalityServices, "BANK")
+    assertNotNull(parsedHospitalityServices)
+    assertEquals("Food & Dining", parsedHospitalityServices!!.category)
+
+    val parsedHospital = com.example.sms.SmsParser.parse(smsHospital, "BANK")
+    assertNotNull(parsedHospital)
+    assertEquals("Health & Wellness", parsedHospital!!.category)
+
+    val parsedClinic = com.example.sms.SmsParser.parse(smsClinic, "BANK")
+    assertNotNull(parsedClinic)
+    assertEquals("Health & Wellness", parsedClinic!!.category)
+
+    // Tier 2: AiCoreCategorizer detectCategory
+    assertEquals("Food & Dining", com.example.ai.AiCoreCategorizer.detectCategory("TAJ HOSPITALITY", smsHospitality))
+    assertEquals("Food & Dining", com.example.ai.AiCoreCategorizer.detectCategory("GREEN PARK HOSPITALITY", smsHospitalityServices))
+    assertEquals("Health & Wellness", com.example.ai.AiCoreCategorizer.detectCategory("APOLLO HOSPITAL", smsHospital))
+    assertEquals("Health & Wellness", com.example.ai.AiCoreCategorizer.detectCategory("DR MOHAN CLINIC", smsClinic))
+
+    // Tier 1: OpenRouterCategorizer normalizeCategory
+    // Even if initial category was erroneously passed as Health & Wellness due to "hospital" prefix, it must be corrected to Food & Dining
+    assertEquals("Food & Dining", com.example.ai.OpenRouterCategorizer.normalizeCategory("UNKNOWN", "TAJ HOSPITALITY", smsHospitality))
+    assertEquals("Food & Dining", com.example.ai.OpenRouterCategorizer.normalizeCategory("Health & Wellness", "TAJ HOSPITALITY", smsHospitality))
+    assertEquals("Food & Dining", com.example.ai.OpenRouterCategorizer.normalizeCategory("UNKNOWN", "HOSPITALITY SERVICES", smsHospitalityServices))
+    assertEquals("Food & Dining", com.example.ai.OpenRouterCategorizer.normalizeCategory("Health & Wellness", "HOSPITALITY SERVICES", smsHospitalityServices))
+
+    assertEquals("Health & Wellness", com.example.ai.OpenRouterCategorizer.normalizeCategory("UNKNOWN", "APOLLO HOSPITAL", smsHospital))
+    assertEquals("Health & Wellness", com.example.ai.OpenRouterCategorizer.normalizeCategory("Health & Wellness", "APOLLO HOSPITAL", smsHospital))
+  }
+
+  @Test
+  fun `test version 1_1_5 categories patreon ctrlx nobero hotel resort`() {
+    // Patreon -> Bills & Utilities
+    assertEquals("Bills & Utilities", com.example.ai.OpenRouterCategorizer.normalizeCategory("UNKNOWN", "Patreon", "Paid to Patreon* Creator"))
+    // Ctrlx -> Food & Dining
+    assertEquals("Food & Dining", com.example.ai.OpenRouterCategorizer.normalizeCategory("UNKNOWN", "CTRLX", "Spent at CTRLX Cafe"))
+    // Nobero -> Shopping
+    assertEquals("Shopping", com.example.ai.OpenRouterCategorizer.normalizeCategory("UNKNOWN", "Nobero", "Purchased at Nobero Fashion"))
+    // Hotel / Resort -> Travel & Commute
+    assertEquals("Travel & Commute", com.example.ai.OpenRouterCategorizer.normalizeCategory("Hotel", "Grand Palace", "Paid at Grand Palace Hotel"))
+    assertEquals("Travel & Commute", com.example.ai.OpenRouterCategorizer.normalizeCategory("Resort", "Whispering Palms", "Spent at Whispering Palms Resort"))
   }
 }
 

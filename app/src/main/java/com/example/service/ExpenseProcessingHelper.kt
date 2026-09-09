@@ -361,8 +361,10 @@ object ExpenseProcessingHelper {
             isUnrecognized = false
         } else {
             // Check if user previously mapped this merchant to a category
-            val rememberedCategory = prefs.getMerchantCategory(effectiveMerchant)
-            if (!rememberedCategory.isNullOrBlank()) {
+            val rememberedCategory = prefs.getMerchantCategory(effectiveMerchant)?.let {
+                OpenRouterCategorizer.normalizeCategory(it, effectiveMerchant, parsed.rawText)
+            }
+            if (!rememberedCategory.isNullOrBlank() && rememberedCategory != "Uncategorized") {
                 finalCategory = rememberedCategory
                 isUnrecognized = false
             } else if (apiKey.isNotEmpty() && (finalCategory.isBlank() || finalCategory.equals("General", ignoreCase = true) || finalCategory.equals("Uncategorized", ignoreCase = true))) {
@@ -404,6 +406,8 @@ object ExpenseProcessingHelper {
                 }
             }
         }
+
+        finalCategory = OpenRouterCategorizer.normalizeCategory(finalCategory, effectiveMerchant, parsed.rawText)
 
         val lowerRaw = parsed.rawText.lowercase(Locale.US)
         val isSelfPayment = parsed.type == com.example.data.ExpenseType.SELF ||

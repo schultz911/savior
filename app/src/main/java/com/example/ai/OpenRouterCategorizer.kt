@@ -56,85 +56,257 @@ object OpenRouterCategorizer {
      */
     fun normalizeCategory(rawCat: String, merchant: String = "", rawText: String = ""): String {
         val clean = rawCat.trim()
-        val directMatch = KNOWN_CATEGORIES.firstOrNull { it.equals(clean, ignoreCase = true) }
-        if (directMatch != null) return directMatch
-
         val lowerCat = clean.lowercase(Locale.US)
         val combined = "$clean $merchant $rawText".lowercase(Locale.US)
 
         return when {
-            lowerCat.contains("health") || lowerCat.contains("wellness") || lowerCat.contains("pharma") ||
+            // 1. Digital Services, Software Subscriptions, Cloud APIs, Developer Tools & Utilities (HIGHEST PRIORITY)
+            // Even if raw LLM/bank output says "Shopping", "Entertainment", or generic labels,
+            // all online services and software subscriptions belong to Bills & Utilities.
+            lowerCat.contains("bill") || lowerCat.contains("utilit") || lowerCat.contains("recharge") ||
+                lowerCat.contains("electricity") || lowerCat.contains("power") || lowerCat.contains("water") ||
+                lowerCat.contains("gas") || lowerCat.contains("lpg") || lowerCat.contains("cylinder") ||
+                lowerCat.contains("piped gas") || lowerCat.contains("broadband") || lowerCat.contains("wifi") ||
+                lowerCat.contains("internet") || lowerCat.contains("telecom") || lowerCat.contains("postpaid") ||
+                lowerCat.contains("prepaid") || lowerCat.contains("mobile bill") || lowerCat.contains("phone bill") ||
+                lowerCat.contains("landline") || lowerCat.contains("dth") || lowerCat.contains("cable") ||
+                lowerCat.contains("maintenance") || lowerCat.contains("society maintenance") || lowerCat.contains("sewerage") ||
+                lowerCat.contains("waste") || lowerCat.contains("municipal") || lowerCat.contains("property tax") ||
+                lowerCat.contains("challan") || lowerCat.contains("service payment") ||
+                lowerCat.contains("subscription") || lowerCat.contains("software") ||
+                lowerCat.contains("saas") || lowerCat.contains("hosting") ||
+                lowerCat.contains("domain") || lowerCat.contains("developer") ||
+                lowerCat.contains("online service") || lowerCat.contains("digital service") || lowerCat.contains("storage") ||
+                lowerCat.contains("vpn") || lowerCat.contains("proxy") || lowerCat.contains("license") ||
+                combined.contains("openrouter") || combined.contains("railway") || combined.contains("patreon") ||
+                combined.contains("exitlag") || combined.contains("torbox") || combined.contains("onedrive") ||
+                combined.contains("google play") || combined.contains("play store") || combined.contains("google storage") ||
+                combined.contains("google one") || combined.contains("quillbot") || combined.contains("openai") ||
+                combined.contains("chatgpt") || combined.contains("claude") || combined.contains("anthropic") ||
+                combined.contains("github") || combined.contains("cursor") || combined.contains("copilot") ||
+                combined.contains("replit") || combined.contains("vercel") || combined.contains("netlify") ||
+                combined.contains("heroku") || combined.contains("render") || combined.contains("supabase") ||
+                combined.contains("firebase") || combined.contains("aws") || combined.contains("amazon web services") ||
+                combined.contains("digitalocean") || combined.contains("linode") || combined.contains("cloudflare") ||
+                combined.contains("godaddy") || combined.contains("namecheap") || combined.contains("hostinger") ||
+                combined.contains("notion") || combined.contains("slack") || combined.contains("zoom") ||
+                combined.contains("canva") || combined.contains("adobe") || combined.contains("midjourney") ||
+                combined.contains("figma") || combined.contains("linear") || combined.contains("jira") ||
+                combined.contains("atlassian") || combined.contains("dropbox") || combined.contains("1password") ||
+                combined.contains("bitwarden") || combined.contains("nordvpn") || combined.contains("expressvpn") ||
+                combined.contains("surfshark") || combined.contains("proton") || combined.contains("microsoft 365") ||
+                combined.contains("office 365") || combined.contains("jetbrains") || combined.contains("grammarly") ||
+                combined.contains("laundrymate") || combined.contains("urban company") || combined.contains("icloud") ||
+                combined.contains("apple services") ||
+                combined.contains("bescom") || combined.contains("electricity") || combined.contains("tata power") ||
+                combined.contains("adani electricity") || combined.contains("mahavitaran") || combined.contains("water") ||
+                combined.contains("piped gas") || combined.contains("indane") || combined.contains("hp gas") ||
+                combined.contains("bharat gas") || combined.contains("broadband") || combined.contains("act fibernet") ||
+                combined.contains("airtel") || combined.contains("jio") || combined.contains(" vi ") ||
+                combined.contains("vi recharge") || combined.contains("vodafone") || combined.contains("bsnl") ||
+                ((combined.contains("recharge") || lowerCat.contains("recharge")) && !combined.contains("metro") && !combined.contains("transit") && !combined.contains("fastag") && !combined.contains("toll")) ||
+                combined.contains("dth") || combined.contains("tata play") || combined.contains("dish tv") ||
+                combined.contains("sun direct") || combined.contains("software") ||
+                combined.contains("saas") || combined.contains("cloud service") -> "Bills & Utilities"
+            
+            (lowerCat.contains("health") || lowerCat.contains("wellness") || lowerCat.contains("pharma") ||
                 lowerCat.contains("pharmacy") || lowerCat.contains("chemist") || lowerCat.contains("medical") ||
-                lowerCat.contains("medicine") || lowerCat.contains("hospital") || lowerCat.contains("clinic") ||
+                lowerCat.contains("medicine") || (lowerCat.contains("hospital") && !lowerCat.contains("hospitality")) || lowerCat.contains("clinic") ||
+                lowerCat.contains("doctor") || lowerCat.contains("diagnostic") || lowerCat.contains("pathology") ||
+                lowerCat.contains("dental") || lowerCat.contains("gym") || lowerCat.contains("fitness") ||
                 combined.contains("pharma") || combined.contains("pharmacy") || combined.contains("chemist") ||
                 combined.contains("medplus") || combined.contains("apollo") || combined.contains("1mg") ||
-                combined.contains("pharmeasy") || combined.contains("netmeds") || combined.contains("hospital") ||
+                combined.contains("pharmeasy") || combined.contains("netmeds") || (combined.contains("hospital") && !combined.contains("hospitality")) ||
                 combined.contains("clinic") || combined.contains("doctor") || combined.contains("dr.") ||
                 combined.contains("diagnostic") || combined.contains("pathology") || combined.contains("lab") ||
                 combined.contains("medicine") || combined.contains("medicos") || combined.contains("dental") ||
-                combined.contains("gym") || combined.contains("fitness") || combined.contains("cult.fit") -> "Health & Wellness"
+                combined.contains("gym") || combined.contains("fitness") || combined.contains("cult.fit")) &&
+                !combined.contains("hospitalit") && !lowerCat.contains("hospitalit") -> "Health & Wellness"
+
+            lowerCat.contains("grocer") || lowerCat.contains("supermarket") || lowerCat.contains("hypermarket") ||
+                lowerCat.contains("mart") || lowerCat.contains("kirana") || lowerCat.contains("provisions") ||
+                lowerCat.contains("general store") || lowerCat.contains("convenience") || lowerCat.contains("vegetable") ||
+                lowerCat.contains("fruit") || lowerCat.contains("dairy") || lowerCat.contains("milk") ||
+                lowerCat.contains("meat") || lowerCat.contains("poultry") || lowerCat.contains("fish") ||
+                lowerCat.contains("seafood") || lowerCat.contains("bazaar") || lowerCat.contains("ration") ||
+                lowerCat.contains("fresh") || lowerCat.contains("daily essentials") || lowerCat.contains("instamart") ||
+                combined.contains("zepto") || combined.contains("blinkit") || combined.contains("instamart") ||
+                combined.contains("swiggy instamart") ||
+                combined.contains("bigbasket") || combined.contains("dmart") || combined.contains("supermarket") ||
+                combined.contains("hypermarket") || combined.contains("kirana") || combined.contains("provisions") ||
+                combined.contains("grocery") || combined.contains("bbdaily") || combined.contains("nature's basket") ||
+                combined.contains("spencer") || combined.contains("smart bazaar") || combined.contains("reliance smart") ||
+                combined.contains("country delight") || combined.contains("vegetable") || combined.contains("fruit") ||
+                combined.contains("dairy") || combined.contains("milk") || combined.contains("grocery store") ||
+                combined.contains("general store") || combined.contains("provision store") -> "Groceries"
 
             lowerCat.contains("food") || lowerCat.contains("dining") || lowerCat.contains("restaurant") ||
-                lowerCat.contains("cafe") || lowerCat.contains("coffee") ||
-                combined.contains("swiggy") || combined.contains("zomato") || combined.contains("starbucks") ||
+                lowerCat.contains("cafe") || lowerCat.contains("coffee") || lowerCat.contains("bakery") ||
+                lowerCat.contains("bakeries") || lowerCat.contains("bistro") || lowerCat.contains("eatery") ||
+                lowerCat.contains("diner") || lowerCat.contains("kitchen") || lowerCat.contains("canteen") ||
+                lowerCat.contains("dhaba") || lowerCat.contains("pub") || lowerCat.contains("hospitality") ||
+                ((lowerCat.contains(" bar") || lowerCat.startsWith("bar ") || lowerCat == "bar" || lowerCat.contains("bars")) && !lowerCat.contains("barber")) ||
+                lowerCat.contains("brewery") || lowerCat.contains("lounge") || lowerCat.contains("fast food") ||
+                lowerCat.contains("takeaway") || lowerCat.contains("takeout") || lowerCat.contains("dessert") ||
+                lowerCat.contains("patisserie") || lowerCat.contains("confectionery") || lowerCat.contains("beverage") ||
+                lowerCat.contains(" tea") || lowerCat.startsWith("tea ") || lowerCat == "tea" || lowerCat.contains("chai") ||
+                lowerCat.contains("tiffin") || lowerCat.contains("breakfast") ||
+                lowerCat.contains("lunch") || lowerCat.contains("dinner") || lowerCat.contains("snack") ||
+                lowerCat.contains("meal") ||
+                (combined.contains("swiggy") && !combined.contains("instamart")) || combined.contains("zomato") || combined.contains("starbucks") ||
                 combined.contains("mcdonald") || combined.contains("kfc") || combined.contains("burger king") ||
                 combined.contains("domino") || combined.contains("pizza") || combined.contains("cafe") ||
-                combined.contains("restaurant") || combined.contains("dining") || combined.contains("coffee") -> "Food & Dining"
+                combined.contains("restaurant") || combined.contains("dining") || combined.contains("coffee") ||
+                combined.contains("bakery") || combined.contains("biryani") || combined.contains("subway") ||
+                combined.contains("haldiram") || combined.contains("ownly") || combined.contains("ctrlx") || combined.contains("chai") ||
+                combined.contains("tea point") || combined.contains("hospitalit") -> "Food & Dining"
 
-            lowerCat.contains("grocer") || lowerCat.contains("supermarket") ||
-                combined.contains("zepto") || combined.contains("blinkit") || combined.contains("instamart") ||
-                combined.contains("bigbasket") || combined.contains("dmart") || combined.contains("supermarket") ||
-                combined.contains("kirana") || combined.contains("provisions") || combined.contains("grocery") -> "Groceries"
+            lowerCat.contains("travel") || lowerCat.contains("commute") || lowerCat.contains("transport") ||
+                lowerCat.contains("transit") || lowerCat.contains("cab") || lowerCat.contains("taxi") ||
+                lowerCat.contains("ride") || lowerCat.contains("metro") || lowerCat.contains("subway") ||
+                lowerCat.contains("train") || lowerCat.contains("railway") || lowerCat.contains("flight") ||
+                lowerCat.contains("airline") || lowerCat.contains("aviation") || lowerCat.contains("airport") ||
+                ((lowerCat.contains(" bus") || lowerCat.startsWith("bus ") || lowerCat == "bus" || lowerCat.contains("buses") || lowerCat.contains("bus ticket")) && !lowerCat.contains("business")) ||
+                (lowerCat.contains("coach") && !lowerCat.contains("coaching")) || lowerCat.contains("auto") ||
+                lowerCat.contains("rickshaw") || lowerCat.contains("fuel") || lowerCat.contains("petrol") ||
+                lowerCat.contains("diesel") || lowerCat.contains("cng") || lowerCat.contains("ev charging") ||
+                lowerCat.contains("parking") || lowerCat.contains("toll") || lowerCat.contains("fastag") ||
+                lowerCat.contains("ferry") || lowerCat.contains("logistics") || lowerCat.contains("hotel") || lowerCat.contains("resort") ||
+                combined.contains("uber") || combined.contains("ola") || combined.contains("rapido") || combined.contains("taxi") ||
+                combined.contains("metro") || combined.contains("irctc") || combined.contains("flight") || combined.contains("airline") ||
+                combined.contains("air india") || combined.contains("indigo") || combined.contains("spicejet") || combined.contains("vistara") ||
+                combined.contains("bus") || combined.contains("redbus") || combined.contains("fuel") || combined.contains("petrol") ||
+                combined.contains("diesel") || combined.contains("cng") || combined.contains("parking") || combined.contains("shell") ||
+                combined.contains("hpcl") || combined.contains("bpcl") || combined.contains("iocl") || combined.contains("indian oil") ||
+                combined.contains("fastag") || combined.contains("toll") || combined.contains("makemytrip") || combined.contains("goibibo") ||
+                combined.contains("cleartrip") || combined.contains("easemytrip") || combined.contains("yatra") -> "Travel & Commute"
 
-            lowerCat.contains("travel") || lowerCat.contains("commute") || lowerCat.contains("transport") || lowerCat.contains("cab") ||
-                combined.contains("uber") || combined.contains("ola") || combined.contains("rapido") ||
-                combined.contains("metro") || combined.contains("irctc") || combined.contains("flight") ||
-                combined.contains("fuel") || combined.contains("petrol") || combined.contains("diesel") ||
-                combined.contains("shell") || combined.contains("fastag") -> "Travel & Commute"
+            lowerCat.contains("entertain") || lowerCat.contains("movie") || lowerCat.contains("cinema") ||
+                lowerCat.contains("theatre") || lowerCat.contains("show") || lowerCat.contains("event") ||
+                lowerCat.contains("concert") || lowerCat.contains("play") || lowerCat.contains("game") ||
+                lowerCat.contains("gaming") || lowerCat.contains("music") || lowerCat.contains("ott") ||
+                lowerCat.contains("streaming") || combined.contains("bookmyshow") || combined.contains("pvr") ||
+                combined.contains("inox") || combined.contains("cinepolis") || combined.contains("netflix") ||
+                combined.contains("spotify") || combined.contains("prime video") || combined.contains("hotstar") ||
+                combined.contains("disney") || combined.contains("sony liv") || combined.contains("zee5") ||
+                combined.contains("apple tv") || combined.contains("apple music") || combined.contains("youtube") ||
+                combined.contains("steam") || combined.contains("playstation") || combined.contains("xbox") ||
+                combined.contains("nintendo") || combined.contains("epic games") -> "Entertainment"
 
-            lowerCat.contains("bill") || lowerCat.contains("utilit") || lowerCat.contains("recharge") || lowerCat.contains("electricity") ||
-                combined.contains("bescom") || combined.contains("electricity") || combined.contains("water") ||
-                combined.contains("gas") || combined.contains("broadband") || combined.contains("airtel") ||
-                combined.contains("jio") || combined.contains("recharge") || combined.contains("dth") -> "Bills & Utilities"
-
-            lowerCat.contains("shop") || lowerCat.contains("retail") || lowerCat.contains("ecommerce") || lowerCat.contains("e-commerce") ||
+            lowerCat.contains("shop") || lowerCat.contains("retail") || lowerCat.contains("ecommerce") ||
+                lowerCat.contains("e-commerce") || lowerCat.contains("apparel") || lowerCat.contains("clothing") ||
+                lowerCat.contains("clothes") || lowerCat.contains("fashion") || lowerCat.contains("wear") ||
+                lowerCat.contains("garment") || lowerCat.contains("footwear") || lowerCat.contains("shoes") ||
+                lowerCat.contains("electronics") || lowerCat.contains("gadget") || lowerCat.contains("mobile") ||
+                lowerCat.contains("computer") || lowerCat.contains("laptop") || lowerCat.contains("hardware") ||
+                lowerCat.contains("appliance") || lowerCat.contains("furniture") || lowerCat.contains("home decor") ||
+                lowerCat.contains("furnishing") || lowerCat.contains("mall") || lowerCat.contains("boutique") ||
+                lowerCat.contains("department store") || lowerCat.contains("jewellery") || lowerCat.contains("jewelry") ||
+                lowerCat.contains("watch") || lowerCat.contains("eyewear") || lowerCat.contains("opticals") ||
+                lowerCat.contains("accessories") || lowerCat.contains("bag") || lowerCat.contains("luggage") ||
+                lowerCat.contains("stationery") || lowerCat.contains("merchandise") ||
                 combined.contains("amazon") || combined.contains("flipkart") || combined.contains("myntra") ||
-                combined.contains("ajio") || combined.contains("nykaa") || combined.contains("zara") ||
-                combined.contains("h&m") || combined.contains("croma") || combined.contains("mall") -> "Shopping"
+                combined.contains("ajio") || combined.contains("nykaa") || combined.contains("zara") || combined.contains("nobero") ||
+                combined.contains("h&m") || combined.contains("croma") || combined.contains("reliance digital") ||
+                combined.contains("vijay sales") || combined.contains("ikea") || combined.contains("meesho") ||
+                combined.contains("tata cliq") || combined.contains("decathlon") || combined.contains("uniqlo") ||
+                combined.contains("lenskart") || combined.contains("titan") || combined.contains("tanishq") ||
+                combined.contains("westside") || combined.contains("pantaloons") || combined.contains("shoppers stop") ||
+                combined.contains("lifestyle") || combined.contains("mall") -> "Shopping"
 
-            lowerCat.contains("entertain") || lowerCat.contains("movie") || lowerCat.contains("cinema") || lowerCat.contains("streaming") ||
+            lowerCat.contains("entertain") || lowerCat.contains("movie") || lowerCat.contains("cinema") ||
+                lowerCat.contains("theatre") || lowerCat.contains("theater") || lowerCat.contains("film") ||
+                lowerCat.contains("multiplex") || lowerCat.contains("streaming") ||
+                (lowerCat.contains(" ott") || lowerCat.startsWith("ott") || lowerCat == "ott") ||
+                lowerCat.contains("music") || lowerCat.contains("concert") || lowerCat.contains("show") ||
+                lowerCat.contains("event") || lowerCat.contains("gaming") || lowerCat.contains("game") ||
+                lowerCat.contains("video game") || lowerCat.contains("arcade") || lowerCat.contains("sports") ||
+                lowerCat.contains("stadium") || lowerCat.contains("amusement") || lowerCat.contains("theme park") ||
+                lowerCat.contains("carnival") || lowerCat.contains("ticket") ||
                 combined.contains("bookmyshow") || combined.contains("netflix") || combined.contains("spotify") ||
                 combined.contains("prime video") || combined.contains("hotstar") || combined.contains("pvr") ||
-                combined.contains("inox") || combined.contains("cinema") || combined.contains("movie") ||
-                combined.contains("steam") || combined.contains("playstation") || combined.contains("youtube") -> "Entertainment"
+                combined.contains("cinepolis") || combined.contains("inox") || combined.contains("district") ||
+                combined.contains("cinema") || combined.contains("movie") || combined.contains("steam") ||
+                combined.contains("playstation") || combined.contains("xbox") || combined.contains("riot games") ||
+                combined.contains("arenanet") || combined.contains("nintendo") || combined.contains("epic games") ||
+                combined.contains("youtube") || combined.contains("apple music") || combined.contains("gaana") ||
+                combined.contains("jiosaavn") || combined.contains("audible") -> "Entertainment"
 
-            lowerCat.contains("personal") || lowerCat.contains("care") || lowerCat.contains("salon") || lowerCat.contains("spa") || lowerCat.contains("beauty") ||
+            lowerCat.contains("personal") ||
+                (lowerCat.contains("care") && !lowerCat.contains("daycare") && !lowerCat.contains("childcare")) ||
+                lowerCat.contains("salon") ||
+                lowerCat.contains("spa") || lowerCat.contains("beauty") || lowerCat.contains("barber") ||
+                lowerCat.contains("haircut") || lowerCat.contains("hair") || lowerCat.contains("parlour") ||
+                lowerCat.contains("parlor") || lowerCat.contains("grooming") || lowerCat.contains("skincare") ||
+                lowerCat.contains("cosmetic") || lowerCat.contains("makeup") || lowerCat.contains("dermatology") ||
+                lowerCat.contains("massage") || lowerCat.contains("nail") || lowerCat.contains("tattoo") ||
+                lowerCat.contains("waxing") || lowerCat.contains("threading") || lowerCat.contains("facial") ||
+                lowerCat.contains("hygiene") ||
                 combined.contains("salon") || combined.contains("spa") || combined.contains("barber") ||
-                combined.contains("parlour") || combined.contains("grooming") || combined.contains("skincare") ||
-                combined.contains("cosmetics") || combined.contains("urban company") -> "Personal Care"
+                combined.contains("parlour") || combined.contains("parlor") || combined.contains("grooming") ||
+                combined.contains("skincare") || combined.contains("cosmetics") || combined.contains("urban company") ||
+                combined.contains("enrich") || combined.contains("tony & guy") || combined.contains("toni & guy") ||
+                combined.contains("jawed habib") || combined.contains("vlcc") || combined.contains("lakme") ||
+                combined.contains("bodycraft") -> "Personal Care"
 
-            lowerCat.contains("invest") || lowerCat.contains("stock") || lowerCat.contains("mutual") || lowerCat.contains("trading") ||
+            lowerCat.contains("invest") || lowerCat.contains("stock") || lowerCat.contains("mutual") ||
+                lowerCat.contains("trading") || lowerCat.contains("share") || lowerCat.contains("equity") ||
+                lowerCat.contains("broker") || lowerCat.contains("brokerage") || lowerCat.contains("sip") ||
+                lowerCat.contains("fund") || lowerCat.contains("securities") || lowerCat.contains("demat") ||
+                lowerCat.contains("deposit") || lowerCat.contains("fixed deposit") || lowerCat.contains("recurring deposit") ||
+                lowerCat.contains("nps") || lowerCat.contains("ppf") || lowerCat.contains("bonds") ||
+                lowerCat.contains("gold") || lowerCat.contains("bullion") || lowerCat.contains("crypto") ||
+                lowerCat.contains("wealth") || lowerCat.contains("portfolio") ||
                 combined.contains("zerodha") || combined.contains("groww") || combined.contains("upstox") ||
                 combined.contains("mutual fund") || combined.contains("sip") || combined.contains("stocks") ||
-                combined.contains("angel one") || combined.contains("smallcase") -> "Investments"
+                combined.contains("angel one") || combined.contains("smallcase") || combined.contains("indmoney") ||
+                combined.contains("kuvera") || combined.contains("etmoney") || combined.contains("sharekhan") ||
+                combined.contains("motilal oswal") || combined.contains("icicidirect") || combined.contains("5paisa") ||
+                combined.contains("paytm money") -> "Investments"
 
-            lowerCat.contains("educat") || lowerCat.contains("tuition") || lowerCat.contains("course") || lowerCat.contains("school") ||
+            lowerCat.contains("educat") || lowerCat.contains("tuition") || lowerCat.contains("course") ||
+                lowerCat.contains("school") || lowerCat.contains("college") || lowerCat.contains("university") ||
+                lowerCat.contains("institute") || lowerCat.contains("academy") || lowerCat.contains("coaching") ||
+                lowerCat.contains("class") || lowerCat.contains("learning") || lowerCat.contains("training") ||
+                lowerCat.contains("exam") || lowerCat.contains("test") || lowerCat.contains("certification") ||
+                lowerCat.contains("degree") || lowerCat.contains("diploma") || lowerCat.contains("admission") ||
+                lowerCat.contains("fee") || lowerCat.contains("fees") || lowerCat.contains("books") ||
+                lowerCat.contains("textbook") || lowerCat.contains("library") || lowerCat.contains("stationery") ||
+                lowerCat.contains("study") || lowerCat.contains("kindergarten") || lowerCat.contains("daycare") ||
                 combined.contains("coursera") || combined.contains("udemy") || combined.contains("unacademy") ||
-                combined.contains("school") || combined.contains("college") || combined.contains("university") ||
-                combined.contains("tuition") || combined.contains("fee") || combined.contains("books") -> "Education"
+                combined.contains("byju") || combined.contains("physics wallah") || combined.contains("allen") ||
+                combined.contains("aakash") || combined.contains("fiitjee") || combined.contains("school") ||
+                combined.contains("college") || combined.contains("university") || combined.contains("tuition") ||
+                combined.contains("fee") || combined.contains("fees") || combined.contains("books") ||
+                combined.contains("edx") || combined.contains("skillshare") || combined.contains("duolingo") -> "Education"
 
-            lowerCat.contains("self") || combined.contains("self transfer") || combined.contains("own account") ||
-                combined.contains("to own") || combined.contains("to self") || combined.contains("linked account") -> "Self"
+            lowerCat.contains("self") || lowerCat.contains("own account") || lowerCat.contains("self transfer") ||
+                lowerCat.contains("internal transfer") || lowerCat.contains("linked account") || lowerCat.contains("to own") ||
+                combined.contains("self transfer") || combined.contains("own account") ||
+                combined.contains("to hdfc") || combined.contains("to kotak") || combined.contains("to dcb") ||
+                combined.contains("to sbi") || combined.contains("to icici") || combined.contains("to axis") ||
+                combined.contains("to own") || combined.contains("to self") || combined.contains("linked account") ||
+                combined.contains("my account") || combined.contains("savings to current") || combined.contains("self a/c") -> "Self"
 
             lowerCat.contains("credit card") || lowerCat.contains("card dues") || lowerCat.contains("card bill") ||
+                lowerCat.contains("cc bill") || lowerCat.contains("cc payment") || lowerCat.contains("card payment") ||
+                lowerCat.contains("credit card payment") || lowerCat.contains("statement payment") ||
                 combined.contains("towards your credit card") || combined.contains("credit card bill") ||
-                combined.contains("card dues") || combined.contains("paid to cred") || combined.contains("bill payment for card") -> "Credit Card Bill"
+                combined.contains("card dues") || combined.contains("paid to cred") || combined.contains("bill payment for card") ||
+                combined.contains("credit card payment") || combined.contains("card payment") || combined.contains("cc payment") ||
+                combined.contains("card settlement") -> "Credit Card Bill"
 
-            lowerCat.contains("transfer") || lowerCat.contains("p2p") ||
+            lowerCat.contains("transfer") || lowerCat.contains("p2p") || lowerCat.contains("remittance") ||
+                lowerCat.contains("send money") || lowerCat.contains("sent money") || lowerCat.contains("wire") ||
+                lowerCat.contains("imps") || lowerCat.contains("neft") || lowerCat.contains("rtgs") ||
+                lowerCat.contains("upi transfer") || lowerCat.contains("person to person") ||
                 combined.contains("transfer to") || combined.contains("sent to") || combined.contains("paid to") ||
-                combined.contains("vpa") || combined.contains("upi") -> "Transfers"
+                combined.contains("vpa") || combined.contains("upi") || combined.contains("imps") ||
+                combined.contains("neft") || combined.contains("rtgs") || combined.contains("remittance") -> "Transfers"
 
-            else -> "Uncategorized"
+            else -> {
+                KNOWN_CATEGORIES.firstOrNull { it.equals(clean, ignoreCase = true) } ?: "Uncategorized"
+            }
         }
     }
 
@@ -250,15 +422,15 @@ ACCOUNT INFO:
 - Detect card or account info with 4-digit mask (e.g. "Card ••4821", "A/c ••3391", "UPI ••9012").
 
 CATEGORY MAPPING GUIDE (Choose the most accurate category):
-- "Health & Wellness": Any pharmacy, chemist, medicine store, pharma (e.g. "SANDEEP PHARMA", "Apollo Pharmacy", "Medplus", "Tata 1mg", "PharmEasy", "Netmeds"), hospitals, clinics, diagnostic labs, doctors, gyms, fitness centers ("Cult.fit").
-- "Groceries": Supermarkets, quick-commerce (Blinkit, Zepto, Instamart, BigBasket), kirana stores, provisions, milk, vegetables, D-Mart.
-- "Food & Dining": Restaurants, cafes, food delivery (Swiggy, Zomato), coffee shops (Starbucks), fast food (McDonald's, Domino's, KFC), bakeries, dining.
-- "Travel & Commute": Cabs (Uber, Ola, Rapido), public transport (Metro, IRCTC, trains), airlines (IndiGo, Air India), fuel/petrol pumps (Shell, HPCL, BPCL, Indian Oil), FASTag, tolls, parking.
-- "Bills & Utilities": Electricity (BESCOM, Tata Power), water, gas (PNG/LPG), broadband/WiFi, mobile recharge/postpaid (Airtel, Jio, Vi), DTH (Tata Play).
-- "Shopping": E-commerce (Amazon, Flipkart, Myntra, Ajio), clothing/apparel (Zara, H&M), electronics (Croma, Apple, Reliance Digital), retail stores, malls.
-- "Entertainment": Movies (BookMyShow, PVR, INOX), streaming subscriptions (Netflix, Spotify, Prime Video, Hotstar, YouTube), gaming (Steam, PlayStation).
-- "Personal Care": Salons, spas, barbers, beauty parlours, grooming, cosmetics, skincare, Urban Company.
-- "Investments": Stock brokers (Zerodha, Groww, Upstox, Angel One), mutual funds, SIPs, NPS, crypto/Coin.
+- "Health & Wellness": Any pharmacy, chemist, medicine store, pharma (e.g. "SANDEEP PHARMA", "Apollo Pharmacy", "Medplus", "Tata 1mg", "PharmEasy", "Netmeds"), hospitals (e.g. "Apollo Hospital", "Fortis", "Manipal"), clinics, diagnostic labs, doctors, gyms, fitness centers ("Cult.fit"). NOTE: Differentiate medical "hospital" from "hospitality". "hospitality" is ALWAYS Food & Dining, NEVER Health & Wellness!
+- "Groceries": Supermarkets, quick-commerce (Blinkit, Zepto, Instamart, Swiggy Instamart, BigBasket), kirana stores, provisions, milk, vegetables, D-Mart. CRITICAL: "Swiggy Instamart" or "Instamart" is ALWAYS Groceries, NEVER Food & Dining!
+- "Food & Dining": Restaurants, cafes, food delivery (Swiggy food delivery, Zomato, Ownly), coffee shops (Starbucks), fast food (McDonald's, Domino's, KFC), bakeries, dining. CRITICAL: "Hospitality" is ALWAYS Food & Dining, NEVER Health & Wellness! Regular Swiggy food orders are Food & Dining, but Swiggy Instamart is Groceries.
+- "Travel & Commute": Cabs (Uber, Ola, Rapido), public transport (Metro, IRCTC, trains), airlines (IndiGo, Air India), hotels, resorts, fuel/petrol pumps (Shell, HPCL, BPCL, Indian Oil), FASTag, tolls, parking.
+- "Bills & Utilities": Electricity (BESCOM, Tata Power), water, gas (PNG/LPG), broadband/WiFi, mobile recharge/postpaid (Airtel, Jio, Vi), DTH (Tata Play), and ALL online services, digital subscriptions, SaaS, software tools, AI APIs, cloud hosting, app store purchases (OpenRouter, OpenAI, ChatGPT, Anthropic, Claude, Railway, Exitlag, Torbox, OneDrive, Google Play, Google Storage, Google One, iCloud, Apple Services, Quillbot, GitHub, Cursor, Notion, Midjourney, Canva, Adobe, Microsoft 365, AWS, DigitalOcean, Vercel, Cloudflare, Urban Company, LaundryMate, and any online purchased service or subscription).
+- "Shopping": E-commerce physical goods (Amazon, Flipkart, Myntra, Ajio), clothing/apparel (Zara, H&M, Nobero), electronics (Croma, Apple Store hardware, Reliance Digital), retail stores, malls. CRITICAL: Do NOT classify online digital services, subscriptions, software, APIs, or digital platforms as Shopping — they belong to Bills & Utilities.
+- "Entertainment": Movies (BookMyShow, PVR, INOX, Cinepolis), streaming subscriptions (Netflix, Spotify, Prime Video, Hotstar, YouTube), gaming (Steam, PlayStation, XBOX, Gamepass, Arenanet, Riot Games).
+- "Personal Care": Salons, spas, barbers, beauty parlours, grooming, cosmetics, skincare.
+- "Investments": Stock brokers (ETMoney, Zerodha, Groww, Upstox, Angel One), mutual funds, SIPs, NPS, crypto/Coin.
 - "Education": School/college fees, universities, coaching/tuition, online courses (Coursera, Udemy), books.
 - "Transfers": P2P transfers sent to contacts, friends, or individuals.
 - "Self": Internal transfers between own bank accounts.
@@ -267,6 +439,15 @@ CATEGORY MAPPING GUIDE (Choose the most accurate category):
 FEW-SHOT EXAMPLES:
 SMS: "Paid Rs 450.00 to SANDEEP PHARMA from A/c XX4821 on 04-Sep. UPI Ref: 445566."
 Output: {"classification":"MERCHANT","amount":450.00,"currency":"₹","merchant":"SANDEEP PHARMA","accountInfo":"A/c ••4821","category":"Health & Wellness"}
+
+SMS: "USD 10.00 debited from Card ending 4821 at OPENROUTER.AI on 04-Sep."
+Output: {"classification":"MERCHANT","amount":10.00,"currency":"$","merchant":"OPENROUTER.AI","accountInfo":"Card ••4821","category":"Bills & Utilities"}
+
+SMS: "INR 499.00 paid for Google Play subscription on Card ending 1234 on 05-Sep."
+Output: {"classification":"MERCHANT","amount":499.00,"currency":"₹","merchant":"Google Play","accountInfo":"Card ••1234","category":"Bills & Utilities"}
+
+SMS: "USD 20.00 paid to TORBOX.APP on 06-Sep from Card ending 5511."
+Output: {"classification":"MERCHANT","amount":20.00,"currency":"$","merchant":"TORBOX.APP","accountInfo":"Card ••5511","category":"Bills & Utilities"}
 
 SMS: "Debited INR 1,200.00 on HDFC Card ending 4821 at APOLLO PHARMACY on 05-Sep."
 Output: {"classification":"MERCHANT","amount":1200.00,"currency":"₹","merchant":"APOLLO PHARMACY","accountInfo":"Card ••4821","category":"Health & Wellness"}
@@ -288,6 +469,15 @@ Output: {"classification":"MERCHANT","amount":6890.00,"currency":"₹","merchant
 
 SMS: "Thank you for using HDFC Bank Credit Card ending 4821 for payment of Rs 1,450.00 at SWIGGY BANGALORE on 04-Sep. Avl Limit: Rs 48,250.00."
 Output: {"classification":"MERCHANT","amount":1450.00,"currency":"₹","merchant":"SWIGGY BANGALORE","accountInfo":"Card ••4821","category":"Food & Dining"}
+
+SMS: "Paid Rs 680.00 at SWIGGY INSTAMART from A/c XX4821 on 05-Sep. UPI Ref: 889900."
+Output: {"classification":"MERCHANT","amount":680.00,"currency":"₹","merchant":"SWIGGY INSTAMART","accountInfo":"A/c ••4821","category":"Groceries"}
+
+SMS: "Debited Rs 4,200.00 on Axis Card ending 1004 at TAJ HOSPITALITY on 05-Sep."
+Output: {"classification":"MERCHANT","amount":4200.00,"currency":"₹","merchant":"TAJ HOSPITALITY","accountInfo":"Card ••1004","category":"Food & Dining"}
+
+SMS: "Paid Rs 3,500.00 at APOLLO HOSPITAL on 05-Sep from A/c XX1234."
+Output: {"classification":"MERCHANT","amount":3500.00,"currency":"₹","merchant":"APOLLO HOSPITAL","accountInfo":"A/c ••1234","category":"Health & Wellness"}
 
 SMS: "Dear SBI User, your A/c XX3391 debited by Rs 5,000.00 on 03-Sep towards Transfer to Ramesh Kumar. UPI Ref 382910."
 Output: {"classification":"P2P","amount":5000.00,"currency":"₹","merchant":"Ramesh Kumar","accountInfo":"A/c ••3391","category":"Transfers"}
@@ -454,13 +644,13 @@ You are a precise financial transaction categorizer for the Savio₹ personal ex
 Analyze the bank SMS and extract the exact spend category.
 
 Permitted categories:
-- Health & Wellness: Pharmacies, chemists, pharma, medical stores, medicines (e.g. "SANDEEP PHARMA", "Apollo Pharmacy", "Medplus", "1mg", "PharmEasy"), hospitals, clinics, diagnostic labs, doctors, gyms, cult.fit, fitness.
-- Groceries: Supermarkets, quick-commerce (Blinkit, Zepto, Instamart, BigBasket), grocery, kirana, provisions, milk, vegetables.
-- Food & Dining: Restaurants, cafes, food delivery (Swiggy, Zomato), coffee shops, fast food, dining.
-- Travel & Commute: Cabs (Uber, Ola, Rapido), public transport (Metro, IRCTC, trains), airlines, fuel/petrol pumps, FASTag, tolls.
-- Bills & Utilities: Electricity, water, gas, broadband, mobile recharge/postpaid (Airtel, Jio, Vi), DTH.
-- Shopping: E-commerce (Amazon, Flipkart, Myntra, Ajio), apparel, electronics, retail stores, malls.
-- Entertainment: Movies (BookMyShow, PVR, INOX), streaming (Netflix, Spotify, Prime Video, Hotstar, YouTube), gaming.
+- Health & Wellness: Pharmacies, chemists, pharma, medical stores, medicines (e.g. "SANDEEP PHARMA", "Apollo Pharmacy", "Medplus", "1mg", "PharmEasy"), hospitals, clinics, diagnostic labs, doctors, gyms, cult.fit, fitness. (Differentiate medical "hospital" from "hospitality" — hospitality is Food & Dining).
+- Groceries: Supermarkets, quick-commerce (Blinkit, Zepto, Instamart, Swiggy Instamart, BigBasket), grocery, kirana, provisions, milk, vegetables. (Swiggy Instamart is Groceries, NOT Food & Dining).
+- Food & Dining: Restaurants, cafes, bakeries, food delivery (Swiggy food orders, Zomato, Ownly), coffee shops, fast food, dining.
+- Travel & Commute: Cabs (Uber, Ola, Rapido), public transport (Metro, IRCTC, trains), airlines, hotels, resorts, fuel/petrol pumps, FASTag, parking, tolls.
+- Bills & Utilities: Electricity, water, gas, broadband, mobile recharge/postpaid (Airtel, Jio, Vi), DTH, and ALL payments for online purchased services, digital subscriptions, SaaS, software tools, AI APIs, cloud hosting, and app stores (OpenRouter, OpenAI, ChatGPT, Claude, Railway, Exitlag, Torbox, OneDrive, Google Play, Google Storage, Google One, iCloud, Apple Services, Quillbot, GitHub, Cursor, Notion, Canva, Adobe, Microsoft 365, AWS, DigitalOcean, Vercel, Cloudflare, Urban Company, LaundryMate).
+- Shopping: E-commerce physical goods (Amazon, Flipkart, Myntra, Ajio), clothing/apparel, electronics, retail stores, malls. (Never classify online digital services, subscriptions, software, or API platforms as Shopping — they belong to Bills & Utilities).
+- Entertainment: Movies (BookMyShow, PVR, INOX, Cinepolis, District), streaming (Netflix, Spotify, Prime Video, Hotstar, YouTube), gaming (Steam, XBOX, Riot Games, Arenanet).
 - Personal Care: Salons, spas, barbers, beauty parlours, grooming, cosmetics, skincare.
 - Investments: Stock brokers (Zerodha, Groww, Upstox, Angel One), mutual funds, SIPs, NPS.
 - Education: School/college fees, universities, coaching/tuition, online courses, books.
@@ -474,6 +664,8 @@ Rules:
 3. If the message is ambiguous, generic, cannot be determined, or is not an identifiable purchase, output ONLY "UNKNOWN".
 4. Do not add explanations, prefixes, punctuation or quotes.
 5. CRITICAL: A purchase made USING a credit card at a store or merchant (e.g. Swiggy, Amazon, Uber, restaurant, pharmacy) MUST be categorized by what was bought (e.g. Food & Dining, Shopping, Health & Wellness). NEVER categorize a purchase as "Credit Card Bill" just because a credit card was used! Use "Credit Card Bill" ONLY when paying off the credit card bill itself.
+6. "Hospitality" is Food & Dining, NOT Health & Wellness. Differentiate "hospital" (medical) from "hospitality" (dining/hotels).
+7. "Swiggy Instamart" or "Instamart" is Groceries, NOT Food & Dining. Regular Swiggy food orders are Food & Dining.
 """.trimIndent()
 
         val userPrompt = """
