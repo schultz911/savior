@@ -61,10 +61,10 @@ object AiCoreCategorizer {
         for (pkg in AICORE_CANDIDATE_PACKAGES) {
             try {
                 val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    pm.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(PackageManager.MATCH_ALL.toLong()))
+                    pm.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0L))
                 } else {
                     @Suppress("DEPRECATION")
-                    pm.getPackageInfo(pkg, PackageManager.MATCH_ALL)
+                    pm.getPackageInfo(pkg, 0)
                 }
                 if (packageInfo != null) {
                     return true
