@@ -18,6 +18,9 @@ interface MerchantRuleDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRule(rule: MerchantRuleEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRules(rules: List<MerchantRuleEntity>): List<Long>
+
     @Query("DELETE FROM merchant_rules WHERE id = :id")
     suspend fun deleteRule(id: Long)
 }

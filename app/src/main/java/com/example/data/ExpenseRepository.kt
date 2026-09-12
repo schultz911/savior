@@ -121,11 +121,12 @@ class ExpenseRepository(
 
     suspend fun parseAndAddMessage(rawBody: String, sender: String = "TestSMS"): Boolean =
         withContext(Dispatchers.IO) {
+            val parsedTime = com.example.sms.SmsParser.extractDateTime(rawBody) ?: System.currentTimeMillis()
             val inserted = com.example.service.ExpenseProcessingHelper.processRawSms(
                 context = context,
                 rawText = rawBody,
                 sender = sender,
-                timestamp = System.currentTimeMillis()
+                timestamp = parsedTime
             )
             inserted != null
         }
@@ -143,8 +144,26 @@ class ExpenseRepository(
 
         try {
             val lastSync = preferences.lastSyncTimestamp
-            val candidateMessages = SmsReader.readCandidateSmsMessages(context, lastSync, limit = 50)
+            val isFirstScan = lastSync == 0L
+            val sinceTimestamp = if (isFirstScan) {
+                val cal = java.util.Calendar.getInstance().apply {
+                    set(java.util.Calendar.DAY_OF_MONTH, 1)
+                    set(java.util.Calendar.HOUR_OF_DAY, 0)
+                    set(java.util.Calendar.MINUTE, 0)
+                    set(java.util.Calendar.SECOND, 0)
+                    set(java.util.Calendar.MILLISECOND, 0)
+                }
+                cal.timeInMillis
+            } else {
+                lastSync
+            }
+            val candidateMessages = SmsReader.readCandidateSmsMessages(
+                context = context,
+                sinceTimestamp = sinceTimestamp,
+                limit = Int.MAX_VALUE
+            )
             var insertedCount = 0
+            val preloadedRules = merchantRuleDao?.getAllRulesSync()
 
             for ((index, msg) in candidateMessages.withIndex()) {
                 onProgress?.invoke(index + 1, candidateMessages.size)
@@ -156,7 +175,8 @@ class ExpenseRepository(
                     sender = msg.sender,
                     timestamp = msg.timestamp,
                     smsId = msg.smsId,
-                    isBatchSync = true
+                    isBatchSync = true,
+                    preloadedRules = preloadedRules
                 )
                 if (inserted != null) {
                     insertedCount++
@@ -191,8 +211,13 @@ class ExpenseRepository(
             }
             val startOfMonthTimestamp = cal.timeInMillis
             preferences.lastSyncTimestamp = startOfMonthTimestamp
-            val candidateMessages = SmsReader.readCandidateSmsMessages(context, startOfMonthTimestamp, limit = 200)
+            val candidateMessages = SmsReader.readCandidateSmsMessages(
+                context = context,
+                sinceTimestamp = startOfMonthTimestamp,
+                limit = Int.MAX_VALUE
+            )
             var insertedCount = 0
+            val preloadedRules = merchantRuleDao?.getAllRulesSync()
 
             for ((index, msg) in candidateMessages.withIndex()) {
                 onProgress?.invoke(index + 1, candidateMessages.size)
@@ -203,7 +228,8 @@ class ExpenseRepository(
                     sender = msg.sender,
                     timestamp = msg.timestamp,
                     smsId = msg.smsId,
-                    isBatchSync = true
+                    isBatchSync = true,
+                    preloadedRules = preloadedRules
                 )
                 if (inserted != null) {
                     insertedCount++

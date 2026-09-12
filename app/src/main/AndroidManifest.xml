@@ -90,11 +90,7 @@
             android:exported="false"
             android:icon="@mipmap/ic_savio_launcher"
             android:roundIcon="@mipmap/ic_savio_launcher_round"
-            android:foregroundServiceType="dataSync">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Live expenditure calculation and persistent status bar tracking from messages" />
-        </service>
+            android:foregroundServiceType="dataSync" />
 
         <!-- File Provider for Excel .XLS Export Sharing -->
         <provider

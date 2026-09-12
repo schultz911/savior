@@ -267,14 +267,9 @@ fun SpendTrackerScreen(
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
     val syncFeedback by viewModel.syncFeedback.collectAsStateWithLifecycle()
 
-    val openRouterApiKey by viewModel.openRouterApiKey.collectAsStateWithLifecycle()
-    val aiEngineTier by viewModel.aiEngineTier.collectAsStateWithLifecycle()
-    val isAiCoreForceEnabled by viewModel.isAiCoreForceEnabled.collectAsStateWithLifecycle()
-    val categoryLimits by viewModel.categoryLimits.collectAsStateWithLifecycle()
-
     val isBiometricLockEnabled by viewModel.isBiometricLockEnabled.collectAsStateWithLifecycle()
     val isPrivacyShieldEnabled by viewModel.isPrivacyShieldEnabled.collectAsStateWithLifecycle()
-    val lockTimeoutSeconds by viewModel.lockTimeoutSeconds.collectAsStateWithLifecycle()
+    val categoryLimits by viewModel.categoryLimits.collectAsStateWithLifecycle()
     val isAppLocked by AppSecurityManager.isLocked.collectAsStateWithLifecycle()
     var biometricErrorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -283,10 +278,6 @@ fun SpendTrackerScreen(
     val onlyRecurringFilter by viewModel.onlyRecurringFilter.collectAsStateWithLifecycle()
     val isSearchExpanded by viewModel.isSearchExpanded.collectAsStateWithLifecycle()
     val isGlobalSearch by viewModel.isGlobalSearch.collectAsStateWithLifecycle()
-    val isVelocityAlertsEnabled by viewModel.isVelocityAlertsEnabled.collectAsStateWithLifecycle()
-    val isAnomalyAlertsEnabled by viewModel.isAnomalyAlertsEnabled.collectAsStateWithLifecycle()
-    val isWeeklyDigestEnabled by viewModel.isWeeklyDigestEnabled.collectAsStateWithLifecycle()
-    val trailingMedianSpend by viewModel.trailingMedianSpend.collectAsStateWithLifecycle()
     val predictedRecurringBills by viewModel.predictedRecurringBills.collectAsStateWithLifecycle()
     val safeSpendPacing by viewModel.safeSpendPacing.collectAsStateWithLifecycle()
 
@@ -698,6 +689,15 @@ fun SpendTrackerScreen(
         when (currentTab) {
             SavioScreenTab.SETTINGS -> {
                 val merchantRules by viewModel.merchantRules.collectAsStateWithLifecycle()
+                val openRouterApiKey by viewModel.openRouterApiKey.collectAsStateWithLifecycle()
+                val aiEngineTier by viewModel.aiEngineTier.collectAsStateWithLifecycle()
+                val isAiCoreForceEnabled by viewModel.isAiCoreForceEnabled.collectAsStateWithLifecycle()
+                val categoryLimits by viewModel.categoryLimits.collectAsStateWithLifecycle()
+                val lockTimeoutSeconds by viewModel.lockTimeoutSeconds.collectAsStateWithLifecycle()
+                val isVelocityAlertsEnabled by viewModel.isVelocityAlertsEnabled.collectAsStateWithLifecycle()
+                val isAnomalyAlertsEnabled by viewModel.isAnomalyAlertsEnabled.collectAsStateWithLifecycle()
+                val isWeeklyDigestEnabled by viewModel.isWeeklyDigestEnabled.collectAsStateWithLifecycle()
+                val trailingMedianSpend by viewModel.trailingMedianSpend.collectAsStateWithLifecycle()
                 Box(
                     modifier = Modifier
                         .fillMaxSize()

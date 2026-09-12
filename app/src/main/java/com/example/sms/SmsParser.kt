@@ -103,6 +103,29 @@ object SmsParser {
     private val REFUND_TRAILING_ORDER_REGEX = Regex("""(?i)\s+(?:for|towards)\s+(?:(?:your|the|cancelled)?\s*(?:order|ride|purchase|txn|transaction|booking).*)$""")
     private val REFUND_TRAILING_REF_REGEX = Regex("""[-/]\d{4,}$""")
 
+    // Pre-compiled regex patterns for date and time extraction
+    private val DATE_DAY_MONTH_NAME_REGEX = Regex(
+        """(?i)\b(?:on|dated|dt\.?|date)?\s*([0-3]?\d)[-/\s]([A-Za-z]{3,9})(?:[-/\s](\d{2,4}))?\b"""
+    )
+    private val DATE_MONTH_NAME_DAY_REGEX = Regex(
+        """(?i)\b(?:on|dated|dt\.?|date)?\s*([A-Za-z]{3,9})[-/\s]([0-3]?\d)(?:[,\s]+(\d{2,4}))?\b"""
+    )
+    private val DATE_NUMERIC_DMY_REGEX = Regex(
+        """(?i)\b(?:on|dated|dt\.?|date)?\s*([0-3]?\d)[-/.](0?[1-9]|1[0-2])[-/.](20\d{2}|\d{2})\b"""
+    )
+    private val DATE_NUMERIC_YMD_REGEX = Regex(
+        """(?i)\b(?:on|dated|dt\.?|date)?\s*(20\d{2})[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])\b"""
+    )
+    private val TIME_COLON_REGEX = Regex(
+        """(?i)\b(?:at|time)?\s*([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?\s*(am|pm|a\.m\.|p\.m\.)?\b"""
+    )
+    private val TIME_DOT_AMPM_REGEX = Regex(
+        """(?i)\b(?:at|time)?\s*([01]?\d|2[0-3])\.([0-5]\d)\s*(am|pm|a\.m\.|p\.m\.)\b"""
+    )
+    private val TIME_MILITARY_REGEX = Regex(
+        """(?i)\b(?:at|time)?\s*([01]\d|2[0-3])([0-5]\d)\s*hrs?\b"""
+    )
+
     // Dedicated refund-merchant extraction patterns (ordered most-specific → least-specific)
     private val REFUND_MERCHANT_PATTERNS = listOf(
         // 1. BIL*REFUND*FLIPKART, BIL*FLIPKART*REFUND, INFO: BIL-REV-SWIGGY, NEFT-REFUND-MAKEMYTRIP
@@ -250,6 +273,7 @@ object SmsParser {
             val accountInfo = extractAccountInfo(cleanBody)
             // Use dedicated refund-merchant extractor first, fall back to general extractor
             val merchant = extractRefundMerchant(cleanBody)
+            val parsedTime = extractDateTime(cleanBody)
             return ParsedSms(
                 amount = amount,
                 currency = currency,
@@ -259,7 +283,8 @@ object SmsParser {
                 category = "Refund",
                 isExpense = false,
                 rawText = cleanBody,
-                isRefund = true
+                isRefund = true,
+                parsedTimestamp = parsedTime
             )
         }
 
@@ -354,6 +379,7 @@ object SmsParser {
             else -> ExpenseType.MERCHANT
         }
 
+        val parsedTime = extractDateTime(cleanBody)
         return ParsedSms(
             amount = amount,
             currency = currency,
@@ -362,7 +388,8 @@ object SmsParser {
             accountInfo = accountInfo,
             category = detectedCategory,
             isExpense = true,
-            rawText = cleanBody
+            rawText = cleanBody,
+            parsedTimestamp = parsedTime
         )
     }
 
@@ -718,5 +745,203 @@ object SmsParser {
         val hasAmount = AMOUNT_PATTERNS.any { it.matcher(clean).find() }
 
         return (hasDebit || hasTransfer || hasSpend || hasRefund || hasUpi || (looksBank && hasAmount)) && hasAmount
+    }
+
+    private data class ParsedTime(val hour: Int, val minute: Int, val second: Int)
+
+    private fun parseMonthName(name: String): Int? {
+        val lower = name.lowercase(Locale.US)
+        return when {
+            lower.startsWith("jan") -> 0
+            lower.startsWith("feb") -> 1
+            lower.startsWith("mar") -> 2
+            lower.startsWith("apr") -> 3
+            lower == "may" -> 4
+            lower.startsWith("jun") -> 5
+            lower.startsWith("jul") -> 6
+            lower.startsWith("aug") -> 7
+            lower.startsWith("sep") -> 8
+            lower.startsWith("oct") -> 9
+            lower.startsWith("nov") -> 10
+            lower.startsWith("dec") -> 11
+            else -> null
+        }
+    }
+
+    private fun parseYear(yearStr: String?, currentYear: Int): Int {
+        if (yearStr.isNullOrBlank()) return currentYear
+        val y = yearStr.toIntOrNull() ?: return currentYear
+        return when {
+            y in 0..99 -> 2000 + y
+            y in 2000..2099 -> y
+            else -> currentYear
+        }
+    }
+
+    private fun extractTime(text: String): ParsedTime? {
+        for (match in TIME_COLON_REGEX.findAll(text)) {
+            val rawH = match.groupValues[1].toIntOrNull() ?: continue
+            val min = match.groupValues[2].toIntOrNull() ?: continue
+            val sec = match.groupValues.getOrNull(3)?.takeIf { it.isNotBlank() }?.toIntOrNull() ?: 0
+            val amPm = match.groupValues.getOrNull(4)?.lowercase(Locale.US)
+
+            val h = when {
+                amPm?.startsWith("p") == true -> if (rawH < 12) rawH + 12 else rawH
+                amPm?.startsWith("a") == true -> if (rawH == 12) 0 else rawH
+                else -> rawH
+            }
+            if (h in 0..23 && min in 0..59 && sec in 0..59) {
+                return ParsedTime(h, min, sec)
+            }
+        }
+
+        for (match in TIME_DOT_AMPM_REGEX.findAll(text)) {
+            val rawH = match.groupValues[1].toIntOrNull() ?: continue
+            val min = match.groupValues[2].toIntOrNull() ?: continue
+            val amPm = match.groupValues[3].lowercase(Locale.US)
+            val h = if (amPm.startsWith("p")) {
+                if (rawH < 12) rawH + 12 else rawH
+            } else {
+                if (rawH == 12) 0 else rawH
+            }
+            if (h in 0..23 && min in 0..59) {
+                return ParsedTime(h, min, 0)
+            }
+        }
+
+        for (match in TIME_MILITARY_REGEX.findAll(text)) {
+            val h = match.groupValues[1].toIntOrNull() ?: continue
+            val min = match.groupValues[2].toIntOrNull() ?: continue
+            if (h in 0..23 && min in 0..59) {
+                return ParsedTime(h, min, 0)
+            }
+        }
+
+        return null
+    }
+
+    /**
+     * Extracts date and time from raw bank SMS body.
+     * Combines explicit date/time or defaults gracefully.
+     * Returns epoch milliseconds or null if no date/time found.
+     */
+    fun extractDateTime(smsBody: String, referenceTimestamp: Long = System.currentTimeMillis()): Long? {
+        val cleanBody = smsBody.trim()
+        if (cleanBody.isEmpty()) return null
+
+        val refCal = java.util.Calendar.getInstance().apply { timeInMillis = referenceTimestamp }
+        val currentYear = refCal.get(java.util.Calendar.YEAR)
+
+        var foundDay: Int? = null
+        var foundMonth: Int? = null // 0..11
+        var foundYear: Int? = null
+        var isYearExplicit = false
+
+        // 1. Try Day-MonthName(-Year): e.g. 04-Sep, 04-Sep-24, 04-Sep-2024, 4-Sep-24, 04/Sep/2024
+        for (match in DATE_DAY_MONTH_NAME_REGEX.findAll(cleanBody)) {
+            val d = match.groupValues[1].toIntOrNull()
+            val m = parseMonthName(match.groupValues[2])
+            if (d != null && d in 1..31 && m != null) {
+                foundDay = d
+                foundMonth = m
+                val yStr = match.groupValues.getOrNull(3)
+                if (!yStr.isNullOrBlank()) {
+                    foundYear = parseYear(yStr, currentYear)
+                    isYearExplicit = true
+                } else {
+                    foundYear = currentYear
+                }
+                break
+            }
+        }
+
+        // 2. Try MonthName-Day(-Year): e.g. Sep 04, Sep 04, 2024, September 4, 2024
+        if (foundDay == null) {
+            for (match in DATE_MONTH_NAME_DAY_REGEX.findAll(cleanBody)) {
+                val m = parseMonthName(match.groupValues[1])
+                val d = match.groupValues[2].toIntOrNull()
+                if (m != null && d != null && d in 1..31) {
+                    foundDay = d
+                    foundMonth = m
+                    val yStr = match.groupValues.getOrNull(3)
+                    if (!yStr.isNullOrBlank()) {
+                        foundYear = parseYear(yStr, currentYear)
+                        isYearExplicit = true
+                    } else {
+                        foundYear = currentYear
+                    }
+                    break
+                }
+            }
+        }
+
+        // 3. Try Numeric Day-Month-Year: e.g. 04/09/2024, 04-09-2024, 04.09.2024, 04/09/24, 4/9/24
+        if (foundDay == null) {
+            for (match in DATE_NUMERIC_DMY_REGEX.findAll(cleanBody)) {
+                val d = match.groupValues[1].toIntOrNull()
+                val m = match.groupValues[2].toIntOrNull()?.minus(1)
+                val yStr = match.groupValues[3]
+                if (d != null && d in 1..31 && m != null && m in 0..11) {
+                    foundDay = d
+                    foundMonth = m
+                    foundYear = parseYear(yStr, currentYear)
+                    isYearExplicit = true
+                    break
+                }
+            }
+        }
+
+        // 4. Try Numeric Year-Month-Day (ISO): e.g. 2024-09-04, 2024/09/04
+        if (foundDay == null) {
+            for (match in DATE_NUMERIC_YMD_REGEX.findAll(cleanBody)) {
+                val yStr = match.groupValues[1]
+                val m = match.groupValues[2].toIntOrNull()?.minus(1)
+                val d = match.groupValues[3].toIntOrNull()
+                if (d != null && d in 1..31 && m != null && m in 0..11) {
+                    foundDay = d
+                    foundMonth = m
+                    foundYear = parseYear(yStr, currentYear)
+                    isYearExplicit = true
+                    break
+                }
+            }
+        }
+
+        // 5. Extract Time
+        val timeMatch = extractTime(cleanBody)
+
+        if (foundDay == null && timeMatch == null) {
+            return null
+        }
+
+        val cal = java.util.Calendar.getInstance().apply {
+            timeInMillis = referenceTimestamp
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+
+        if (foundDay != null && foundMonth != null && foundYear != null) {
+            cal.set(java.util.Calendar.YEAR, foundYear)
+            cal.set(java.util.Calendar.MONTH, foundMonth)
+            val maxDay = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+            cal.set(java.util.Calendar.DAY_OF_MONTH, foundDay.coerceAtMost(maxDay))
+
+            // Year inference: if year was not explicitly in the SMS and date is > 1 day in the future, it was last year
+            if (!isYearExplicit && cal.timeInMillis > referenceTimestamp + 86_400_000L) {
+                cal.set(java.util.Calendar.YEAR, currentYear - 1)
+            }
+        }
+
+        if (timeMatch != null) {
+            cal.set(java.util.Calendar.HOUR_OF_DAY, timeMatch.hour)
+            cal.set(java.util.Calendar.MINUTE, timeMatch.minute)
+            cal.set(java.util.Calendar.SECOND, timeMatch.second)
+        } else if (foundDay != null) {
+            // If date was found but no explicit time, default to noon (12:00:00) to protect against DST/timezone edge shifts
+            cal.set(java.util.Calendar.HOUR_OF_DAY, 12)
+            cal.set(java.util.Calendar.MINUTE, 0)
+            cal.set(java.util.Calendar.SECOND, 0)
+        }
+
+        return cal.timeInMillis
     }
 }

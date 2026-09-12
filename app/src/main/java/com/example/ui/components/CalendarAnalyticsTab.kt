@@ -228,27 +228,23 @@ fun CalendarAnalyticsTab(
     val selectedSavings = monthlySalary - selectedTotalSpend
 
     // Month-over-Month (MoM) Delta Calculations
-    val prevMonthKey = remember(selectedMonthKey) {
+    val (prevMonthKey, prevMonthShortLabel) = remember(selectedMonthKey) {
         try {
-            val sdf = SimpleDateFormat("yyyy-MM", Locale.US)
-            val date = sdf.parse(selectedMonthKey)
-            if (date != null) {
-                val c = Calendar.getInstance().apply { time = date }
-                c.add(Calendar.MONTH, -1)
-                sdf.format(c.time)
-            } else null
-        } catch (e: Exception) { null }
-    }
-
-    val prevMonthShortLabel = remember(prevMonthKey) {
-        if (prevMonthKey != null) {
-            try {
-                val sdf = SimpleDateFormat("yyyy-MM", Locale.US)
-                val sdfShort = SimpleDateFormat("MMM", Locale.US)
-                val d = sdf.parse(prevMonthKey)
-                if (d != null) sdfShort.format(d) else "last month"
-            } catch (e: Exception) { "last month" }
-        } else "last month"
+            val parts = selectedMonthKey.split("-")
+            if (parts.size == 2) {
+                var year = parts[0].toInt()
+                var month = parts[1].toInt() // 1-based
+                month -= 1
+                if (month < 1) {
+                    month = 12
+                    year -= 1
+                }
+                val prevKey = "%04d-%02d".format(year, month)
+                val monthNames = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                val shortLabel = monthNames[month - 1]
+                Pair(prevKey, shortLabel)
+            } else Pair(null, "last month")
+        } catch (e: Exception) { Pair(null, "last month") }
     }
 
     val prevMonthExpenses = remember(prevMonthKey, allExpenses) {

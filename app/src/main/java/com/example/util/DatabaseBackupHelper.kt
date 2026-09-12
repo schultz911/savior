@@ -255,15 +255,20 @@ object DatabaseBackupHelper {
             // Restore Merchant Rules if present
             if (rootJson.has("merchantRules") && ruleDao != null) {
                 val rulesArr = rootJson.getJSONArray("merchantRules")
+                val rulesToInsert = mutableListOf<MerchantRuleEntity>()
                 for (i in 0 until rulesArr.length()) {
                     val rObj = rulesArr.getJSONObject(i)
-                    val rule = MerchantRuleEntity(
-                        merchantPattern = rObj.getString("merchantPattern"),
-                        assignedCategory = rObj.getString("assignedCategory"),
-                        normalizedAlias = rObj.optString("normalizedAlias", ""),
-                        isRegex = rObj.optBoolean("isRegex", false)
+                    rulesToInsert.add(
+                        MerchantRuleEntity(
+                            merchantPattern = rObj.getString("merchantPattern"),
+                            assignedCategory = rObj.getString("assignedCategory"),
+                            normalizedAlias = rObj.optString("normalizedAlias", ""),
+                            isRegex = rObj.optBoolean("isRegex", false)
+                        )
                     )
-                    ruleDao.insertRule(rule)
+                }
+                if (rulesToInsert.isNotEmpty()) {
+                    ruleDao.insertRules(rulesToInsert)
                 }
             }
 

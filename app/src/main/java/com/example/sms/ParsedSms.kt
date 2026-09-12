@@ -11,5 +11,6 @@ data class ParsedSms(
     val category: String,
     val isExpense: Boolean,
     val rawText: String,
-    val isRefund: Boolean = false
+    val isRefund: Boolean = false,
+    val parsedTimestamp: Long? = null
 )

@@ -1720,5 +1720,131 @@ class ExampleRobolectricTest {
     assertTrue(restoreResult.isSuccess)
     assertTrue("Restored database must contain original expense", dao.existsBySmsId(uniqueSmsId))
   }
+
+  @Test
+  fun `test sms parser extracts date and time accurately`() {
+    val refCal = java.util.Calendar.getInstance().apply {
+      set(2026, java.util.Calendar.SEPTEMBER, 12, 12, 0, 0)
+      set(java.util.Calendar.MILLISECOND, 0)
+    }
+    val refTime = refCal.timeInMillis
+
+    // 1. Day-Month: "04-Sep" without explicit year or time -> Sep 4, 2026 at 12:00:00
+    val sms1 = "Rs 1,450.00 debited from A/c **4821 on 04-Sep at SWIGGY BANGALORE. Avl Bal: Rs 48,250.00."
+    val ts1 = SmsParser.extractDateTime(sms1, refTime)
+    assertNotNull(ts1)
+    val cal1 = java.util.Calendar.getInstance().apply { timeInMillis = ts1!! }
+    assertEquals(2026, cal1.get(java.util.Calendar.YEAR))
+    assertEquals(java.util.Calendar.SEPTEMBER, cal1.get(java.util.Calendar.MONTH))
+    assertEquals(4, cal1.get(java.util.Calendar.DAY_OF_MONTH))
+    assertEquals(12, cal1.get(java.util.Calendar.HOUR_OF_DAY))
+    assertEquals(0, cal1.get(java.util.Calendar.MINUTE))
+
+    // 2. Day-Month-Year with explicit 24h time: "04-Sep-2024 at 14:30:15"
+    val sms2 = "Your card was charged $45.00 on 04-Sep-2024 at 14:30:15 at Trader Joe's."
+    val ts2 = SmsParser.extractDateTime(sms2, refTime)
+    assertNotNull(ts2)
+    val cal2 = java.util.Calendar.getInstance().apply { timeInMillis = ts2!! }
+    assertEquals(2024, cal2.get(java.util.Calendar.YEAR))
+    assertEquals(java.util.Calendar.SEPTEMBER, cal2.get(java.util.Calendar.MONTH))
+    assertEquals(4, cal2.get(java.util.Calendar.DAY_OF_MONTH))
+    assertEquals(14, cal2.get(java.util.Calendar.HOUR_OF_DAY))
+    assertEquals(30, cal2.get(java.util.Calendar.MINUTE))
+    assertEquals(15, cal2.get(java.util.Calendar.SECOND))
+
+    // 3. Numeric DMY format with 12h PM time: "03/09/2026 at 02:45 PM"
+    val sms3 = "Debited INR 500 on 03/09/2026 at 02:45 PM via UPI to Coffee Day."
+    val ts3 = SmsParser.extractDateTime(sms3, refTime)
+    assertNotNull(ts3)
+    val cal3 = java.util.Calendar.getInstance().apply { timeInMillis = ts3!! }
+    assertEquals(2026, cal3.get(java.util.Calendar.YEAR))
+    assertEquals(java.util.Calendar.SEPTEMBER, cal3.get(java.util.Calendar.MONTH))
+    assertEquals(3, cal3.get(java.util.Calendar.DAY_OF_MONTH))
+    assertEquals(14, cal3.get(java.util.Calendar.HOUR_OF_DAY))
+    assertEquals(45, cal3.get(java.util.Calendar.MINUTE))
+
+    // 4. ISO format: "2026-09-02 18:20:00"
+    val sms4 = "Spent Rs 250 on 2026-09-02 18:20:00 at Chai Point."
+    val ts4 = SmsParser.extractDateTime(sms4, refTime)
+    assertNotNull(ts4)
+    val cal4 = java.util.Calendar.getInstance().apply { timeInMillis = ts4!! }
+    assertEquals(2026, cal4.get(java.util.Calendar.YEAR))
+    assertEquals(java.util.Calendar.SEPTEMBER, cal4.get(java.util.Calendar.MONTH))
+    assertEquals(2, cal4.get(java.util.Calendar.DAY_OF_MONTH))
+    assertEquals(18, cal4.get(java.util.Calendar.HOUR_OF_DAY))
+    assertEquals(20, cal4.get(java.util.Calendar.MINUTE))
+
+    // 5. Month-Day format: "Sep 05"
+    val sms5 = "Your Chase card was charged $12.00 at STARBUCKS on Sep 05."
+    val ts5 = SmsParser.extractDateTime(sms5, refTime)
+    assertNotNull(ts5)
+    val cal5 = java.util.Calendar.getInstance().apply { timeInMillis = ts5!! }
+    assertEquals(5, cal5.get(java.util.Calendar.DAY_OF_MONTH))
+    assertEquals(java.util.Calendar.SEPTEMBER, cal5.get(java.util.Calendar.MONTH))
+
+    // 6. No date or time present -> returns null
+    val smsNoDate = "Sent Rs 1,200.00 to rahul@okaxis via Google Pay UPI (UPI Ref 429104)."
+    val tsNull = SmsParser.extractDateTime(smsNoDate, refTime)
+    assertNull(tsNull)
+
+    // 7. Verify ParsedSms carries parsedTimestamp
+    val parsed = SmsParser.parse(sms1, "HDFC-BANK")
+    assertNotNull(parsed)
+    assertEquals(ts1, parsed!!.parsedTimestamp)
+  }
+
+  @Test
+  fun `test manual sms parsing assigns extracted date and places transaction in correct chronological order`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val db = com.example.data.AppDatabase.getDatabase(context)
+    val dao = db.expenseDao()
+    dao.clearAll()
+
+    val prefs = com.example.data.ExpensePreferences(context)
+    val repo = com.example.data.ExpenseRepository(context, dao, prefs)
+
+    // Setup: Create two anchor transactions: Today (Sep 12) and 10 days ago (Sep 02)
+    val cal12 = java.util.Calendar.getInstance().apply {
+      set(2026, java.util.Calendar.SEPTEMBER, 12, 10, 0, 0)
+      set(java.util.Calendar.MILLISECOND, 0)
+    }
+    val cal02 = java.util.Calendar.getInstance().apply {
+      set(2026, java.util.Calendar.SEPTEMBER, 2, 10, 0, 0)
+      set(java.util.Calendar.MILLISECOND, 0)
+    }
+
+    val expToday = com.example.data.ExpenseEntity(
+      amount = 100.0,
+      timestamp = cal12.timeInMillis,
+      merchantOrRecipient = "Today Store"
+    )
+    val expOlder = com.example.data.ExpenseEntity(
+      amount = 200.0,
+      timestamp = cal02.timeInMillis,
+      merchantOrRecipient = "Old Store"
+    )
+    dao.insertExpense(expToday)
+    dao.insertExpense(expOlder)
+
+    // Manual SMS with date 05-Sep at 15:30:00 (which is chronologically between Sep 12 and Sep 02)
+    val manualSms = "Debited INR 450.00 via UPI to Sharma General Store on 05-Sep at 15:30:00. UPI Ref: 98124901."
+    val success = repo.parseAndAddMessage(manualSms, "AXIS-UPI")
+    assertTrue(success)
+
+    val allExpenses = dao.getAllExpensesSync()
+    assertEquals(3, allExpenses.size)
+
+    // Verify ordering is strictly descending by timestamp
+    assertEquals("Today Store", allExpenses[0].merchantOrRecipient)
+    assertEquals("Sharma General Store", allExpenses[1].merchantOrRecipient)
+    assertEquals("Old Store", allExpenses[2].merchantOrRecipient)
+
+    // Verify exact parsed timestamp of the middle transaction
+    val middleCal = java.util.Calendar.getInstance().apply { timeInMillis = allExpenses[1].timestamp }
+    assertEquals(5, middleCal.get(java.util.Calendar.DAY_OF_MONTH))
+    assertEquals(java.util.Calendar.SEPTEMBER, middleCal.get(java.util.Calendar.MONTH))
+    assertEquals(15, middleCal.get(java.util.Calendar.HOUR_OF_DAY))
+    assertEquals(30, middleCal.get(java.util.Calendar.MINUTE))
+  }
 }
 

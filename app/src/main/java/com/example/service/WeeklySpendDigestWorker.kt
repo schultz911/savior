@@ -130,6 +130,8 @@ class WeeklySpendDigestWorker(
 
             val notif = NotificationCompat.Builder(applicationContext, SpendAlertManager.CHANNEL_ALERTS)
                 .setSmallIcon(R.drawable.ic_stat_rupee)
+                .setLargeIcon(SpendAlertManager.getNotificationLargeIcon(applicationContext))
+                .setColor(0xFF059669.toInt())
                 .setContentTitle(title)
                 .setContentText(shortText)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))

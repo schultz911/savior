@@ -6,6 +6,7 @@ import com.example.SpendTrackerApplication
 import com.example.ai.AiCoreCategorizer
 import com.example.ai.OpenRouterCategorizer
 import com.example.data.ExpenseEntity
+import com.example.data.MerchantRuleEntity
 import com.example.sms.ParsedSms
 import com.example.sms.SmsParser
 import kotlinx.coroutines.Dispatchers
@@ -26,7 +27,8 @@ object ExpenseProcessingHelper {
         sender: String,
         timestamp: Long = System.currentTimeMillis(),
         smsId: Long = 0L,
-        isBatchSync: Boolean = false
+        isBatchSync: Boolean = false,
+        preloadedRules: List<MerchantRuleEntity>? = null
     ): ExpenseEntity? = withContext(Dispatchers.IO) {
         val app = context.applicationContext as? SpendTrackerApplication ?: return@withContext null
         val prefs = app.preferences
@@ -49,6 +51,8 @@ object ExpenseProcessingHelper {
 
         // Local parser candidate for comparison or fallback
         val localParsed = SmsParser.parse(rawText, sender)
+
+        val effectiveTimestamp = if (timestamp > 0L) timestamp else (localParsed?.parsedTimestamp ?: SmsParser.extractDateTime(rawText) ?: System.currentTimeMillis())
 
         // 1. Tier 1: Cloud AI (OpenRouter Gemini 3.5 Flash Lite) if API key is provided
         if (apiKey.isNotEmpty()) {
@@ -77,7 +81,7 @@ object ExpenseProcessingHelper {
                         rawText = rawText,
                         isRefund = true
                     )
-                    return@withContext handleRefund(context, refundParsed, sender, timestamp, smsId, isBatchSync)
+                    return@withContext handleRefund(context, refundParsed, sender, effectiveTimestamp, smsId, isBatchSync)
                 }
 
                 if (!aiParsed.isExpense) {
@@ -95,7 +99,7 @@ object ExpenseProcessingHelper {
                     isExpense = true,
                     rawText = rawText
                 )
-                return@withContext processAndInsertExpense(context, parsed, sender, timestamp, smsId, isBatchSync)
+                return@withContext processAndInsertExpense(context, parsed, sender, effectiveTimestamp, smsId, isBatchSync, preloadedRules)
             }
         }
 
@@ -122,13 +126,13 @@ object ExpenseProcessingHelper {
                         rawText = rawText,
                         isRefund = true
                     )
-                    return@withContext handleRefund(context, refundParsed, sender, timestamp, smsId, isBatchSync)
+                    return@withContext handleRefund(context, refundParsed, sender, effectiveTimestamp, smsId, isBatchSync)
                 }
 
                 // If local parser detected a confirmed refund that AICore missed or labeled as credit, honor the refund
                 if (localParsed?.isRefund == true && localParsed.amount > 0.0) {
                     Log.d(TAG, "Local parser detected confirmed refund where AICore classified as non-expense/credit, routing to handleRefund.")
-                    return@withContext handleRefund(context, localParsed, sender, timestamp, smsId, isBatchSync)
+                    return@withContext handleRefund(context, localParsed, sender, effectiveTimestamp, smsId, isBatchSync)
                 }
 
                 if (!nanoParsed.isExpense) {
@@ -146,17 +150,17 @@ object ExpenseProcessingHelper {
                     isExpense = true,
                     rawText = rawText
                 )
-                return@withContext processAndInsertExpense(context, parsed, sender, timestamp, smsId, isBatchSync)
+                return@withContext processAndInsertExpense(context, parsed, sender, effectiveTimestamp, smsId, isBatchSync, preloadedRules)
             }
         }
 
         // 3. Tier 3: Enhanced Local Regex Parser (100% offline, universal compatibility)
         if (localParsed != null) {
             if (localParsed.isRefund) {
-                return@withContext handleRefund(context, localParsed, sender, timestamp, smsId, isBatchSync)
+                return@withContext handleRefund(context, localParsed, sender, effectiveTimestamp, smsId, isBatchSync)
             }
             if (localParsed.isExpense) {
-                return@withContext processAndInsertExpense(context, localParsed, sender, timestamp, smsId, isBatchSync)
+                return@withContext processAndInsertExpense(context, localParsed, sender, effectiveTimestamp, smsId, isBatchSync, preloadedRules)
             }
         }
         return@withContext null
@@ -295,7 +299,8 @@ object ExpenseProcessingHelper {
         sender: String,
         timestamp: Long = System.currentTimeMillis(),
         smsId: Long = 0L,
-        isBatchSync: Boolean = false
+        isBatchSync: Boolean = false,
+        preloadedRules: List<MerchantRuleEntity>? = null
     ): ExpenseEntity? = withContext(Dispatchers.IO) {
         val app = context.applicationContext as? SpendTrackerApplication ?: return@withContext null
         val dao = app.database.expenseDao()
@@ -331,7 +336,7 @@ object ExpenseProcessingHelper {
         var isUnrecognized = false
 
         // 1. Auto-Rule & Merchant Alias Engine (Deterministic Local Classifier takes top precedence)
-        val activeRules = ruleDao.getAllRulesSync()
+        val activeRules = preloadedRules ?: ruleDao.getAllRulesSync()
         var matchedRuleCategory: String? = null
 
         for (rule in activeRules) {

@@ -2,6 +2,15 @@
 
 ## 1. Discovered Optimizations
 
+- **[Vector B] Global vs Monthly Search State Coupling (`ExpenseViewModel.kt`)**: `filteredExpenses` unconditionally combined `allExpenses` even when global search was disabled, re-filtering all transactions on every background write and list change.
+- **[Vector B] Over-Subscription of Settings & Anomaly Flows at Root Screen Scope (`MainActivity.kt`)**: `trailingMedianSpend`, `openRouterApiKey`, `aiEngineTier`, `isAiCoreForceEnabled`, `lockTimeoutSeconds`, `isVelocityAlertsEnabled`, `isAnomalyAlertsEnabled`, and `isWeeklyDigestEnabled` were collected at root scope, triggering full screen recompositions when viewing the dashboard.
+- **[Vector B] Repetitive Formatter & Calendar Allocation in Month-over-Month Delta (`CalendarAnalyticsTab.kt`)**: `prevMonthKey` and `prevMonthShortLabel` re-instantiated `SimpleDateFormat("yyyy-MM")`, `SimpleDateFormat("MMM")`, and `Calendar.getInstance()` on recompositions instead of integer arithmetic.
+- **[Vector B] Batch SMS Sync Rule Lookup Disk Churn (`ExpenseProcessingHelper.kt` & `ExpenseRepository.kt`)**: `ruleDao.getAllRulesSync()` was queried inside the sync loop for every incoming SMS message, turning rule resolution into $O(N)$ SQLite disk reads during batch sync.
+- **[Vector B] Non-Atomic Sequential Rule Restores (`MerchantRuleDao.kt` & `DatabaseBackupHelper.kt`)**: Backup restoration inserted merchant rules individually one by one in a loop instead of a single atomic Room batch insert.
+- **[Vector C] Stranded Truncated Export Files on I/O Failures (`ExcelExportHelper.kt`)**: The export catch handler only deleted 0-byte orphan files, leaving partially written non-zero `.xls` files stranded in cache storage upon stream interruptions.
+- **[Vector A] Redundant FGS Subtype Manifest Property (`AndroidManifest.xml`)**: `LiveExpenditureNotificationService` declared `android:foregroundServiceType="dataSync"` alongside `PROPERTY_SPECIAL_USE_FGS_SUBTYPE`, which is only applicable to `specialUse` services on Android 14+.
+- **[Vector B] Unstyled Weekly Spend Digest Notification (`WeeklySpendDigestWorker.kt`)**: Digest notification lacked the brand logo large icon and accent color present on all other system notifications.
+- **[Vector A] Android Studio Boilerplate Unit Test Cruft (`ExampleUnitTest.kt`)**: Unused template test file retained from project initialization.
 - **[Vector B] Hot-Path Dynamic Regex Compilations in SMS Parser (`SmsParser.kt`)**: `isRefundIntimationOrPending` dynamically compiled `PENDING_TIMING_REGEX` and `cleanRefundMerchantCandidate` dynamically compiled 4 separate regexes on every SMS parse, creating CPU overhead and GC object churn during batch sync.
 - **[Vector B] Intermediate Collection Allocation & Unconditional Cadence Iteration in Recurring Engine (`RecurringDetectionEngine.kt`)**: `detectRecurringBills()` ran `sorted.map { it.monthKey }.distinct()` (allocating an ArrayList and HashSet) and consistency math unconditionally even when merchant was already a known subscription keyword or manually marked recurring.
 - **[Vector C] Missing Transaction Type Exclusion Guardrails in Room DAO (`ExpenseDao.kt`)**: `getRecentDebitAmounts` omitted `type != 'CREDIT_CARD'` when building anomaly spike baselines, and `findMatchingDebitByMerchant` omitted `type != 'SELF' AND type != 'CREDIT_CARD'`, risking credit card dues or transfers contaminating spend metrics or pairing with refunds.
@@ -55,6 +64,19 @@
 ---
 
 ## 2. Previously Suggested
+
+- **Enterprise Optimization Sweep Phase 1: Concurrency & StateFlow Recomposition Isolation (Vector B)**:
+  - Decouple global vs current month transaction filtering via `flatMapLatest` on `_isGlobalSearch` in `ExpenseViewModel.kt` to avoid filtering all expenses when search is local.
+  - Scope non-dashboard settings and anomaly StateFlows (`trailingMedianSpend`, `openRouterApiKey`, etc.) inside `SavioScreenTab.SETTINGS` in `MainActivity.kt` to avoid root screen recompositions.
+  - Replace repeated `SimpleDateFormat` and `Calendar.getInstance()` allocations in `CalendarAnalyticsTab.kt` Month-over-Month calculation with pure integer arithmetic and static formatters.
+- **Enterprise Optimization Sweep Phase 2: Runtime I/O & Algorithmic Batch Optimization (Vector B)**:
+  - Pre-fetch merchant rules once before the sync loop in `ExpenseRepository.kt` and pass `preloadedRules` to `processRawSms` / `processAndInsertExpense` in `ExpenseProcessingHelper.kt` to reduce SQLite queries from $O(N)$ to $O(1)$.
+  - Add batch `@Insert` method `insertRules()` in `MerchantRuleDao.kt` and replace per-rule iteration in `DatabaseBackupHelper.kt` with a single atomic batch insert.
+- **Enterprise Optimization Sweep Phase 3: Sanitization, Brand Integrity & Production Hardening (Vectors A, B, & C)**:
+  - Delete all orphaned partial files matching the export prefix regardless of length on export exceptions in `ExcelExportHelper.kt`.
+  - Remove redundant `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` property from `dataSync` service in `AndroidManifest.xml`.
+  - Add brand logo large icon (`SpendAlertManager.getNotificationLargeIcon()`) and accent color (`0xFF059669`) to weekly spend digest notification in `WeeklySpendDigestWorker.kt`.
+  - Delete boilerplate template test `ExampleUnitTest.kt` to sanitize repository test hygiene.
 
 - **Master Plan Phase 1: Hot-Path Dynamic Regex Pre-Compilation (Vector B)**:
   - Pre-compile `PENDING_TIMING_REGEX` and 4 candidate merchant sanitization regexes (`REFUND_CONTEXT_PREFIX_REGEX`, `REFUND_LEADING_PREP_REGEX`, `REFUND_TRAILING_ORDER_REGEX`, `REFUND_TRAILING_REF_REGEX`) into companion constants in `SmsParser.kt` to eliminate inline pattern compilations on candidate messages.
@@ -132,6 +154,28 @@
 ---
 
 ## 3. Approved and Implemented
+
+- **[Enterprise Optimization Sweep: Phases 1, 2, & 3] (Executed & Validated)**:
+  - **Phase 1: Concurrency & StateFlow Recomposition Isolation (`ExpenseViewModel.kt`, `MainActivity.kt`, `CalendarAnalyticsTab.kt`)**:
+    - Decoupled `filteredExpenses` global vs current-month flow collection using `_isGlobalSearch.flatMapLatest { isGlobal -> if (isGlobal) allExpenses else currentMonthExpenses }`, eliminating redundant full-history re-evaluations during monthly views.
+    - Scoped `openRouterApiKey`, `aiEngineTier`, `isAiCoreForceEnabled`, `lockTimeoutSeconds`, `isVelocityAlertsEnabled`, `isAnomalyAlertsEnabled`, `isWeeklyDigestEnabled`, and `trailingMedianSpend` strictly within `SavioScreenTab.SETTINGS`, keeping `categoryLimits` at root for the dashboard pie chart while eliminating dashboard recompositions on unrelated setting modifications.
+    - Optimized Month-over-Month calculation in `CalendarAnalyticsTab.kt` to compute `prevMonthKey` and `prevMonthShortLabel` via integer arithmetic and static array lookup, completely eliminating `SimpleDateFormat` and `Calendar` instantiations during compositions.
+    - Reused a single `Calendar.getInstance()` in `ExpenseViewModel.computeLast12MonthsAnalytics` across all 12 iterations.
+  - **Phase 2: Runtime I/O & Algorithmic Batch Optimization (`ExpenseRepository.kt`, `ExpenseProcessingHelper.kt`, `MerchantRuleDao.kt`, `DatabaseBackupHelper.kt`)**:
+    - Pre-fetched active merchant rules once before the sync loops in `ExpenseRepository.syncInbox()` and `rescanAllInbox()` and forwarded `preloadedRules` to `processRawSms()` and `processAndInsertExpense()`, cutting repeated SQLite rule lookups from $O(N)$ to $O(1)$.
+    - Added `@Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertRules(rules: List<MerchantRuleEntity>)` to `MerchantRuleDao.kt` and updated `DatabaseBackupHelper.kt` to restore merchant rules in a single atomic Room transaction.
+  - **Phase 3: Sanitization, Brand Integrity & Production Hardening (`ExcelExportHelper.kt`, `AndroidManifest.xml`, `WeeklySpendDigestWorker.kt`, `ExampleUnitTest.kt`)**:
+    - Hardened export error recovery in `ExcelExportHelper.kt` by deleting all orphaned `.xls` files matching the export prefix regardless of file size, preventing corrupted partial files from lingering in internal storage.
+    - Removed redundant `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` metadata property from `LiveExpenditureNotificationService` in `AndroidManifest.xml`, ensuring compliance with Android 14+ foreground service guidelines.
+    - Standardized weekly spend digest notifications in `WeeklySpendDigestWorker.kt` by assigning brand logo large icon via `SpendAlertManager.getNotificationLargeIcon()` and brand primary color (`0xFF059669`).
+    - Purged Android Studio boilerplate template test `ExampleUnitTest.kt` to keep repository test hygiene pristine.
+  - **Deterministic Verification**: Executed offline Robolectric test suite (`.\gradlew test --offline`), passing 100% of unit tests with 0 regressions. Verified complete release packaging and R8 minification (`.\gradlew assembleRelease --offline`) exiting with code 0 (`BUILD SUCCESSFUL in 1m`).
+
+- **[Full-Month Initial Inbox Scan & Manual SMS Date/Time Parsing with Chronological Positioning] (Executed & Validated)**:
+  - **Unbounded Current-Month Initial Sync (`ExpenseRepository.kt`, `SmsReader.kt`)**: Updated `syncInbox()` so that on the initial scan (`lastSyncTimestamp == 0L`), it computes the start of the current month (`set(DAY_OF_MONTH, 1)`) and passes `limit = Int.MAX_VALUE`, removing the artificial 50-message cap and ensuring the complete current month is scanned. Updated `SmsReader.readCandidateSmsMessages` default limit to `Int.MAX_VALUE` and selection operator to `${Telephony.Sms.DATE} >= ?` to inclusively capture all transactions from midnight of the 1st of the month. Removed the 200-message ceiling in `rescanAllInbox()`.
+  - **Comprehensive Bank SMS Date & Time Extraction Engine (`SmsParser.kt`, `ParsedSms.kt`)**: Added `SmsParser.extractDateTime()` with pre-compiled patterns covering Day-Month-Year (`04-Sep`, `04-Sep-24`, `04-Sep-2024`, `04/Sep/2024`, `04-Sept-2024`), Month-Day (`Sep 04`, `Sep 04, 2024`), numeric formats (`04/09/2024`, `04-09-2024`, `04/09/24`), ISO (`2026-09-04`), 12h/24h times (`14:30:15`, `02:30 PM`), dotted times (`2.30 PM`), and military format (`1430 hrs`). Defaults missing time to 12:00:00 (noon) to protect against midnight timezone/DST boundary shifts, and infers past-year rollover when year is omitted.
+  - **Chronological Transaction Placement & Auto Month-Switching (`ExpenseRepository.kt`, `ExpenseProcessingHelper.kt`, `ExpenseViewModel.kt`)**: Updated `parseAndAddMessage()` to extract the SMS timestamp and pass it to `ExpenseProcessingHelper.processRawSms()`, which assigns it to `ExpenseEntity.timestamp` and `monthKey`. Room automatically inserts and sorts it at its exact chronological position in `ORDER BY timestamp DESC`. Updated `ExpenseViewModel.parseAndAddMessage()` and `simulateSample()` to automatically switch `_selectedMonthKey` if the transaction belongs to another month, guaranteeing the user immediately sees the transaction in the list.
+  - **Deterministic Verification**: Added unit tests `test sms parser extracts date and time accurately` and `test manual sms parsing assigns extracted date and places transaction in correct chronological order` in `ExampleRobolectricTest.kt`. All 63 unit tests passed with 100% pass rate (`BUILD SUCCESSFUL in 16s`). Verified clean debug APK assembly (`assembleDebug`).
 
 - **[Version 1.1.6 Release Candidate Packaging & Artifact Sanitization] (Executed & Validated)**:
   - **Version 1.1.6 Alignment across Codebase (`app/build.gradle.kts`, `SettingsScreen.kt`, `ExampleRobolectricTest.kt`)**: Bumped `versionCode = 12` and `versionName = "1.1.6"`. Updated Settings screen build label to `v1.1.6 (RC)` and synchronized Robolectric unit tests to assert `VERSION_NAME == "1.1.6"` and `VERSION_CODE == 12`.

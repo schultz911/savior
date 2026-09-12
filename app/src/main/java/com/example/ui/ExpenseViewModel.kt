@@ -279,12 +279,11 @@ class ExpenseViewModel(
         FilterCriteria(f, q, c, a, r)
     }
 
-    val filteredExpenses: StateFlow<List<ExpenseEntity>> = combine(
-        combine(_isGlobalSearch, currentMonthExpenses, allExpenses) { isGlobal, monthExp, allExp ->
-            if (isGlobal) allExp else monthExp
-        },
-        filterCriteria
-    ) { expenses, criteria ->
+    val filteredExpenses: StateFlow<List<ExpenseEntity>> = _isGlobalSearch
+        .flatMapLatest { isGlobal ->
+            if (isGlobal) allExpenses else currentMonthExpenses
+        }
+        .combine(filterCriteria) { expenses, criteria ->
         expenses.filter { item ->
             val matchesFilter = when (criteria.filter) {
                 ExpenseFilter.ALL -> true
@@ -674,17 +673,16 @@ class ExpenseViewModel(
         }
 
         val months = mutableListOf<MonthAnalytics>()
+        val loopCal = Calendar.getInstance()
 
         for (i in 11 downTo 0) {
-            val cal = Calendar.getInstance().apply {
-                time = calendar.time
-                add(Calendar.MONTH, -i)
-            }
-            val monthKey = sdfKey.format(cal.time)
-            val fullLabel = sdfFull.format(cal.time)
-            val shortLabel = sdfShort.format(cal.time)
-            val year = cal.get(Calendar.YEAR)
-            val monthNum = cal.get(Calendar.MONTH) + 1
+            loopCal.time = calendar.time
+            loopCal.add(Calendar.MONTH, -i)
+            val monthKey = sdfKey.format(loopCal.time)
+            val fullLabel = sdfFull.format(loopCal.time)
+            val shortLabel = sdfShort.format(loopCal.time)
+            val year = loopCal.get(Calendar.YEAR)
+            val monthNum = loopCal.get(Calendar.MONTH) + 1
 
             val totalSpent = spendByMonth[monthKey] ?: 0.0
             val savedAmount = salary - totalSpent
@@ -842,8 +840,15 @@ class ExpenseViewModel(
 
     fun parseAndAddMessage(rawBody: String, sender: String = "BankSMS") {
         viewModelScope.launch {
+            val parsedTime = com.example.sms.SmsParser.extractDateTime(rawBody)
             val success = repository.parseAndAddMessage(rawBody, sender)
             if (success) {
+                if (parsedTime != null) {
+                    val targetMonth = ExpenseEntity.formatMonthKey(parsedTime)
+                    if (_selectedMonthKey.value != targetMonth) {
+                        _selectedMonthKey.value = targetMonth
+                    }
+                }
                 _syncFeedback.value = "Message parsed & added live!"
             } else {
                 _syncFeedback.value = "Could not detect debit/spend in this message."
@@ -853,8 +858,15 @@ class ExpenseViewModel(
 
     fun simulateSample(sample: SampleSmsData.SampleSms) {
         viewModelScope.launch {
+            val parsedTime = com.example.sms.SmsParser.extractDateTime(sample.body)
             val success = repository.parseAndAddMessage(sample.body, sample.sender)
             if (success) {
+                if (parsedTime != null) {
+                    val targetMonth = ExpenseEntity.formatMonthKey(parsedTime)
+                    if (_selectedMonthKey.value != targetMonth) {
+                        _selectedMonthKey.value = targetMonth
+                    }
+                }
                 _syncFeedback.value = "Simulated: ${sample.description}"
             }
         }

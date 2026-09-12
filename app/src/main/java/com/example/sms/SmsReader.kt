@@ -35,7 +35,7 @@ object SmsReader {
     /**
      * Reads filtered candidate financial SMS messages from inbox for AI validation & enhancement.
      */
-    fun readCandidateSmsMessages(context: Context, sinceTimestamp: Long = 0L, limit: Int = 100): List<RawSmsMessage> {
+    fun readCandidateSmsMessages(context: Context, sinceTimestamp: Long = 0L, limit: Int = Int.MAX_VALUE): List<RawSmsMessage> {
         if (!hasReadSmsPermission(context)) {
             return emptyList()
         }
@@ -49,7 +49,7 @@ object SmsReader {
         )
 
         val selection = if (sinceTimestamp > 0) {
-            "${Telephony.Sms.DATE} > ?"
+            "${Telephony.Sms.DATE} >= ?"
         } else null
 
         val selectionArgs = if (sinceTimestamp > 0) {

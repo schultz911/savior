@@ -126,7 +126,7 @@ object ExcelExportHelper {
             e.printStackTrace()
             try {
                 val exportDir = File(context.cacheDir, "exports")
-                val incompleteFiles = exportDir.listFiles { f -> f.isFile && f.name.startsWith("Savior_Expenses_") && f.length() == 0L }
+                val incompleteFiles = exportDir.listFiles { f -> f.isFile && f.name.startsWith("Savior_Expenses_") }
                 incompleteFiles?.forEach { it.delete() }
             } catch (_: Exception) {}
             Toast.makeText(context, "Error exporting: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
