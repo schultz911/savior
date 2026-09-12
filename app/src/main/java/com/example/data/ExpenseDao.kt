@@ -54,6 +54,8 @@ interface ExpenseDao {
         AND timestamp <= :maxTimestamp 
         AND isReversal = 0 
         AND LOWER(category) != 'refund'
+        AND type != 'SELF'
+        AND type != 'CREDIT_CARD'
         AND (LENGTH(:merchantKeyword) >= 2 AND (
             LOWER(merchantOrRecipient) LIKE '%' || LOWER(:merchantKeyword) || '%'
             OR LOWER(:merchantKeyword) LIKE '%' || LOWER(merchantOrRecipient) || '%'
@@ -154,6 +156,7 @@ interface ExpenseDao {
           AND isReversal = 0 
           AND isExcluded = 0 
           AND type != 'SELF' 
+          AND type != 'CREDIT_CARD' 
           AND category NOT IN ('Self', 'Credit Card Bill')
         ORDER BY amount ASC
     """)

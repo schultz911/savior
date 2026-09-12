@@ -257,7 +257,6 @@ fun SpendTrackerScreen(
     val monthlySavings by viewModel.monthlySavings.collectAsStateWithLifecycle()
     val monthlySalary by viewModel.monthlySalary.collectAsStateWithLifecycle()
     val savingsGoal by viewModel.savingsGoal.collectAsStateWithLifecycle()
-    val last12MonthsAnalytics by viewModel.last12MonthsAnalytics.collectAsStateWithLifecycle()
     val allExpenses by viewModel.allExpenses.collectAsStateWithLifecycle()
 
     val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
@@ -290,11 +289,6 @@ fun SpendTrackerScreen(
     val trailingMedianSpend by viewModel.trailingMedianSpend.collectAsStateWithLifecycle()
     val predictedRecurringBills by viewModel.predictedRecurringBills.collectAsStateWithLifecycle()
     val safeSpendPacing by viewModel.safeSpendPacing.collectAsStateWithLifecycle()
-
-    val merchantRules by viewModel.merchantRules.collectAsStateWithLifecycle()
-    val dailyBurnDownData by viewModel.dailyBurnDownData.collectAsStateWithLifecycle()
-    val instrumentSummaries by viewModel.instrumentSummaries.collectAsStateWithLifecycle()
-    val selectedAccountFilter by viewModel.selectedAccountFilter.collectAsStateWithLifecycle()
 
     var selectedMerchantForSheet by remember { mutableStateOf<String?>(null) }
     var showRecurringCommitmentsSheet by remember { mutableStateOf(false) }
@@ -703,6 +697,7 @@ fun SpendTrackerScreen(
         // Main view content switched by tab - cleanly below top app bar without overlap!
         when (currentTab) {
             SavioScreenTab.SETTINGS -> {
+                val merchantRules by viewModel.merchantRules.collectAsStateWithLifecycle()
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -811,6 +806,10 @@ fun SpendTrackerScreen(
             }
 
             SavioScreenTab.ANALYTICS -> {
+                val last12MonthsAnalytics by viewModel.last12MonthsAnalytics.collectAsStateWithLifecycle()
+                val dailyBurnDownData by viewModel.dailyBurnDownData.collectAsStateWithLifecycle()
+                val instrumentSummaries by viewModel.instrumentSummaries.collectAsStateWithLifecycle()
+                val selectedAccountFilter by viewModel.selectedAccountFilter.collectAsStateWithLifecycle()
                 Box(
                     modifier = Modifier
                         .fillMaxSize()

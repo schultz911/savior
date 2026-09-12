@@ -2,7 +2,11 @@
 
 ## 1. Discovered Optimizations
 
-- **[Vector C] Unconfirmed Long-Press Database Wipe & Unbounded Scan Scope (`MainActivity.kt`, `ExpenseRepository.kt`, `PermissionsBanner.kt`)**: The newly integrated 1.5-second hold gesture on `ScanInboxButton` immediately executed `clearAll()` with zero confirmation, risking irreversible user data loss. Additionally, `rescanAllInbox()` blindly attempted to re-read up to 200 historical SMS messages from all time instead of scoping the scan to the current billing month.
+- **[Vector B] Hot-Path Dynamic Regex Compilations in SMS Parser (`SmsParser.kt`)**: `isRefundIntimationOrPending` dynamically compiled `PENDING_TIMING_REGEX` and `cleanRefundMerchantCandidate` dynamically compiled 4 separate regexes on every SMS parse, creating CPU overhead and GC object churn during batch sync.
+- **[Vector B] Intermediate Collection Allocation & Unconditional Cadence Iteration in Recurring Engine (`RecurringDetectionEngine.kt`)**: `detectRecurringBills()` ran `sorted.map { it.monthKey }.distinct()` (allocating an ArrayList and HashSet) and consistency math unconditionally even when merchant was already a known subscription keyword or manually marked recurring.
+- **[Vector C] Missing Transaction Type Exclusion Guardrails in Room DAO (`ExpenseDao.kt`)**: `getRecentDebitAmounts` omitted `type != 'CREDIT_CARD'` when building anomaly spike baselines, and `findMatchingDebitByMerchant` omitted `type != 'SELF' AND type != 'CREDIT_CARD'`, risking credit card dues or transfers contaminating spend metrics or pairing with refunds.
+- **[Vector B] Over-Subscription of Analytics & Settings StateFlows at Root Screen Scope (`MainActivity.kt`)**: `SpendTrackerScreen` collected `last12MonthsAnalytics`, `dailyBurnDownData`, `instrumentSummaries`, `selectedAccountFilter`, and `merchantRules` at root scope, triggering full screen recompositions on transaction changes even when the user was only viewing the Dashboard.
+- **[Vector A] Orphan Legacy XML Template Colors (`colors.xml`)**: `res/values/colors.xml` defined 7 unused color tokens unreferenced by the Compose design system.
 - **[Vector C] Uncompressed Encrypted Backup Payload Storage Bloat (`DatabaseBackupHelper.kt`)**: Exported backup vaults serialized uncompressed UTF-8 JSON text directly into AES-256-GCM ciphertext, creating 75–85% avoidable flash storage I/O and export file size overhead for users with extensive transaction histories.
 - **[Vector C] Orphan Corrupt File Accumulation on Stream Interruptions (`ExcelExportHelper.kt`)**: If an `IOException` interrupted Excel workbook streaming, zero-byte or incomplete `.xls` files remained stranded in `context.cacheDir/exports/`.
 - **[Vector B] Hot-Path Dynamic Regex Re-compilation in Rule Evaluator (`ExpenseProcessingHelper.kt`)**: Evaluated rules re-compiled `Regex(pattern, RegexOption.IGNORE_CASE)` twice per regex rule (once for merchant, once for raw text) inside the core SMS ingestion path.
@@ -51,6 +55,15 @@
 ---
 
 ## 2. Previously Suggested
+
+- **Master Plan Phase 1: Hot-Path Dynamic Regex Pre-Compilation (Vector B)**:
+  - Pre-compile `PENDING_TIMING_REGEX` and 4 candidate merchant sanitization regexes (`REFUND_CONTEXT_PREFIX_REGEX`, `REFUND_LEADING_PREP_REGEX`, `REFUND_TRAILING_ORDER_REGEX`, `REFUND_TRAILING_REF_REGEX`) into companion constants in `SmsParser.kt` to eliminate inline pattern compilations on candidate messages.
+- **Master Plan Phase 2: Allocation-Free Subscription Radar Cadence (Vector B)**:
+  - Short-circuit cadence calculations in `RecurringDetectionEngine.kt` when `hasManualRecurring || isKnownKeyword` is true; replace `map {}.distinct()` collection churn with an allocation-free early-break scan across transactions.
+- **Master Plan Phase 3: Room DAO Type Exclusion Parity & Spend Guardrails (Vector C)**:
+  - Add `AND type != 'CREDIT_CARD'` to `getRecentDebitAmounts` and `AND type != 'SELF' AND type != 'CREDIT_CARD'` to `findMatchingDebitByMerchant` in `ExpenseDao.kt` to guarantee mathematical parity across SQLite anomaly detection and refund matching.
+- **Master Plan Phase 4: Compose Root Recomposition Scoping & Asset Purge (Vectors A & B)**:
+  - Relocate `last12MonthsAnalytics`, `dailyBurnDownData`, `instrumentSummaries`, and `selectedAccountFilter` collections into `SavioScreenTab.ANALYTICS`, and `merchantRules` into `SavioScreenTab.SETTINGS` in `MainActivity.kt`. Purge unreferenced `colors.xml`.
 
 - **Sweep Plan Phase 1: Symbol & Asset Sanitization (Vector A)**:
   - Audit and strip unreferenced imports and dead icon tokens across 11 UI components and ViewModel (`TransactionItemCard.kt`, `ExpenditureHeroCard.kt`, `DailyBurnDownChart.kt`, `MerchantDetailSheet.kt`, `RecurringCommitmentsSheet.kt`, `TestSmsBottomSheet.kt`, `BiometricLockOverlay.kt`, `SearchFilterBar.kt`, `CalendarAnalyticsTab.kt`, `SettingsScreen.kt`, and `ExpenseViewModel.kt`).
@@ -120,6 +133,26 @@
 
 ## 3. Approved and Implemented
 
+- **[Compose Recomposition Scoping & Orphan Asset Purge (Vectors A & B)] (Executed & Validated)**:
+  - **Tab-Specific StateFlow Scoping (`MainActivity.kt`)**: Moved `collectAsStateWithLifecycle` invocations for `last12MonthsAnalytics`, `dailyBurnDownData`, `instrumentSummaries`, and `selectedAccountFilter` directly inside `SavioScreenTab.ANALYTICS`, and `merchantRules` inside `SavioScreenTab.SETTINGS`. Drops 100% of unneeded root `SpendTrackerScreen` recompositions when browsing or scrolling transactions on the Dashboard.
+  - **Legacy XML Template Colors Purge (`res/values/colors.xml`)**: Deleted orphaned `colors.xml` file defining 7 unused XML color tokens unreferenced by the Compose design system, cleaning the Android resource table.
+  - **Deterministic Verification**: Executed offline Robolectric test suite (`BUILD SUCCESSFUL in 42s`, 61/61 unit tests passed with 100% pass rate).
+
+- **[Room DAO Spend Parity & Transaction Type Exclusion Guardrails (Vector C)] (Executed & Validated)**:
+  - **Recent Debit Anomaly Baseline Type Parity (`ExpenseDao.kt`)**: Added `AND type != 'CREDIT_CARD'` to `getRecentDebitAmounts`, preventing credit card payments from contaminating the anomaly detection median baseline.
+  - **Refund Merchant Matching Exclusion Parity (`ExpenseDao.kt`)**: Added `AND type != 'SELF' AND type != 'CREDIT_CARD'` to `findMatchingDebitByMerchant`, aligning with sibling query `findMatchingDebitByAmount` and preventing refunds from matching against transfers or card dues.
+  - **Deterministic Verification**: Executed offline Robolectric test suite (`BUILD SUCCESSFUL in 33s`, 61/61 unit tests passed with 100% pass rate).
+
+- **[Allocation-Free Subscription Radar Cadence & Short-Circuiting (Vector B)] (Executed & Validated)**:
+  - **Known Keyword & Manual Subscription Short-Circuiting (`RecurringDetectionEngine.kt`)**: Short-circuited cadence and amount-consistency calculations when `hasManualRecurring || isKnownKeyword` evaluates to `true`, bypassing all cadence iterations for recognized subscriptions.
+  - **Zero-Allocation Multi-Month Cadence Scan (`RecurringDetectionEngine.kt`)**: Replaced `sorted.map { it.monthKey }.distinct().size >= 2` collection churn (which allocated `ArrayList` and `HashSet` per merchant group) with an allocation-free early-break scan across `sorted` comparing distinct `monthKey` values.
+  - **Deterministic Verification**: Executed offline Robolectric test suite (`BUILD SUCCESSFUL in 35s`, 61/61 unit tests passed with 100% pass rate).
+
+- **[Hot-Path Dynamic Regex Pre-Compilation in SMS Parser (Vector B)] (Executed & Validated)**:
+  - **Pending Timing Regex Pre-Compilation (`SmsParser.kt`)**: Hoisted `PENDING_TIMING_REGEX = Regex("""(?i)\b(?:in|within|takes?)\s+\d+(?:-\d+|\s+to\s+\d+)?\s*(?:days|hrs|hours)\b""")` into private companion constant, eliminating dynamic Regex compilation in `isRefundIntimationOrPending` on every incoming SMS.
+  - **Candidate Merchant Sanitization Regex Pre-Compilation (`SmsParser.kt`)**: Hoisted `REFUND_CONTEXT_PREFIX_REGEX`, `REFUND_LEADING_PREP_REGEX`, `REFUND_TRAILING_ORDER_REGEX`, and `REFUND_TRAILING_REF_REGEX` into companion constants, eliminating 4 dynamic regex pattern compilations per candidate string in `cleanRefundMerchantCandidate`.
+  - **Deterministic Verification**: Executed offline Robolectric test suite (`BUILD SUCCESSFUL in 40s`, 61/61 unit tests passed with 100% pass rate).
+
 - **[Rescan Safety Guardrail, Current-Month Scoping, GZIP Backup Compression & Orphan Cache Cleanup (Vectors B & C)] (Executed & Validated)**:
   - **Confirmation Dialog on Rescan (`MainActivity.kt`)**: Added an explicit Material 3 Confirmation Alert Dialog (`Reset & Rescan Inbox?`) before executing `resetAndRescanInbox()`. Prevents catastrophic accidental database wipes from the 1.5-second hold gesture on `ScanInboxButton`.
   - **Current-Month Rescan Scoping (`ExpenseRepository.kt`)**: Updated `rescanAllInbox()` to compute the start of the current month timestamp (`set(DAY_OF_MONTH, 1)`) and pass it to `SmsReader.readCandidateSmsMessages()`, ensuring only current-month financial messages are re-ingested instead of arbitrary historical batches.
@@ -179,7 +212,7 @@
 
 - **[Refund Merchant Extraction Precision, AI Waterfall Inversion & Non-Greedy Regex Hardening (Vector B & C)] (Executed & Validated)**:
   - **3-Tier AI Waterfall Inversion (`ExpenseProcessingHelper.kt`)**: Removed premature `localParsed.isRefund` interceptor that was short-circuiting at line 51 before Tier 1 (OpenRouter) or Tier 2 (AICore) could execute. OpenRouter now analyzes incoming refund messages as Tier 1, extracting the actual refunding merchant via semantic intelligence.
-  - **Exhaustive Refund Merchant Regex Coverage (`SmsParser.kt`)**: Replaced brittle refund patterns with generalized patterns capturing "towards refund/reversal of order/ride/purchase at/on/with/from <Merchant>", "refund for order/ride/purchase with/from <Merchant>", "credited back/refunded/reversed to account from/at/with <Merchant>", and billing descriptors (`BIL*REFUND*FLIPKART`, `BIL*FLIPKART*REFUND`, `NEFT-REFUND-MAKEMYTRIP`).
+  - **Exhaustive Refund Merchant Regex Coverage (`SmsParser.kt`)**: Replaced brittle refund patterns with generalized patterns capturing "towards refund/reversal of order/ride/purchase at/on/with/from Merchant", "refund for order/ride/purchase with/from Merchant", "credited back/refunded/reversed to account from/at/with Merchant", and billing descriptors (`BIL*REFUND*FLIPKART`, `BIL*FLIPKART*REFUND`, `NEFT-REFUND-MAKEMYTRIP`).
   - **Word Boundary & Whitespace Hardening (`SmsParser.kt`)**: Replaced `(?:\s*(?:on\b...)|...)` with `(?:\s+(?:is|has|on|via|dated|ref|credited|avl|bal)\b|[.!,;]|$)`. Previously, `\s*on\b` with zero-length whitespace was causing non-greedy capture of words ending in "on" (e.g. "AMAZON" was truncated to "AMAZ"). Added contextual prefix stripping for "your cancelled ride with ", "order on ", "order at ".
   - **Universal Fallback Extraction in `handleRefund` (`ExpenseProcessingHelper.kt`)**: If `parsed.title` is generic and no past debit is found, `handleRefund` runs `SmsParser.extractRefundMerchant(parsed.rawText)` as a final defense, guaranteeing refund merchant preservation across Zomato, Swiggy, Blinkit, Flipkart, Amazon, Uber, Zara, BigBasket, and MakeMyTrip.
   - **Automated Verification & Release Packaging**: Added Robolectric unit tests covering diverse bank refund SMS variants (HDFC, SBI, ICICI, Axis, Kotak) and end-to-end `processRawSms` execution. All 46 tests passed. Reassembled release APK (`savior-1.0.2.apk`, 4.22 MB).

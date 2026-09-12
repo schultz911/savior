@@ -69,17 +69,27 @@ object RecurringDetectionEngine {
                 merchantName.lowercase(Locale.US).contains(it)
             }
 
-            // Check cadence: 2+ occurrences across distinct months
-            val distinctMonths = sorted.map { it.monthKey }.distinct()
-            val hasMultiMonthCadence = distinctMonths.size >= 2
+            // Check cadence and consistency only if not already verified via manual flag or known subscription keyword
+            val isRecurring = hasManualRecurring || isKnownKeyword || run {
+                // Zero-allocation multi-month cadence check: verify at least 2 distinct months exist
+                var hasMultiMonthCadence = false
+                if (sorted.size >= 2) {
+                    val firstMonth = sorted[0].monthKey
+                    for (i in 1 until sorted.size) {
+                        if (sorted[i].monthKey != firstMonth) {
+                            hasMultiMonthCadence = true
+                            break
+                        }
+                    }
+                }
+                if (!hasMultiMonthCadence) return@run false
 
-            // Single-pass accumulation — zero intermediate list allocations
-            var amountSum = 0.0
-            for (exp in sorted) { amountSum += exp.amount }
-            val avgAmount = if (sorted.isNotEmpty()) amountSum / sorted.size else 0.0
-            val isConsistentAmount = avgAmount > 0.0 && sorted.all { abs(it.amount - avgAmount) / avgAmount <= 0.20 }
-
-            val isRecurring = hasManualRecurring || isKnownKeyword || (hasMultiMonthCadence && isConsistentAmount)
+                // Single-pass accumulation — zero intermediate list allocations
+                var amountSum = 0.0
+                for (exp in sorted) { amountSum += exp.amount }
+                val avgAmount = if (sorted.isNotEmpty()) amountSum / sorted.size else 0.0
+                avgAmount > 0.0 && sorted.all { abs(it.amount - avgAmount) / avgAmount <= 0.20 }
+            }
 
             if (isRecurring) {
                 // Find median day of month — direct accumulation without intermediate list

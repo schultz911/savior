@@ -96,6 +96,13 @@ object SmsParser {
     private val SUFFIX_ENTITY_REGEX = Regex("(?i)\\s+(ltd|inc|corp|co|llc|pvt|services|vpa)$")
     private val SPECIAL_CHARS_REGEX = Regex("[*#_/]")
 
+    // Hot-path pre-compiled regex constants for pending refund timing and candidate merchant sanitization
+    private val PENDING_TIMING_REGEX = Regex("""(?i)\b(?:in|within|takes?)\s+\d+(?:-\d+|\s+to\s+\d+)?\s*(?:days|hrs|hours)\b""")
+    private val REFUND_CONTEXT_PREFIX_REGEX = Regex("""(?i)^(?:cancelled\s+)?(?:order|ride|purchase|txn|transaction|booking)\s+(?:at|on|with|from|to)\s+""")
+    private val REFUND_LEADING_PREP_REGEX = Regex("""(?i)^(?:at|on|from|to|with)\s+""")
+    private val REFUND_TRAILING_ORDER_REGEX = Regex("""(?i)\s+(?:for|towards)\s+(?:(?:your|the|cancelled)?\s*(?:order|ride|purchase|txn|transaction|booking).*)$""")
+    private val REFUND_TRAILING_REF_REGEX = Regex("""[-/]\d{4,}$""")
+
     // Dedicated refund-merchant extraction patterns (ordered most-specific → least-specific)
     private val REFUND_MERCHANT_PATTERNS = listOf(
         // 1. BIL*REFUND*FLIPKART, BIL*FLIPKART*REFUND, INFO: BIL-REV-SWIGGY, NEFT-REFUND-MAKEMYTRIP
@@ -152,7 +159,7 @@ object SmsParser {
                 lower.contains("shall be credited") ||
                 lower.contains("business days") ||
                 lower.contains("working days") ||
-                Regex("""(?i)\b(?:in|within|takes?)\s+\d+(?:-\d+|\s+to\s+\d+)?\s*(?:days|hrs|hours)\b""").containsMatchIn(text)
+                PENDING_TIMING_REGEX.containsMatchIn(text)
 
         // 2. Processing or initiated phrasing
         val hasProcessingOrInitiated = lower.contains("refund processing") ||
@@ -544,13 +551,13 @@ object SmsParser {
             .trimEnd('.', ',', ';', ':', '-', ' ')
 
         // Strip contextual prefixes like "order on ", "order at ", "cancelled ride with ", "ride with "
-        clean = clean.replace(Regex("""(?i)^(?:cancelled\s+)?(?:order|ride|purchase|txn|transaction|booking)\s+(?:at|on|with|from|to)\s+"""), "")
-            .replace(Regex("""(?i)^(?:at|on|from|to|with)\s+"""), "")
-            .replace(Regex("""(?i)\s+(?:for|towards)\s+(?:(?:your|the|cancelled)?\s*(?:order|ride|purchase|txn|transaction|booking).*)$"""), "")
+        clean = clean.replace(REFUND_CONTEXT_PREFIX_REGEX, "")
+            .replace(REFUND_LEADING_PREP_REGEX, "")
+            .replace(REFUND_TRAILING_ORDER_REGEX, "")
             .trim()
 
         // Strip trailing reference numbers like "-01234" or "/9876"
-        clean = clean.replace(Regex("""[-/]\d{4,}$"""), "").trim()
+        clean = clean.replace(REFUND_TRAILING_REF_REGEX, "").trim()
 
         // Capitalize words nicely
         val words = clean.split(" ")
