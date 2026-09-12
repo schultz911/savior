@@ -155,6 +155,11 @@
 
 ## 3. Approved and Implemented
 
+- **[Version 1.2.0 Stable Release Packaging & Artifact Sanitization] (Executed & Validated)**:
+  - **Version 1.2.0 Alignment across Codebase (`app/build.gradle.kts`, `SettingsScreen.kt`, `ExampleRobolectricTest.kt`)**: Bumped `versionCode = 13` and `versionName = "1.2.0"`. Updated Settings screen build label to `v1.2.0 (Stable)` and synchronized Robolectric unit tests to assert `VERSION_NAME == "1.2.0"` and `VERSION_CODE == 13`.
+  - **Deterministic Verification**: Executed offline test suite (`.\gradlew test --offline`), passing 33 actionable tasks and 63/63 unit tests with 100% pass rate.
+  - **Distributable APK Assembly & Legacy Purge**: Assembled minified, resource-shrunk production release binary with R8 (`4.44 MB`). Purged older release candidate `savior-1.1.6-rc.APK` from both root and `public/`. Sole deployed distributable is `savior-1.2.0-stable.apk` in both root and `public/`.
+
 - **[Enterprise Optimization Sweep: Phases 1, 2, & 3] (Executed & Validated)**:
   - **Phase 1: Concurrency & StateFlow Recomposition Isolation (`ExpenseViewModel.kt`, `MainActivity.kt`, `CalendarAnalyticsTab.kt`)**:
     - Decoupled `filteredExpenses` global vs current-month flow collection using `_isGlobalSearch.flatMapLatest { isGlobal -> if (isGlobal) allExpenses else currentMonthExpenses }`, eliminating redundant full-history re-evaluations during monthly views.

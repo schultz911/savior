@@ -1473,9 +1473,9 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `test version name is 1_1_6`() {
-    assertEquals("1.1.6", com.example.BuildConfig.VERSION_NAME)
-    assertEquals(12, com.example.BuildConfig.VERSION_CODE)
+  fun `test version name is 1_2_0`() {
+    assertEquals("1.2.0", com.example.BuildConfig.VERSION_NAME)
+    assertEquals(13, com.example.BuildConfig.VERSION_CODE)
   }
 
   @Test
