@@ -1860,7 +1860,7 @@ fun SettingsScreen(
                 )
 
                 Text(
-                    text = "v${com.example.BuildConfig.VERSION_NAME} (Stable)",
+                    text = "v${com.example.BuildConfig.VERSION_NAME} (RC)",
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Normal,
                         fontSize = 12.sp

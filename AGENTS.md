@@ -133,6 +133,11 @@
 
 ## 3. Approved and Implemented
 
+- **[Version 1.1.6 Release Candidate Packaging & Artifact Sanitization] (Executed & Validated)**:
+  - **Version 1.1.6 Alignment across Codebase (`app/build.gradle.kts`, `SettingsScreen.kt`, `ExampleRobolectricTest.kt`)**: Bumped `versionCode = 12` and `versionName = "1.1.6"`. Updated Settings screen build label to `v1.1.6 (RC)` and synchronized Robolectric unit tests to assert `VERSION_NAME == "1.1.6"` and `VERSION_CODE == 12`.
+  - **Deterministic Verification**: Executed offline test suite (`./gradlew test --offline`), passing 33 actionable tasks and 61/61 unit tests with 100% pass rate.
+  - **Distributable APK Assembly & Legacy Purge**: Assembled minified, resource-shrunk release binary with R8 (`4.44 MB`). Purged all older APKs (`savio-1.1.5.apk`, `savio.apk`, `savior-1.1.5.apk`, `savior.apk`) from both root and `public/`. Sole deployed distributable is `savior-1.1.6-rc.APK`.
+
 - **[Compose Recomposition Scoping & Orphan Asset Purge (Vectors A & B)] (Executed & Validated)**:
   - **Tab-Specific StateFlow Scoping (`MainActivity.kt`)**: Moved `collectAsStateWithLifecycle` invocations for `last12MonthsAnalytics`, `dailyBurnDownData`, `instrumentSummaries`, and `selectedAccountFilter` directly inside `SavioScreenTab.ANALYTICS`, and `merchantRules` inside `SavioScreenTab.SETTINGS`. Drops 100% of unneeded root `SpendTrackerScreen` recompositions when browsing or scrolling transactions on the Dashboard.
   - **Legacy XML Template Colors Purge (`res/values/colors.xml`)**: Deleted orphaned `colors.xml` file defining 7 unused XML color tokens unreferenced by the Compose design system, cleaning the Android resource table.
