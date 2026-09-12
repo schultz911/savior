@@ -182,8 +182,16 @@ class ExpenseRepository(
         }
         try {
             clearAll()
-            preferences.lastSyncTimestamp = 0L
-            val candidateMessages = SmsReader.readCandidateSmsMessages(context, 0L, limit = 200)
+            val cal = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.DAY_OF_MONTH, 1)
+                set(java.util.Calendar.HOUR_OF_DAY, 0)
+                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }
+            val startOfMonthTimestamp = cal.timeInMillis
+            preferences.lastSyncTimestamp = startOfMonthTimestamp
+            val candidateMessages = SmsReader.readCandidateSmsMessages(context, startOfMonthTimestamp, limit = 200)
             var insertedCount = 0
 
             for ((index, msg) in candidateMessages.withIndex()) {

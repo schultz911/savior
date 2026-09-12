@@ -1668,5 +1668,57 @@ class ExampleRobolectricTest {
     assertEquals("Travel & Commute", com.example.ai.OpenRouterCategorizer.normalizeCategory("Hotel", "Grand Palace", "Paid at Grand Palace Hotel"))
     assertEquals("Travel & Commute", com.example.ai.OpenRouterCategorizer.normalizeCategory("Resort", "Whispering Palms", "Spent at Whispering Palms Resort"))
   }
+
+  @Test
+  fun `test gzip encrypted backup export and backward compatible restore`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val app = context as SpendTrackerApplication
+    val dao = app.database.expenseDao()
+    val prefs = app.preferences
+    val ruleDao = app.database.merchantRuleDao()
+
+    val uniqueSmsId = 999112233L
+    val expense = com.example.data.ExpenseEntity(
+      amount = 2500.0,
+      currency = "INR",
+      category = "Shopping",
+      merchantOrRecipient = "AMAZON INDIA",
+      type = ExpenseType.MERCHANT,
+      accountInfo = "A/c ••9999",
+      smsId = uniqueSmsId,
+      rawBody = "Rs 2500 debited for Amazon order",
+      sender = "HDFC",
+      timestamp = System.currentTimeMillis()
+    )
+    dao.insertExpense(expense)
+
+    // Export with GZIP compression
+    val baos = java.io.ByteArrayOutputStream()
+    val backupResult = com.example.util.DatabaseBackupHelper.createEncryptedBackup(
+      dao = dao,
+      preferences = prefs,
+      passphrase = "secure-password-gzip",
+      outputStream = baos,
+      ruleDao = ruleDao
+    )
+    assertTrue(backupResult.isSuccess)
+    val encryptedBytes = baos.toByteArray()
+    assertTrue("Encrypted payload must have magic header", encryptedBytes.size > 32)
+
+    // Clear DB
+    dao.clearAll()
+    assertFalse(dao.existsBySmsId(uniqueSmsId))
+
+    // Restore GZIP encrypted backup
+    val restoreResult = com.example.util.DatabaseBackupHelper.restoreEncryptedBackup(
+      inputStream = java.io.ByteArrayInputStream(encryptedBytes),
+      passphrase = "secure-password-gzip",
+      dao = dao,
+      preferences = prefs,
+      ruleDao = ruleDao
+    )
+    assertTrue(restoreResult.isSuccess)
+    assertTrue("Restored database must contain original expense", dao.existsBySmsId(uniqueSmsId))
+  }
 }
 

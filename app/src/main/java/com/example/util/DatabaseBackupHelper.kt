@@ -11,11 +11,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import java.nio.ByteBuffer
 import java.security.SecureRandom
 import java.text.SimpleDateFormat
@@ -112,7 +116,13 @@ object DatabaseBackupHelper {
                 put("expenses", expensesArray)
             }
 
-            val plainBytes = rootJson.toString().toByteArray(Charsets.UTF_8)
+            val uncompressedBytes = rootJson.toString().toByteArray(Charsets.UTF_8)
+            val plainBytes = ByteArrayOutputStream().use { baos ->
+                GZIPOutputStream(baos).use { gzip ->
+                    gzip.write(uncompressedBytes)
+                }
+                baos.toByteArray()
+            }
 
             // Generate salt & IV
             val random = SecureRandom()
@@ -196,7 +206,20 @@ object DatabaseBackupHelper {
             cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(TAG_LENGTH_BITS, iv))
             val decryptedBytes = cipher.doFinal(cipherBytes)
 
-            val jsonString = String(decryptedBytes, Charsets.UTF_8)
+            // Transparent GZIP decompression with legacy fallback
+            val isGzip = decryptedBytes.size >= 2 &&
+                    decryptedBytes[0] == 0x1F.toByte() &&
+                    decryptedBytes[1] == 0x8B.toByte()
+
+            val jsonString = if (isGzip) {
+                ByteArrayInputStream(decryptedBytes).use { bais ->
+                    GZIPInputStream(bais).use { gzipIn ->
+                        gzipIn.bufferedReader(Charsets.UTF_8).readText()
+                    }
+                }
+            } else {
+                String(decryptedBytes, Charsets.UTF_8)
+            }
             val rootJson = JSONObject(jsonString)
 
             if (rootJson.has("currency")) {

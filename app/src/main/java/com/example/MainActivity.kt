@@ -395,6 +395,7 @@ fun SpendTrackerScreen(
 
     var showTestSmsSheet by remember { mutableStateOf(false) }
     var showManualAddDialog by remember { mutableStateOf(false) }
+    var showResetRescanConfirmDialog by remember { mutableStateOf(false) }
     var assignCategoryTargetExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
 
     LaunchedEffect(manualAddTrigger) {
@@ -906,7 +907,7 @@ fun SpendTrackerScreen(
                             isSyncing = isSyncing,
                             onRequestPermissions = { requestRequiredPermissions() },
                             onSyncInbox = { viewModel.syncSmsInbox() },
-                            onResetAndRescan = { viewModel.resetAndRescanInbox() }
+                            onResetAndRescan = { showResetRescanConfirmDialog = true }
                         )
                     }
 
@@ -1167,6 +1168,43 @@ fun SpendTrackerScreen(
             onDismiss = { showRecurringCommitmentsSheet = false },
             onToggleRecurring = { m, isRec -> viewModel.toggleRecurringForMerchant(m, isRec) },
             onRemoveRecurringBill = { viewModel.removeRecurringBill(it) }
+        )
+    }
+
+    if (showResetRescanConfirmDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showResetRescanConfirmDialog = false },
+            title = {
+                Text(
+                    text = "Reset & Rescan Inbox?",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            },
+            text = {
+                Text(
+                    text = "This will clear all currently stored transactions and re-read SMS messages from the current month. Custom notes and manual cash entries will be reset.\n\nDo you wish to proceed?",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = SavioSlateMuted
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.Button(
+                    onClick = {
+                        showResetRescanConfirmDialog = false
+                        viewModel.resetAndRescanInbox()
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = SavioSpendRose)
+                ) {
+                    Text("Reset & Rescan", color = Color.White)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { showResetRescanConfirmDialog = false }
+                ) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 

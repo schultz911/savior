@@ -339,8 +339,8 @@ object ExpenseProcessingHelper {
             if (pattern.isBlank()) continue
             val matches = if (rule.isRegex) {
                 try {
-                    Regex(pattern, RegexOption.IGNORE_CASE).containsMatchIn(effectiveMerchant) ||
-                    Regex(pattern, RegexOption.IGNORE_CASE).containsMatchIn(parsed.rawText)
+                    val regex = Regex(pattern, RegexOption.IGNORE_CASE)
+                    regex.containsMatchIn(effectiveMerchant) || regex.containsMatchIn(parsed.rawText)
                 } catch (e: Exception) { false }
             } else {
                 val clean = pattern.removePrefix("*").removeSuffix("*").trim()
