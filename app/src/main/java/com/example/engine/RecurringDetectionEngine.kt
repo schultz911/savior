@@ -7,6 +7,7 @@ import java.util.Locale
 import kotlin.math.abs
 
 data class PredictedRecurringBill(
+    val id: String = "",
     val merchant: String,
     val expectedAmount: Double,
     val currency: String,
@@ -14,7 +15,8 @@ data class PredictedRecurringBill(
     val typicalDayOfMonth: Int,
     val isPaidThisMonth: Boolean,
     val lastPaidTimestamp: Long,
-    val isManuallyMarked: Boolean = false
+    val isManuallyMarked: Boolean = true,
+    val expenseId: Long = 0L
 )
 
 object RecurringDetectionEngine {
@@ -40,54 +42,78 @@ object RecurringDetectionEngine {
         if (validExpenses.isEmpty()) return emptyList()
 
         val cal = Calendar.getInstance()
-
         val normalizedIgnored = ignoredMerchants.map { it.trim().lowercase(Locale.US) }
 
-        // Group by normalized merchant, excluding ignored recurring merchants
-        val grouped = validExpenses.groupBy { it.merchantOrRecipient.trim().lowercase(Locale.US) }
-            .filterKeys { key ->
-                key.isNotBlank() && key != "unknown" && key != "merchant / payee" &&
-                    normalizedIgnored.none { key.contains(it) || it.contains(key) }
+        // Strictly only track manually tagged transactions as recurring
+        val recurringCandidates = validExpenses.filter { exp ->
+            exp.isRecurring && normalizedIgnored.none {
+                val norm = exp.merchantOrRecipient.trim().lowercase(Locale.US)
+                norm.contains(it) || it.contains(norm)
             }
+        }
+        if (recurringCandidates.isEmpty()) return emptyList()
 
         val result = mutableListOf<PredictedRecurringBill>()
 
-        for ((_, merchantExpenses) in grouped) {
-            val sorted = merchantExpenses.sortedByDescending { it.timestamp }
-            val hasManualRecurring = sorted.any { it.isRecurring }
+        // 1. Current month bills: show each individual transaction marked as a bill
+        val currentMonthBills = recurringCandidates.filter { it.monthKey == currentMonthKey }
+            .sortedByDescending { it.timestamp }
 
-            // Strictly only track manually tagged transactions as recurring
-            if (hasManualRecurring) {
-                val recurringExpenses = sorted.filter { it.isRecurring }
-                val latest = recurringExpenses.firstOrNull() ?: sorted.first()
-                val merchantName = latest.merchantOrRecipient.trim()
-                val currency = latest.currency
-                val category = latest.category
-
-                val targetList = if (recurringExpenses.isNotEmpty()) recurringExpenses else sorted
-                val days = ArrayList<Int>(targetList.size)
-                for (exp in targetList) {
-                    cal.timeInMillis = exp.timestamp
-                    days.add(cal.get(Calendar.DAY_OF_MONTH))
-                }
-                days.sort()
-                val typicalDay = days[days.size / 2]
-
-                val paidThisMonth = sorted.any { it.monthKey == currentMonthKey }
-                val thisMonthPaidExp = sorted.firstOrNull { it.monthKey == currentMonthKey }
-
-                result.add(
-                    PredictedRecurringBill(
-                        merchant = merchantName,
-                        expectedAmount = latest.amount,
-                        currency = currency,
-                        category = category,
-                        typicalDayOfMonth = typicalDay,
-                        isPaidThisMonth = paidThisMonth,
-                        lastPaidTimestamp = thisMonthPaidExp?.timestamp ?: latest.timestamp,
-                        isManuallyMarked = true
-                    )
+        for (exp in currentMonthBills) {
+            cal.timeInMillis = exp.timestamp
+            val day = cal.get(Calendar.DAY_OF_MONTH)
+            result.add(
+                PredictedRecurringBill(
+                    id = "settled_${exp.id}",
+                    merchant = exp.merchantOrRecipient.trim(),
+                    expectedAmount = exp.netAmount,
+                    currency = exp.currency,
+                    category = exp.category,
+                    typicalDayOfMonth = day,
+                    isPaidThisMonth = true,
+                    lastPaidTimestamp = exp.timestamp,
+                    isManuallyMarked = true,
+                    expenseId = exp.id
                 )
+            )
+        }
+
+        // 2. Past recurring transactions: show unpaid recurring bills individually in upcoming
+        val pastBills = recurringCandidates.filter { it.monthKey != currentMonthKey }
+        if (pastBills.isNotEmpty()) {
+            val pastByMerchant = pastBills.groupBy { it.merchantOrRecipient.trim().lowercase(Locale.US) }
+            val currentByMerchant = currentMonthBills.groupBy { it.merchantOrRecipient.trim().lowercase(Locale.US) }
+
+            for ((merchantKey, pastMerchantBills) in pastByMerchant) {
+                val currentCount = currentByMerchant[merchantKey]?.size ?: 0
+
+                // Reference past month: latest month before currentMonthKey where this merchant had bills
+                val latestPastMonth = pastMerchantBills.map { it.monthKey }.maxOrNull() ?: continue
+                val referenceBills = pastMerchantBills.filter { it.monthKey == latestPastMonth }
+                    .sortedByDescending { it.timestamp }
+
+                // If current month has fewer settled payments than the reference month, the remaining are upcoming
+                if (currentCount < referenceBills.size) {
+                    val remainingUnpaid = referenceBills.drop(currentCount)
+                    for (pastExp in remainingUnpaid) {
+                        cal.timeInMillis = pastExp.timestamp
+                        val day = cal.get(Calendar.DAY_OF_MONTH)
+                        result.add(
+                            PredictedRecurringBill(
+                                id = "upcoming_${pastExp.id}",
+                                merchant = pastExp.merchantOrRecipient.trim(),
+                                expectedAmount = pastExp.netAmount,
+                                currency = pastExp.currency,
+                                category = pastExp.category,
+                                typicalDayOfMonth = day,
+                                isPaidThisMonth = false,
+                                lastPaidTimestamp = pastExp.timestamp,
+                                isManuallyMarked = true,
+                                expenseId = pastExp.id
+                            )
+                        )
+                    }
+                }
             }
         }
 

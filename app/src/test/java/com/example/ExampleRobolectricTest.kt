@@ -1520,6 +1520,68 @@ class ExampleRobolectricTest {
   }
 
   @Test
+  fun `test multiple payments to same merchant are each tracked individually`() {
+    val currentMonthKey = com.example.data.ExpenseEntity.formatMonthKey(System.currentTimeMillis())
+    val payment1 = com.example.data.ExpenseEntity(
+      id = 101L,
+      amount = 1200.0,
+      currency = "₹",
+      type = ExpenseType.MERCHANT,
+      merchantOrRecipient = "Bangalore Electricity",
+      category = "Bills & Utilities",
+      monthKey = currentMonthKey,
+      isRecurring = true
+    )
+    val payment2 = com.example.data.ExpenseEntity(
+      id = 102L,
+      amount = 800.0,
+      currency = "₹",
+      type = ExpenseType.MERCHANT,
+      merchantOrRecipient = "Bangalore Electricity",
+      category = "Bills & Utilities",
+      monthKey = currentMonthKey,
+      isRecurring = true
+    )
+    val payment3 = com.example.data.ExpenseEntity(
+      id = 103L,
+      amount = 1500.0,
+      currency = "₹",
+      type = ExpenseType.MERCHANT,
+      merchantOrRecipient = "Bangalore Electricity",
+      category = "Bills & Utilities",
+      monthKey = currentMonthKey,
+      isRecurring = true
+    )
+    val payment4 = com.example.data.ExpenseEntity(
+      id = 104L,
+      amount = 500.0,
+      currency = "₹",
+      type = ExpenseType.MERCHANT,
+      merchantOrRecipient = "Bangalore Electricity",
+      category = "Bills & Utilities",
+      monthKey = currentMonthKey,
+      isRecurring = true
+    )
+    val payment5 = com.example.data.ExpenseEntity(
+      id = 105L,
+      amount = 900.0,
+      currency = "₹",
+      type = ExpenseType.MERCHANT,
+      merchantOrRecipient = "Bangalore Electricity",
+      category = "Bills & Utilities",
+      monthKey = currentMonthKey,
+      isRecurring = true
+    )
+
+    val list = listOf(payment1, payment2, payment3, payment4, payment5)
+    val bills = com.example.engine.RecurringDetectionEngine.detectRecurringBills(list, currentMonthKey)
+
+    assertEquals(5, bills.size)
+    val totalAmount = bills.sumOf { it.expectedAmount }
+    assertEquals(4900.0, totalAmount, 0.01)
+  }
+
+  @Test
   fun `test expanded generic category identifiers in OpenRouterCategorizer`() {
     // Food & Dining
     assertEquals("Food & Dining", com.example.ai.OpenRouterCategorizer.normalizeCategory("Bistro", "The Table", "Paid at The Table"))

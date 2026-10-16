@@ -309,7 +309,7 @@ fun RecurringCommitmentsSheet(
                     }
                 }
             } else {
-                items(upcomingBills, key = { it.merchant }) { bill ->
+                items(upcomingBills, key = { it.id.ifEmpty { "${it.merchant}_${it.expenseId}_${it.expectedAmount}" } }) { bill ->
                     val dateFormat = remember { SimpleDateFormat("dd MMM", Locale.US) }
                     val dueDateStr = remember(bill.typicalDayOfMonth) {
                         val dueCal = Calendar.getInstance().apply {
@@ -363,7 +363,7 @@ fun RecurringCommitmentsSheet(
                     )
                 }
 
-                items(paidBills, key = { it.merchant }) { bill ->
+                items(paidBills, key = { it.id.ifEmpty { "${it.merchant}_${it.expenseId}_${it.expectedAmount}" } }) { bill ->
                     val sdf = remember { SimpleDateFormat("dd MMM", Locale.US) }
                     val paidDateStr = if (bill.lastPaidTimestamp > 0) "Paid on ${sdf.format(Date(bill.lastPaidTimestamp))}" else "Paid this month"
 
@@ -430,7 +430,7 @@ private fun RecurringBillItemCard(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = bill.merchant,
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
@@ -441,30 +441,11 @@ private fun RecurringBillItemCard(
 
                     Spacer(modifier = Modifier.height(2.dp))
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = badgeBg
-                        ) {
-                            Text(
-                                text = statusText,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                color = badgeColor,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(6.dp))
-
-                        Text(
-                            text = bill.category,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                            color = SavioSlateMuted
-                        )
-                    }
+                    Text(
+                        text = bill.category,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        color = SavioSlateMuted
+                    )
                 }
             }
 
@@ -480,11 +461,20 @@ private fun RecurringBillItemCard(
                         )
                     )
 
-                    if (onToggleRecurring != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = badgeBg
+                    ) {
                         Text(
-                            text = "Tracked Recurring Bill",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                            color = SavioSlateMuted
+                            text = statusText,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = badgeColor,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                 }
