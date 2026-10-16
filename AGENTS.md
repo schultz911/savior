@@ -155,6 +155,13 @@
 
 ## 3. Approved and Implemented
 
+- **[Version 2.0.0 Major Release: Manual Recurring Tagging & Monthly Bill Radar Hardening] (Executed & Validated)**:
+  - **Manual Recurring Tagging Only (`RecurringDetectionEngine.kt`)**: Removed heuristic subscription keywords list and automatic multi-month cadence detection. The Subscription and Bill Radar strictly tracks only transactions manually tagged as recurring (`isRecurring = true`).
+  - **Monthly Bill Reserved Amount Overview (`ExpenseViewModel.kt`, `RecurringCommitmentsSheet.kt`, `MainActivity.kt`)**: Computed `recurringBillsSummary` StateFlow that sums every single payment across all transactions marked as bills in the previous month (falling back to current month if previous month has none), giving the user a complete overview of monthly recurring outlay. Connected summary metrics to display `Reserved Amount` alongside `Settled This Month` and `Upcoming Due`.
+  - **Clean Date Formatting (`RecurringCommitmentsSheet.kt`)**: Standardized upcoming bill dates from ordinal forms (`21th`) to explicit `DD Mmm` format (e.g., `21 Oct`, matching the settled section format).
+  - **Strict Credit Card Bill Exclusion (`RecurringDetectionEngine.kt`, `ExpenseViewModel.kt`)**: Comprehensive guardrails to exclude all credit card bills (`ExpenseType.CREDIT_CARD`, category `"Credit Card Bill"` or containing `"Credit Card"`, and card account/merchant indicators) from the recurring bill radar and reserved amount calculation.
+  - **Version 2.0.0 Alignment & Production APK Generation (`app/build.gradle.kts`, `ExampleRobolectricTest.kt`)**: Bumped `versionCode = 14` and `versionName = "2.0.0"`. Updated and added unit tests in `ExampleRobolectricTest.kt` (100% pass rate). Assembled minified release APK with R8 (`savior-2.0.0.apk`, 4.44 MB) and deployed to project root and `public/`, purging legacy v1.2.0 APKs.
+
 - **[Version 1.2.0 Stable Release Packaging & Artifact Sanitization] (Executed & Validated)**:
   - **Version 1.2.0 Alignment across Codebase (`app/build.gradle.kts`, `SettingsScreen.kt`, `ExampleRobolectricTest.kt`)**: Bumped `versionCode = 13` and `versionName = "1.2.0"`. Updated Settings screen build label to `v1.2.0 (Stable)` and synchronized Robolectric unit tests to assert `VERSION_NAME == "1.2.0"` and `VERSION_CODE == 13`.
   - **Deterministic Verification**: Executed offline test suite (`.\gradlew test --offline`), passing 33 actionable tasks and 63/63 unit tests with 100% pass rate.

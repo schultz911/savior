@@ -84,6 +84,9 @@ fun RecurringCommitmentsSheet(
     bills: List<PredictedRecurringBill>,
     currency: String,
     onDismiss: () -> Unit,
+    reservedAmount: Double = 0.0,
+    prevMonthBillsCount: Int = 0,
+    isBasedOnPreviousMonth: Boolean = false,
     onToggleRecurring: ((merchant: String, isRecurring: Boolean) -> Unit)? = null,
     onRemoveRecurringBill: ((merchant: String) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -193,19 +196,26 @@ fun RecurringCommitmentsSheet(
                     ) {
                         Column {
                             Text(
-                                text = "Reserved Due",
+                                text = "Reserved Amount",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = SavioSlateMuted
                             )
+                            val displayReserved = if (reservedAmount > 0.0) reservedAmount else totalRecurring
                             Text(
-                                text = "$currency${numberFormatter.format(upcomingTotal)}",
+                                text = "$currency${numberFormatter.format(displayReserved)}",
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Black,
-                                    color = if (upcomingTotal > 0) Color(0xFFD97706) else SavioSlateDark
+                                    color = if (displayReserved > 0) Color(0xFFD97706) else SavioSlateDark
                                 )
                             )
                             Text(
-                                text = "${upcomingBills.size} bill(s) pending",
+                                text = if (isBasedOnPreviousMonth && prevMonthBillsCount > 0) {
+                                    "$prevMonthBillsCount bill(s) last month"
+                                } else if (prevMonthBillsCount > 0) {
+                                    "$prevMonthBillsCount bill(s) this month"
+                                } else {
+                                    "${bills.size} tracked"
+                                },
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                 color = SavioSlateMuted
                             )
@@ -233,19 +243,19 @@ fun RecurringCommitmentsSheet(
 
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text = "Total Outlay",
+                                text = "Upcoming Due",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = SavioSlateMuted
                             )
                             Text(
-                                text = "$currency${numberFormatter.format(totalRecurring)}",
+                                text = "$currency${numberFormatter.format(upcomingTotal)}",
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Black,
-                                    color = SavioSlateDark
+                                    color = if (upcomingTotal > 0) Color(0xFFD97706) else SavioSlateDark
                                 )
                             )
                             Text(
-                                text = "${bills.size} detected",
+                                text = "${upcomingBills.size} bill(s) pending",
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                 color = SavioSlateMuted
                             )
@@ -300,13 +310,22 @@ fun RecurringCommitmentsSheet(
                 }
             } else {
                 items(upcomingBills, key = { it.merchant }) { bill ->
+                    val dateFormat = remember { SimpleDateFormat("dd MMM", Locale.US) }
+                    val dueDateStr = remember(bill.typicalDayOfMonth) {
+                        val dueCal = Calendar.getInstance().apply {
+                            val maxDay = getActualMaximum(Calendar.DAY_OF_MONTH)
+                            set(Calendar.DAY_OF_MONTH, bill.typicalDayOfMonth.coerceIn(1, maxDay))
+                        }
+                        dateFormat.format(dueCal.time)
+                    }
+
                     val diff = bill.typicalDayOfMonth - currentDay
                     val dueBadgeText = when {
-                        diff == 0 -> "Due Today!"
-                        diff == 1 -> "Due Tomorrow"
-                        diff in 2..5 -> "Due in $diff days (~${bill.typicalDayOfMonth}th)"
-                        diff > 5 -> "Expected ~${bill.typicalDayOfMonth}th"
-                        else -> "Due ~${bill.typicalDayOfMonth}th (Awaiting confirmation)"
+                        diff == 0 -> "Due Today ($dueDateStr)"
+                        diff == 1 -> "Due Tomorrow ($dueDateStr)"
+                        diff in 2..5 -> "Due in $diff days ($dueDateStr)"
+                        diff > 5 -> "Expected $dueDateStr"
+                        else -> "Due $dueDateStr (Awaiting confirmation)"
                     }
                     val dueBadgeColor = when {
                         diff <= 0 -> SavioSpendRose
@@ -463,7 +482,7 @@ private fun RecurringBillItemCard(
 
                     if (onToggleRecurring != null) {
                         Text(
-                            text = if (bill.isManuallyMarked) "Tracked (Custom)" else "Auto-detected",
+                            text = "Tracked Recurring Bill",
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                             color = SavioSlateMuted
                         )

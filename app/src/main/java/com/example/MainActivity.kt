@@ -279,6 +279,7 @@ fun SpendTrackerScreen(
     val isSearchExpanded by viewModel.isSearchExpanded.collectAsStateWithLifecycle()
     val isGlobalSearch by viewModel.isGlobalSearch.collectAsStateWithLifecycle()
     val predictedRecurringBills by viewModel.predictedRecurringBills.collectAsStateWithLifecycle()
+    val recurringBillsSummary by viewModel.recurringBillsSummary.collectAsStateWithLifecycle()
     val safeSpendPacing by viewModel.safeSpendPacing.collectAsStateWithLifecycle()
 
     var selectedMerchantForSheet by remember { mutableStateOf<String?>(null) }
@@ -1164,6 +1165,9 @@ fun SpendTrackerScreen(
         RecurringCommitmentsSheet(
             bills = predictedRecurringBills,
             currency = currency,
+            reservedAmount = recurringBillsSummary.reservedAmount,
+            prevMonthBillsCount = recurringBillsSummary.prevMonthBillsCount,
+            isBasedOnPreviousMonth = recurringBillsSummary.isBasedOnPreviousMonth,
             onDismiss = { showRecurringCommitmentsSheet = false },
             onToggleRecurring = { m, isRec -> viewModel.toggleRecurringForMerchant(m, isRec) },
             onRemoveRecurringBill = { viewModel.removeRecurringBill(it) }

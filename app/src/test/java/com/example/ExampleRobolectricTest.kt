@@ -342,7 +342,8 @@ class ExampleRobolectricTest {
         category = "Subscriptions",
         rawBody = "Netflix charged 499",
         sender = "HDFC",
-        timestamp = System.currentTimeMillis()
+        timestamp = System.currentTimeMillis(),
+        isRecurring = true
       ),
       com.example.data.ExpenseEntity(
         id = 2L,
@@ -354,7 +355,8 @@ class ExampleRobolectricTest {
         category = "Bills & Utilities",
         rawBody = "BESCOM bill payment 1200",
         sender = "ICICI",
-        timestamp = System.currentTimeMillis()
+        timestamp = System.currentTimeMillis(),
+        isRecurring = true
       )
     )
 
@@ -1473,9 +1475,48 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `test version name is 1_2_0`() {
-    assertEquals("1.2.0", com.example.BuildConfig.VERSION_NAME)
-    assertEquals(13, com.example.BuildConfig.VERSION_CODE)
+  fun `test version name is 2_0_0`() {
+    assertEquals("2.0.0", com.example.BuildConfig.VERSION_NAME)
+    assertEquals(14, com.example.BuildConfig.VERSION_CODE)
+  }
+
+  @Test
+  fun `test recurring radar only tracks manually tagged transactions and excludes credit card bills`() {
+    val unflaggedNetflix = com.example.data.ExpenseEntity(
+      id = 10L,
+      amount = 649.0,
+      currency = "₹",
+      type = ExpenseType.MERCHANT,
+      merchantOrRecipient = "Netflix India",
+      category = "Subscriptions",
+      isRecurring = false
+    )
+    val flaggedAirtel = com.example.data.ExpenseEntity(
+      id = 11L,
+      amount = 999.0,
+      currency = "₹",
+      type = ExpenseType.MERCHANT,
+      merchantOrRecipient = "Airtel Broadband",
+      category = "Bills & Utilities",
+      isRecurring = true
+    )
+    val flaggedCreditCardBill = com.example.data.ExpenseEntity(
+      id = 12L,
+      amount = 15000.0,
+      currency = "₹",
+      type = ExpenseType.CREDIT_CARD,
+      merchantOrRecipient = "HDFC Credit Card Bill",
+      category = "Credit Card Bill",
+      isRecurring = true
+    )
+
+    val list = listOf(unflaggedNetflix, flaggedAirtel, flaggedCreditCardBill)
+    val detected = com.example.engine.RecurringDetectionEngine.detectRecurringBills(list)
+
+    // Unflagged Netflix and Credit Card Bill must NOT be detected; only flagged Airtel Broadband should be
+    assertEquals(1, detected.size)
+    assertEquals("Airtel Broadband", detected.first().merchant)
+    assertEquals(999.0, detected.first().expectedAmount, 0.01)
   }
 
   @Test

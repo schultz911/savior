@@ -19,13 +19,6 @@ data class PredictedRecurringBill(
 
 object RecurringDetectionEngine {
 
-    private val KNOWN_SUBSCRIPTION_KEYWORDS = listOf(
-        "netflix", "spotify", "prime", "hotstar", "youtube", "apple", "google",
-        "bescom", "tata power", "electricity", "water", "bill", "broadband",
-        "airtel", "jio", "vi", "vodafone", "sip", "zerodha", "groww", "mutual fund",
-        "emi", "loan", "rent", "gym", "cult", "insurance", "lic", "hdfc life", "icici pru"
-    )
-
     fun detectRecurringBills(
         allExpenses: List<ExpenseEntity>,
         currentMonthKey: String = ExpenseEntity.formatMonthKey(System.currentTimeMillis()),
@@ -39,12 +32,14 @@ object RecurringDetectionEngine {
             it.type != ExpenseType.SELF &&
             !it.category.equals("Self", ignoreCase = true) &&
             it.type != ExpenseType.CREDIT_CARD &&
-            !it.category.equals("Credit Card Bill", ignoreCase = true)
+            !it.category.equals("Credit Card Bill", ignoreCase = true) &&
+            !it.category.contains("Credit Card", ignoreCase = true) &&
+            !it.accountInfo.contains("Credit Card", ignoreCase = true) &&
+            !it.merchantOrRecipient.contains("Credit Card", ignoreCase = true)
         }
         if (validExpenses.isEmpty()) return emptyList()
 
         val cal = Calendar.getInstance()
-        val currentDay = cal.get(Calendar.DAY_OF_MONTH)
 
         val normalizedIgnored = ignoredMerchants.map { it.trim().lowercase(Locale.US) }
 
@@ -59,42 +54,19 @@ object RecurringDetectionEngine {
 
         for ((_, merchantExpenses) in grouped) {
             val sorted = merchantExpenses.sortedByDescending { it.timestamp }
-            val latest = sorted.first()
-            val merchantName = latest.merchantOrRecipient.trim()
-            val currency = latest.currency
-            val category = latest.category
-
             val hasManualRecurring = sorted.any { it.isRecurring }
-            val isKnownKeyword = KNOWN_SUBSCRIPTION_KEYWORDS.any {
-                merchantName.lowercase(Locale.US).contains(it)
-            }
 
-            // Check cadence and consistency only if not already verified via manual flag or known subscription keyword
-            val isRecurring = hasManualRecurring || isKnownKeyword || run {
-                // Zero-allocation multi-month cadence check: verify at least 2 distinct months exist
-                var hasMultiMonthCadence = false
-                if (sorted.size >= 2) {
-                    val firstMonth = sorted[0].monthKey
-                    for (i in 1 until sorted.size) {
-                        if (sorted[i].monthKey != firstMonth) {
-                            hasMultiMonthCadence = true
-                            break
-                        }
-                    }
-                }
-                if (!hasMultiMonthCadence) return@run false
+            // Strictly only track manually tagged transactions as recurring
+            if (hasManualRecurring) {
+                val recurringExpenses = sorted.filter { it.isRecurring }
+                val latest = recurringExpenses.firstOrNull() ?: sorted.first()
+                val merchantName = latest.merchantOrRecipient.trim()
+                val currency = latest.currency
+                val category = latest.category
 
-                // Single-pass accumulation — zero intermediate list allocations
-                var amountSum = 0.0
-                for (exp in sorted) { amountSum += exp.amount }
-                val avgAmount = if (sorted.isNotEmpty()) amountSum / sorted.size else 0.0
-                avgAmount > 0.0 && sorted.all { abs(it.amount - avgAmount) / avgAmount <= 0.20 }
-            }
-
-            if (isRecurring) {
-                // Find median day of month — direct accumulation without intermediate list
-                val days = ArrayList<Int>(sorted.size)
-                for (exp in sorted) {
+                val targetList = if (recurringExpenses.isNotEmpty()) recurringExpenses else sorted
+                val days = ArrayList<Int>(targetList.size)
+                for (exp in targetList) {
                     cal.timeInMillis = exp.timestamp
                     days.add(cal.get(Calendar.DAY_OF_MONTH))
                 }
@@ -102,6 +74,7 @@ object RecurringDetectionEngine {
                 val typicalDay = days[days.size / 2]
 
                 val paidThisMonth = sorted.any { it.monthKey == currentMonthKey }
+                val thisMonthPaidExp = sorted.firstOrNull { it.monthKey == currentMonthKey }
 
                 result.add(
                     PredictedRecurringBill(
@@ -111,8 +84,8 @@ object RecurringDetectionEngine {
                         category = category,
                         typicalDayOfMonth = typicalDay,
                         isPaidThisMonth = paidThisMonth,
-                        lastPaidTimestamp = latest.timestamp,
-                        isManuallyMarked = hasManualRecurring
+                        lastPaidTimestamp = thisMonthPaidExp?.timestamp ?: latest.timestamp,
+                        isManuallyMarked = true
                     )
                 )
             }

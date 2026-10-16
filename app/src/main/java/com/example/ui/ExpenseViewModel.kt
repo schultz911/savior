@@ -71,6 +71,12 @@ data class SafeSpendPacing(
     val upcomingRecurringTotal: Double = 0.0
 )
 
+data class RecurringBillsSummary(
+    val reservedAmount: Double = 0.0,
+    val prevMonthBillsCount: Int = 0,
+    val isBasedOnPreviousMonth: Boolean = false
+)
+
 data class MonthlyTotalsSummary(
     val monthlyTotal: Double = 0.0,
     val transfersTotal: Double = 0.0,
@@ -233,7 +239,11 @@ class ExpenseViewModel(
         item.type == ExpenseType.SELF || item.category.equals("Self", ignoreCase = true)
 
     fun isCreditCard(item: ExpenseEntity): Boolean =
-        item.type == ExpenseType.CREDIT_CARD || item.category.equals("Credit Card Bill", ignoreCase = true)
+        item.type == ExpenseType.CREDIT_CARD ||
+            item.category.equals("Credit Card Bill", ignoreCase = true) ||
+            item.category.contains("Credit Card", ignoreCase = true) ||
+            item.accountInfo.contains("Credit Card", ignoreCase = true) ||
+            item.merchantOrRecipient.contains("Credit Card", ignoreCase = true)
 
     fun isTransfer(item: ExpenseEntity): Boolean =
         item.type == ExpenseType.P2P && !isSelf(item) && !isCreditCard(item)
@@ -356,6 +366,80 @@ class ExpenseViewModel(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
+    )
+
+    // Summary of recurring bills: total bill amount across all payments marked as bills in the previous month
+    val recurringBillsSummary: StateFlow<RecurringBillsSummary> = combine(
+        allExpenses,
+        _selectedMonthKey
+    ) { allList, selectedMonthKey ->
+        val parts = selectedMonthKey.split("-")
+        val prevMonthKey = if (parts.size == 2) {
+            val y = parts[0].toIntOrNull()
+            val m = parts[1].toIntOrNull()
+            if (y != null && m != null) {
+                var prevM = m - 1
+                var prevY = y
+                if (prevM < 1) {
+                    prevM = 12
+                    prevY -= 1
+                }
+                "%04d-%02d".format(Locale.US, prevY, prevM)
+            } else null
+        } else null
+
+        // Non-excluded, non-refund, non-self, non-credit-card candidates
+        val candidates = allList.filter { exp ->
+            !exp.isExcluded &&
+            !exp.isRefundOrReversal &&
+            !isSelf(exp) &&
+            !isCreditCard(exp)
+        }
+
+        // Merchants with at least one manually tagged recurring transaction
+        val recurringMerchants = candidates.filter { it.isRecurring }
+            .map { it.merchantOrRecipient.trim().lowercase(Locale.US) }
+            .filter { it.isNotBlank() && it != "unknown" && it != "merchant / payee" }
+            .toSet()
+
+        // Sum each payment marked as recurring/bill in the previous month
+        val prevMonthBills = if (prevMonthKey != null) {
+            candidates.filter { exp ->
+                exp.monthKey == prevMonthKey &&
+                (exp.isRecurring || recurringMerchants.contains(exp.merchantOrRecipient.trim().lowercase(Locale.US)))
+            }
+        } else emptyList()
+
+        if (prevMonthBills.isNotEmpty()) {
+            var sum = 0.0
+            for (bill in prevMonthBills) {
+                sum += bill.netAmount
+            }
+            RecurringBillsSummary(
+                reservedAmount = sum,
+                prevMonthBillsCount = prevMonthBills.size,
+                isBasedOnPreviousMonth = true
+            )
+        } else {
+            // Fallback: sum each payment marked as recurring/bill in the current month
+            val currentMonthBills = candidates.filter { exp ->
+                exp.monthKey == selectedMonthKey &&
+                (exp.isRecurring || recurringMerchants.contains(exp.merchantOrRecipient.trim().lowercase(Locale.US)))
+            }
+            var sum = 0.0
+            for (bill in currentMonthBills) {
+                sum += bill.netAmount
+            }
+            RecurringBillsSummary(
+                reservedAmount = sum,
+                prevMonthBillsCount = currentMonthBills.size,
+                isBasedOnPreviousMonth = false
+            )
+        }
+    }.flowOn(Dispatchers.Default).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = RecurringBillsSummary()
     )
 
     // Adaptive Burn Rate & Safe Daily Spend Dynamic Pacing
