@@ -76,11 +76,7 @@ class ExpenseRepository(
                     }
                 }
 
-                if (rule.id != 0L) {
-                    dao.updateInstrument(consolidated)
-                } else {
-                    dao.updateInstrument(consolidated)
-                }
+                dao.updateInstrument(consolidated)
                 return@withContext consolidated
             }
         }
@@ -234,6 +230,7 @@ class ExpenseRepository(
             )
             var insertedCount = 0
             val preloadedRules = merchantRuleDao?.getAllRulesSync()
+            val preloadedInstrumentRules = instrumentRuleDao?.getAllInstrumentsSync()
 
             for ((index, msg) in candidateMessages.withIndex()) {
                 onProgress?.invoke(index + 1, candidateMessages.size)
@@ -246,7 +243,8 @@ class ExpenseRepository(
                     timestamp = msg.timestamp,
                     smsId = msg.smsId,
                     isBatchSync = true,
-                    preloadedRules = preloadedRules
+                    preloadedRules = preloadedRules,
+                    preloadedInstrumentRules = preloadedInstrumentRules
                 )
                 if (inserted != null) {
                     insertedCount++
@@ -288,6 +286,7 @@ class ExpenseRepository(
             )
             var insertedCount = 0
             val preloadedRules = merchantRuleDao?.getAllRulesSync()
+            val preloadedInstrumentRules = instrumentRuleDao?.getAllInstrumentsSync()
 
             for ((index, msg) in candidateMessages.withIndex()) {
                 onProgress?.invoke(index + 1, candidateMessages.size)
@@ -299,7 +298,8 @@ class ExpenseRepository(
                     timestamp = msg.timestamp,
                     smsId = msg.smsId,
                     isBatchSync = true,
-                    preloadedRules = preloadedRules
+                    preloadedRules = preloadedRules,
+                    preloadedInstrumentRules = preloadedInstrumentRules
                 )
                 if (inserted != null) {
                     insertedCount++

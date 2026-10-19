@@ -60,7 +60,10 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Edit
 import com.example.data.ExpenseEntity
+import com.example.data.InstrumentRuleEntity
 import com.example.data.MerchantRuleEntity
 import com.example.util.ExcelExportHelper
 import androidx.compose.material3.AlertDialog
@@ -157,6 +160,9 @@ fun SettingsScreen(
     merchantRules: List<MerchantRuleEntity> = emptyList(),
     onAddMerchantRule: (pattern: String, category: String, alias: String) -> Unit = { _, _, _ -> },
     onDeleteMerchantRule: (Long) -> Unit = {},
+    instrumentRules: List<InstrumentRuleEntity> = emptyList(),
+    onEditInstrumentRule: (InstrumentRuleEntity) -> Unit = {},
+    onDeleteInstrumentRule: (Long) -> Unit = {},
     isVelocityAlertsEnabled: Boolean = true,
     onToggleVelocityAlerts: (Boolean) -> Unit = {},
     isAnomalyAlertsEnabled: Boolean = true,
@@ -188,6 +194,7 @@ fun SettingsScreen(
 
     var isCategoryLimitsExpanded by remember { mutableStateOf(false) }
     var isRulesExpanded by remember { mutableStateOf(false) }
+    var isInstrumentRulesExpanded by remember { mutableStateOf(false) }
 
     var newRulePatternInput by remember { mutableStateOf("") }
     var newRuleCategoryInput by remember { mutableStateOf("Food & Dining") }
@@ -1229,7 +1236,189 @@ fun SettingsScreen(
             }
         }
 
-        // 5. Blacklisted Merchants Manager Card
+        // 5. Payment Instruments & Accounts Card
+        item {
+            Card(
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = GlassCardBg),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, GlassCardBorder, RoundedCornerShape(22.dp))
+                    .testTag("instrument_rules_card")
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isInstrumentRulesExpanded = !isInstrumentRulesExpanded },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CreditCard,
+                                contentDescription = null,
+                                tint = SavioEmerald,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "Payment Instruments & Accounts",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = SavioSlateDark
+                                )
+                                Text(
+                                    text = "Custom names, last 4 digits, and regex markers for accounts & cards",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = SavioSlateMuted
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = { isInstrumentRulesExpanded = !isInstrumentRulesExpanded },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isInstrumentRulesExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (isInstrumentRulesExpanded) "Collapse" else "Expand",
+                                tint = SavioEmerald
+                            )
+                        }
+                    }
+
+                    AnimatedVisibility(visible = isInstrumentRulesExpanded) {
+                        Column {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            if (instrumentRules.isEmpty()) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = GlassBackground,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "No custom instrument rules configured yet. Long-press any instrument chip in the Analytics tab or tap an unidentified instrument alert to configure one.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = SavioSlateMuted,
+                                        modifier = Modifier.padding(12.dp)
+                                    )
+                                }
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    instrumentRules.forEach { rule ->
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = Color.White.copy(alpha = 0.6f),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, GlassCardBorder),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .clickable { onEditInstrumentRule(rule) }
+                                                ) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Text(
+                                                            text = rule.canonicalName,
+                                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                            color = SavioSlateDark
+                                                        )
+                                                        if (rule.last4.isNotBlank()) {
+                                                            Spacer(modifier = Modifier.width(6.dp))
+                                                            Surface(
+                                                                shape = RoundedCornerShape(4.dp),
+                                                                color = SavioEmeraldContainer
+                                                            ) {
+                                                                Text(
+                                                                    text = "••${rule.last4}",
+                                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                                                                    color = SavioEmerald,
+                                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                    val markers = rule.getMarkerList()
+                                                    if (markers.isNotEmpty()) {
+                                                        Spacer(modifier = Modifier.height(4.dp))
+                                                        Text(
+                                                            text = "Markers: ${markers.joinToString(", ")}",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = SavioSlateMuted,
+                                                            maxLines = 1
+                                                        )
+                                                    }
+                                                }
+
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    IconButton(
+                                                        onClick = { onEditInstrumentRule(rule) },
+                                                        modifier = Modifier.size(28.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Edit,
+                                                            contentDescription = "Edit instrument",
+                                                            tint = SavioEmerald,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    IconButton(
+                                                        onClick = { onDeleteInstrumentRule(rule.id) },
+                                                        modifier = Modifier.size(28.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Close,
+                                                            contentDescription = "Delete instrument rule",
+                                                            tint = SavioSlateMuted,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = {
+                                    onEditInstrumentRule(
+                                        InstrumentRuleEntity(
+                                            bankName = "",
+                                            cardOrAccountName = "",
+                                            last4 = "",
+                                            markers = ""
+                                        )
+                                    )
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald)
+                            ) {
+                                Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Add Instrument Rule")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 6. Blacklisted Merchants Manager Card
         item {
             Card(
                 shape = RoundedCornerShape(22.dp),

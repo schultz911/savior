@@ -58,6 +58,7 @@ class WeeklySpendDigestWorker(
             val validExpenses = recentExpenses.filter {
                 !it.isExcluded &&
                 it.type != ExpenseType.SELF &&
+                it.type != ExpenseType.CREDIT_CARD &&
                 !it.category.equals("Self", ignoreCase = true) &&
                 !it.category.equals("Credit Card Bill", ignoreCase = true) &&
                 !blacklisted.any { b ->
@@ -69,11 +70,12 @@ class WeeklySpendDigestWorker(
             var totalWeeklySpend = 0.0
             for (exp in validExpenses) {
                 if (exp.isRefundOrReversal) {
-                    totalWeeklySpend = (totalWeeklySpend - exp.amount).coerceAtLeast(0.0)
+                    totalWeeklySpend -= exp.amount
                 } else {
                     totalWeeklySpend += (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
                 }
             }
+            totalWeeklySpend = totalWeeklySpend.coerceAtLeast(0.0)
 
             val currency = app.preferences.currency
             val numberFormatter = NumberFormat.getNumberInstance(Locale.US).apply {

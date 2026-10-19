@@ -1475,9 +1475,9 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `test version name is 2_0_2`() {
-    assertEquals("2.0.2", com.example.BuildConfig.VERSION_NAME)
-    assertEquals(16, com.example.BuildConfig.VERSION_CODE)
+  fun `test version name is 2_0_5`() {
+    assertEquals("2.0.5", com.example.BuildConfig.VERSION_NAME)
+    assertEquals(17, com.example.BuildConfig.VERSION_CODE)
   }
 
   @Test
@@ -2206,6 +2206,96 @@ class ExampleRobolectricTest {
       amount = expUnidentified.amount,
       currency = expUnidentified.currency
     )
+  }
+
+  @Test
+  fun `test backup and restore with instrument rules and GZIP AES256`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val db = androidx.room.Room.inMemoryDatabaseBuilder(context, com.example.data.AppDatabase::class.java)
+      .allowMainThreadQueries()
+      .build()
+    val expenseDao = db.expenseDao()
+    val merchantRuleDao = db.merchantRuleDao()
+    val instrumentRuleDao = db.instrumentRuleDao()
+    val prefs = com.example.data.ExpensePreferences(context)
+
+    // 1. Insert test data
+    expenseDao.insertExpense(com.example.data.ExpenseEntity(id = 1L, amount = 250.0, currency = "₹", merchantOrRecipient = "Test Vendor"))
+    merchantRuleDao.insertRule(com.example.data.MerchantRuleEntity(id = 1L, merchantPattern = "SWIGGY*", assignedCategory = "Food & Dining"))
+    instrumentRuleDao.insertInstrument(com.example.data.InstrumentRuleEntity(id = 1L, bankName = "HDFC", cardOrAccountName = "Millennia", last4 = "4821", markers = "HDFC\n4821"))
+
+    val baos = java.io.ByteArrayOutputStream()
+    val exportResult = com.example.util.DatabaseBackupHelper.createEncryptedBackup(
+      outputStream = baos,
+      dao = expenseDao,
+      preferences = prefs,
+      ruleDao = merchantRuleDao,
+      instrumentRuleDao = instrumentRuleDao,
+      passphrase = "SecretVaultPassword123"
+    )
+    assertTrue("Backup export must succeed", exportResult.isSuccess)
+
+    // 2. Clear Database
+    expenseDao.clearAll()
+    merchantRuleDao.getAllRulesSync().forEach { merchantRuleDao.deleteRule(it.id) }
+    instrumentRuleDao.getAllInstrumentsSync().forEach { instrumentRuleDao.deleteInstrumentById(it.id) }
+    assertEquals(0, expenseDao.getAllExpensesSync().size)
+    assertEquals(0, merchantRuleDao.getAllRulesSync().size)
+    assertEquals(0, instrumentRuleDao.getAllInstrumentsSync().size)
+
+    // 3. Restore from backup
+    val bais = java.io.ByteArrayInputStream(baos.toByteArray())
+    val restoreResult = com.example.util.DatabaseBackupHelper.restoreEncryptedBackup(
+      inputStream = bais,
+      dao = expenseDao,
+      preferences = prefs,
+      ruleDao = merchantRuleDao,
+      instrumentRuleDao = instrumentRuleDao,
+      passphrase = "SecretVaultPassword123"
+    )
+    assertTrue("Backup restore must succeed", restoreResult.isSuccess)
+    assertEquals(1, expenseDao.getAllExpensesSync().size)
+    assertEquals(1, merchantRuleDao.getAllRulesSync().size)
+    val restoredInstruments = instrumentRuleDao.getAllInstrumentsSync()
+    assertEquals(1, restoredInstruments.size)
+    assertEquals("HDFC", restoredInstruments[0].bankName)
+    assertEquals("Millennia", restoredInstruments[0].cardOrAccountName)
+    assertEquals("4821", restoredInstruments[0].last4)
+
+    db.close()
+  }
+
+  @Test
+  fun `test instrument resolver regex hoisting and rule matching`() {
+    // 1. Test suffix extraction
+    assertEquals("4821", com.example.util.InstrumentResolver.extractSuffix("A/C ••4821"))
+    assertEquals("4821", com.example.util.InstrumentResolver.extractSuffix("Card ending in 4821"))
+    assertEquals("XXXX", com.example.util.InstrumentResolver.extractSuffix("A/C ••XXXX"))
+    assertEquals("1234", com.example.util.InstrumentResolver.extractSuffix("", "Your HDFC card ending in 1234 was used"))
+
+    // 2. Test rule matching
+    val rules = listOf(
+      com.example.data.InstrumentRuleEntity(
+        id = 1L,
+        bankName = "HDFC Bank",
+        cardOrAccountName = "Millennia",
+        last4 = "4821",
+        markers = "VM-HDFCBK\n(?i)hdfc.*card"
+      )
+    )
+
+    // Match by last4
+    val matchByLast4 = com.example.util.InstrumentResolver.findMatchingRule("••4821", "", "ANY-BANK", rules)
+    assertNotNull(matchByLast4)
+    assertEquals(1L, matchByLast4?.id)
+
+    // Match by plain marker
+    val matchByMarker = com.example.util.InstrumentResolver.findMatchingRule("Unknown", "Debited via VM-HDFCBK", "SENDER", rules)
+    assertNotNull(matchByMarker)
+
+    // Match by regex marker
+    val matchByRegex = com.example.util.InstrumentResolver.findMatchingRule("Unknown", "Paid with HDFC credit card at store", "SENDER", rules)
+    assertNotNull(matchByRegex)
   }
 }
 

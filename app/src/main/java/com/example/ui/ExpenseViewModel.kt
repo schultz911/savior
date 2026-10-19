@@ -471,9 +471,9 @@ class ExpenseViewModel(
             if (isSelf(exp) || isCreditCard(exp)) continue
 
             if (exp.isRefundOrReversal) {
-                currentSpent = (currentSpent - exp.amount).coerceAtLeast(0.0)
+                currentSpent -= exp.amount
                 if (exp.timestamp >= startOfToday) {
-                    todaySpent = (todaySpent - exp.amount).coerceAtLeast(0.0)
+                    todaySpent -= exp.amount
                 }
             } else {
                 val net = (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
@@ -483,6 +483,9 @@ class ExpenseViewModel(
                 }
             }
         }
+
+        currentSpent = currentSpent.coerceAtLeast(0.0)
+        todaySpent = todaySpent.coerceAtLeast(0.0)
 
         val upcomingRecurring = recurring.filter { !it.isPaidThisMonth }.sumOf { it.expectedAmount }
         val remainingDiscretionary = (budget - currentSpent - upcomingRecurring).coerceAtLeast(0.0)

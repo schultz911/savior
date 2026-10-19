@@ -10,6 +10,19 @@ import java.util.regex.Pattern
 object InstrumentResolver {
 
     private val PREFIX_STRIP_REGEX = Regex("""(?i)^(?:a/c|acct|account|card|credit\s+card|upi)[\s:/\-•*]*""")
+    private val DIGITS_SUFFIX_REGEX = Regex("""\b\d{3,6}\b|(?<=[^0-9]|^)\d{3,6}$""")
+    private val ALPHANUM_SUFFIX_REGEX = Regex("""[0-9A-Za-z]{3,6}$""")
+    private val RAW_BODY_ENDING_IN_REGEX = Regex("""(?i)(?:ending\s+in\s+)([0-9A-Za-z]{4})""")
+    private val RAW_BODY_MASKED_REGEX = Regex("""(?i)(?:xx|[*]{2,}|••)([0-9A-Za-z]{3,6})""")
+    private val RAW_BODY_CARD_AC_REGEX = Regex("""(?i)(?:card|a/c|account|acct)(?:\s*(?:no\.?|ending\s+in|ending|xx|\*+|••|-))*\s*([0-9A-Za-z]{3,6})""")
+    private val RAW_BODY_PATTERNS = listOf(
+        RAW_BODY_ENDING_IN_REGEX,
+        RAW_BODY_MASKED_REGEX,
+        RAW_BODY_CARD_AC_REGEX
+    )
+
+    private val REGEX_METACHARACTERS = charArrayOf('\\', '[', ']', '(', ')', '{', '}', '.', '*', '+', '?', '^', '$', '|')
+    private val MARKER_REGEX_CACHE = java.util.concurrent.ConcurrentHashMap<String, Regex?>()
 
     /**
      * Finds a matching user-defined instrument rule by evaluating regex markers and last 4 digits.
@@ -27,17 +40,33 @@ object InstrumentResolver {
             // 1. Evaluate user regex markers against rawBody, accountInfo, and sender
             val markers = rule.getMarkerList()
             for (marker in markers) {
-                try {
-                    val regex = Regex(marker, RegexOption.IGNORE_CASE)
-                    if (regex.containsMatchIn(rawBody) || regex.containsMatchIn(accountInfo) || regex.containsMatchIn(sender)) {
-                        return rule
-                    }
-                } catch (_: Exception) {
+                val hasMetacharacters = marker.any { it in REGEX_METACHARACTERS }
+                if (!hasMetacharacters) {
                     if (rawBody.contains(marker, ignoreCase = true) ||
                         accountInfo.contains(marker, ignoreCase = true) ||
                         sender.contains(marker, ignoreCase = true)
                     ) {
                         return rule
+                    }
+                } else {
+                    val regex = MARKER_REGEX_CACHE.computeIfAbsent(marker) { p ->
+                        try {
+                            Regex(p, RegexOption.IGNORE_CASE)
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }
+                    if (regex != null) {
+                        if (regex.containsMatchIn(rawBody) || regex.containsMatchIn(accountInfo) || regex.containsMatchIn(sender)) {
+                            return rule
+                        }
+                    } else {
+                        if (rawBody.contains(marker, ignoreCase = true) ||
+                            accountInfo.contains(marker, ignoreCase = true) ||
+                            sender.contains(marker, ignoreCase = true)
+                        ) {
+                            return rule
+                        }
                     }
                 }
             }
@@ -84,13 +113,13 @@ object InstrumentResolver {
             val target = if (stripped.isNotBlank()) stripped else trimmed
 
             // 1. If target contains 3 to 6 digits (e.g. "XX1234", "••4821", "4821"), extract those digits
-            val digitsMatch = Regex("""\b\d{3,6}\b|(?<=[^0-9]|^)\d{3,6}$""").find(target)
+            val digitsMatch = DIGITS_SUFFIX_REGEX.find(target)
             if (digitsMatch != null) {
                 return digitsMatch.value
             }
 
             // 2. If target is a masked alphanumeric suffix (e.g. "XXXX", "XX48"), extract it
-            val alphaNumMatch = Regex("""[0-9A-Za-z]{3,6}$""").find(target)
+            val alphaNumMatch = ALPHANUM_SUFFIX_REGEX.find(target)
             if (alphaNumMatch != null) {
                 val candidate = alphaNumMatch.value
                 if (!candidate.equals("cash", ignoreCase = true) && !candidate.equals("null", ignoreCase = true)) {
@@ -101,16 +130,11 @@ object InstrumentResolver {
 
         // Try extracting from raw SMS text if accountInfo lacks suffix
         if (rawBody.isNotBlank()) {
-            val patterns = listOf(
-                Regex("""(?i)(?:card|a/c|account|acct)(?:\s*(?:no\.?|ending|xx|\*+|••|-))*\s*([0-9A-Za-z]{3,6})"""),
-                Regex("""(?i)(?:ending\s+in\s+)([0-9A-Za-z]{4})"""),
-                Regex("""(?i)(?:xx|[*]{2,}|••)([0-9A-Za-z]{3,6})""")
-            )
-            for (p in patterns) {
+            for (p in RAW_BODY_PATTERNS) {
                 val m = p.find(rawBody)
                 if (m != null) {
                     val candidate = m.groupValues[1]
-                    if (candidate.isNotBlank() && !candidate.equals("cash", ignoreCase = true)) {
+                    if (candidate.isNotBlank() && !candidate.equals("cash", ignoreCase = true) && !candidate.equals("ending", ignoreCase = true) && !candidate.equals("null", ignoreCase = true)) {
                         return candidate.uppercase(Locale.US)
                     }
                 }

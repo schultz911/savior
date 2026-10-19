@@ -5,6 +5,8 @@ import com.example.data.ExpenseDao
 import com.example.data.ExpenseEntity
 import com.example.data.ExpensePreferences
 import com.example.data.ExpenseType
+import com.example.data.InstrumentRuleDao
+import com.example.data.InstrumentRuleEntity
 import com.example.data.MerchantRuleDao
 import com.example.data.MerchantRuleEntity
 import kotlinx.coroutines.Dispatchers
@@ -53,11 +55,13 @@ object DatabaseBackupHelper {
         preferences: ExpensePreferences,
         passphrase: String,
         outputStream: OutputStream,
-        ruleDao: MerchantRuleDao? = null
+        ruleDao: MerchantRuleDao? = null,
+        instrumentRuleDao: InstrumentRuleDao? = null
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
             val allExpenses = dao.getAllExpensesSync()
             val allRules = ruleDao?.getAllRulesSync() ?: emptyList()
+            val allInstrumentRules = instrumentRuleDao?.getAllInstrumentsSync() ?: emptyList()
             val allCategoryLimits = preferences.getAllCategoryLimits()
 
             val rootJson = JSONObject().apply {
@@ -89,6 +93,19 @@ object DatabaseBackupHelper {
                     rulesArray.put(rObj)
                 }
                 put("merchantRules", rulesArray)
+
+                // User-defined Instrument Rules & Regex Markers
+                val instrumentRulesArray = JSONArray()
+                allInstrumentRules.forEach { ir ->
+                    val irObj = JSONObject().apply {
+                        put("bankName", ir.bankName)
+                        put("cardOrAccountName", ir.cardOrAccountName)
+                        put("last4", ir.last4)
+                        put("markers", ir.markers)
+                    }
+                    instrumentRulesArray.put(irObj)
+                }
+                put("instrumentRules", instrumentRulesArray)
 
                 // Expenses with refund & reversal state
                 val expensesArray = JSONArray()
@@ -161,7 +178,8 @@ object DatabaseBackupHelper {
         dao: ExpenseDao,
         preferences: ExpensePreferences,
         ruleDao: MerchantRuleDao? = null,
-        allowLegacyWithoutHeader: Boolean = true
+        allowLegacyWithoutHeader: Boolean = true,
+        instrumentRuleDao: InstrumentRuleDao? = null
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
             val allBytes = inputStream.use { it.readBytes() }
@@ -272,6 +290,26 @@ object DatabaseBackupHelper {
                 }
             }
 
+            // Restore Instrument Rules if present
+            if (rootJson.has("instrumentRules") && instrumentRuleDao != null) {
+                val instArr = rootJson.getJSONArray("instrumentRules")
+                val instToInsert = mutableListOf<InstrumentRuleEntity>()
+                for (i in 0 until instArr.length()) {
+                    val iObj = instArr.getJSONObject(i)
+                    instToInsert.add(
+                        InstrumentRuleEntity(
+                            bankName = iObj.optString("bankName", ""),
+                            cardOrAccountName = iObj.optString("cardOrAccountName", ""),
+                            last4 = iObj.optString("last4", ""),
+                            markers = iObj.optString("markers", "")
+                        )
+                    )
+                }
+                if (instToInsert.isNotEmpty()) {
+                    instrumentRuleDao.insertInstruments(instToInsert)
+                }
+            }
+
             val expensesArray = rootJson.getJSONArray("expenses")
             val entitiesToInsert = mutableListOf<ExpenseEntity>()
 
@@ -350,7 +388,8 @@ object DatabaseBackupHelper {
         preferences: ExpensePreferences,
         ruleDao: MerchantRuleDao?,
         passphrase: String = DEFAULT_SNAPSHOT_PASSPHRASE,
-        maxSnapshots: Int = 3
+        maxSnapshots: Int = 3,
+        instrumentRuleDao: InstrumentRuleDao? = null
     ): Result<File> = withContext(Dispatchers.IO) {
         try {
             val dir = getSnapshotsDirectory(context)
@@ -358,7 +397,7 @@ object DatabaseBackupHelper {
             val snapshotFile = File(dir, "savior_snapshot_$timestampStr.savior")
 
             FileOutputStream(snapshotFile).use { out ->
-                val result = createEncryptedBackup(dao, preferences, passphrase, out, ruleDao)
+                val result = createEncryptedBackup(dao, preferences, passphrase, out, ruleDao, instrumentRuleDao)
                 if (result.isFailure) {
                     snapshotFile.delete()
                     return@withContext Result.failure(result.exceptionOrNull() ?: Exception("Snapshot creation failed"))
@@ -391,12 +430,13 @@ object DatabaseBackupHelper {
         dao: ExpenseDao,
         preferences: ExpensePreferences,
         ruleDao: MerchantRuleDao?,
-        passphrase: String = DEFAULT_SNAPSHOT_PASSPHRASE
+        passphrase: String = DEFAULT_SNAPSHOT_PASSPHRASE,
+        instrumentRuleDao: InstrumentRuleDao? = null
     ): Result<Int> = withContext(Dispatchers.IO) {
         val snapshots = listLocalSnapshots(context)
         val latest = snapshots.firstOrNull() ?: return@withContext Result.failure(IllegalStateException("No local snapshot available to restore."))
         FileInputStream(latest).use { input ->
-            restoreEncryptedBackup(input, passphrase, dao, preferences, ruleDao)
+            restoreEncryptedBackup(input, passphrase, dao, preferences, ruleDao, instrumentRuleDao = instrumentRuleDao)
         }
     }
 }

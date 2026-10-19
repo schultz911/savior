@@ -135,8 +135,8 @@ class LiveExpenditureNotificationService : Service() {
                     } else if (isCreditCard) {
                         creditCardsSum += netAmount
                     } else if (exp.isRefundOrReversal) {
-                        spendsSum = (spendsSum - exp.amount).coerceAtLeast(0.0)
-                        totalSpend = (totalSpend - exp.amount).coerceAtLeast(0.0)
+                        spendsSum -= exp.amount
+                        totalSpend -= exp.amount
                     } else if (exp.type == ExpenseType.P2P) {
                         transfersSum += netAmount
                         totalSpend += netAmount
@@ -145,6 +145,9 @@ class LiveExpenditureNotificationService : Service() {
                         totalSpend += netAmount
                     }
                 }
+
+                spendsSum = spendsSum.coerceAtLeast(0.0)
+                totalSpend = totalSpend.coerceAtLeast(0.0)
 
                 val totalFormatted = formatCurrency(totalSpend, currency)
                 val title = "$monthName:  $totalFormatted"

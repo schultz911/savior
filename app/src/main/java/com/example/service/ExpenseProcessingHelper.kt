@@ -6,6 +6,7 @@ import com.example.SpendTrackerApplication
 import com.example.ai.AiCoreCategorizer
 import com.example.ai.OpenRouterCategorizer
 import com.example.data.ExpenseEntity
+import com.example.data.InstrumentRuleEntity
 import com.example.data.MerchantRuleEntity
 import com.example.sms.ParsedSms
 import com.example.sms.SmsParser
@@ -28,7 +29,8 @@ object ExpenseProcessingHelper {
         timestamp: Long = System.currentTimeMillis(),
         smsId: Long = 0L,
         isBatchSync: Boolean = false,
-        preloadedRules: List<MerchantRuleEntity>? = null
+        preloadedRules: List<MerchantRuleEntity>? = null,
+        preloadedInstrumentRules: List<InstrumentRuleEntity>? = null
     ): ExpenseEntity? = withContext(Dispatchers.IO) {
         val app = context.applicationContext as? SpendTrackerApplication ?: return@withContext null
         val prefs = app.preferences
@@ -99,7 +101,7 @@ object ExpenseProcessingHelper {
                     isExpense = true,
                     rawText = rawText
                 )
-                return@withContext processAndInsertExpense(context, parsed, sender, effectiveTimestamp, smsId, isBatchSync, preloadedRules)
+                return@withContext processAndInsertExpense(context, parsed, sender, effectiveTimestamp, smsId, isBatchSync, preloadedRules, preloadedInstrumentRules)
             }
         }
 
@@ -150,7 +152,7 @@ object ExpenseProcessingHelper {
                     isExpense = true,
                     rawText = rawText
                 )
-                return@withContext processAndInsertExpense(context, parsed, sender, effectiveTimestamp, smsId, isBatchSync, preloadedRules)
+                return@withContext processAndInsertExpense(context, parsed, sender, effectiveTimestamp, smsId, isBatchSync, preloadedRules, preloadedInstrumentRules)
             }
         }
 
@@ -160,7 +162,7 @@ object ExpenseProcessingHelper {
                 return@withContext handleRefund(context, localParsed, sender, effectiveTimestamp, smsId, isBatchSync)
             }
             if (localParsed.isExpense) {
-                return@withContext processAndInsertExpense(context, localParsed, sender, effectiveTimestamp, smsId, isBatchSync, preloadedRules)
+                return@withContext processAndInsertExpense(context, localParsed, sender, effectiveTimestamp, smsId, isBatchSync, preloadedRules, preloadedInstrumentRules)
             }
         }
         return@withContext null
@@ -300,7 +302,8 @@ object ExpenseProcessingHelper {
         timestamp: Long = System.currentTimeMillis(),
         smsId: Long = 0L,
         isBatchSync: Boolean = false,
-        preloadedRules: List<MerchantRuleEntity>? = null
+        preloadedRules: List<MerchantRuleEntity>? = null,
+        preloadedInstrumentRules: List<InstrumentRuleEntity>? = null
     ): ExpenseEntity? = withContext(Dispatchers.IO) {
         val app = context.applicationContext as? SpendTrackerApplication ?: return@withContext null
         val dao = app.database.expenseDao()
@@ -479,7 +482,7 @@ object ExpenseProcessingHelper {
         }
 
         val appInstance = context.applicationContext as? SpendTrackerApplication
-        val instrumentRules = appInstance?.repository?.getAllInstrumentRulesSync() ?: emptyList()
+        val instrumentRules = preloadedInstrumentRules ?: appInstance?.repository?.getAllInstrumentRulesSync() ?: emptyList()
         val matchedInstrumentRule = com.example.util.InstrumentResolver.findMatchingRule(
             accountInfo = parsed.accountInfo,
             rawBody = parsed.rawText,

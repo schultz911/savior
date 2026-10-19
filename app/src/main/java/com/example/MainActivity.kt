@@ -319,7 +319,8 @@ fun SpendTrackerScreen(
                             preferences = app.preferences,
                             passphrase = pendingBackupPassphrase,
                             outputStream = outputStream,
-                            ruleDao = app.database.merchantRuleDao()
+                            ruleDao = app.database.merchantRuleDao(),
+                            instrumentRuleDao = app.database.instrumentRuleDao()
                         )
                         if (res.isSuccess) {
                             snackbarHostState.showSnackbar("Vault backup saved! (${res.getOrNull()} transactions encrypted)")
@@ -353,7 +354,8 @@ fun SpendTrackerScreen(
                             passphrase = pendingRestorePassphrase,
                             dao = app.database.expenseDao(),
                             preferences = app.preferences,
-                            ruleDao = app.database.merchantRuleDao()
+                            ruleDao = app.database.merchantRuleDao(),
+                            instrumentRuleDao = app.database.instrumentRuleDao()
                         )
                         if (res.isSuccess) {
                             snackbarHostState.showSnackbar("Successfully restored ${res.getOrNull()} expenditures!")
@@ -739,6 +741,7 @@ fun SpendTrackerScreen(
                 val isAnomalyAlertsEnabled by viewModel.isAnomalyAlertsEnabled.collectAsStateWithLifecycle()
                 val isWeeklyDigestEnabled by viewModel.isWeeklyDigestEnabled.collectAsStateWithLifecycle()
                 val trailingMedianSpend by viewModel.trailingMedianSpend.collectAsStateWithLifecycle()
+                val instrumentRules by viewModel.allInstrumentRules.collectAsStateWithLifecycle()
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -777,6 +780,9 @@ fun SpendTrackerScreen(
                         merchantRules = merchantRules,
                         onAddMerchantRule = { pattern, cat, alias -> viewModel.addMerchantRule(pattern, cat, alias) },
                         onDeleteMerchantRule = { id -> viewModel.deleteMerchantRule(id) },
+                        instrumentRules = instrumentRules,
+                        onEditInstrumentRule = { rule -> editingInstrumentRule = rule },
+                        onDeleteInstrumentRule = { id -> viewModel.deleteInstrumentRule(id) },
                         isVelocityAlertsEnabled = isVelocityAlertsEnabled,
                         onToggleVelocityAlerts = { viewModel.toggleVelocityAlerts(it) },
                         isAnomalyAlertsEnabled = isAnomalyAlertsEnabled,
@@ -817,7 +823,8 @@ fun SpendTrackerScreen(
                                     context = context,
                                     dao = app.database.expenseDao(),
                                     preferences = app.preferences,
-                                    ruleDao = app.database.merchantRuleDao()
+                                    ruleDao = app.database.merchantRuleDao(),
+                                    instrumentRuleDao = app.database.instrumentRuleDao()
                                 )
                                 if (res.isSuccess) {
                                     snackbarHostState.showSnackbar("Local vault snapshot created! (${res.getOrNull()?.name})")
@@ -833,7 +840,8 @@ fun SpendTrackerScreen(
                                     context = context,
                                     dao = app.database.expenseDao(),
                                     preferences = app.preferences,
-                                    ruleDao = app.database.merchantRuleDao()
+                                    ruleDao = app.database.merchantRuleDao(),
+                                    instrumentRuleDao = app.database.instrumentRuleDao()
                                 )
                                 if (res.isSuccess) {
                                     snackbarHostState.showSnackbar("Successfully restored ${res.getOrNull()} expenditures from latest snapshot!")
