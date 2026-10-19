@@ -594,11 +594,12 @@ object ExpenseProcessingHelper {
             ) continue
 
             if (exp.isRefundOrReversal) {
-                currentSpent = (currentSpent - exp.amount).coerceAtLeast(0.0)
+                currentSpent -= exp.amount
             } else {
                 currentSpent += (exp.amount - exp.refundedAmount).coerceAtLeast(0.0)
             }
         }
+        currentSpent = currentSpent.coerceAtLeast(0.0)
 
         SpendAlertManager.checkAndNotifySpendVelocity(
             context = context,

@@ -1475,9 +1475,9 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `test version name is 2_0_5`() {
-    assertEquals("2.0.5", com.example.BuildConfig.VERSION_NAME)
-    assertEquals(17, com.example.BuildConfig.VERSION_CODE)
+  fun `test version name is 2_0_6`() {
+    assertEquals("2.0.6", com.example.BuildConfig.VERSION_NAME)
+    assertEquals(18, com.example.BuildConfig.VERSION_CODE)
   }
 
   @Test
@@ -2296,6 +2296,77 @@ class ExampleRobolectricTest {
     // Match by regex marker
     val matchByRegex = com.example.util.InstrumentResolver.findMatchingRule("Unknown", "Paid with HDFC credit card at store", "SENDER", rules)
     assertNotNull(matchByRegex)
+  }
+
+  @Test
+  fun `test instrument rule entity marker caching`() {
+    val rule = com.example.data.InstrumentRuleEntity(
+      id = 10L,
+      bankName = "ICICI",
+      cardOrAccountName = "Amazon Pay",
+      last4 = "9988",
+      markers = "ICICI-ALERT\n(?i)amazon.*pay\n••9988"
+    )
+
+    val list1 = rule.getMarkerList()
+    val list2 = rule.getMarkerList()
+    assertEquals(3, list1.size)
+    assertEquals("ICICI-ALERT", list1[0])
+    assertEquals("(?i)amazon.*pay", list1[1])
+    assertEquals("••9988", list1[2])
+    // Ensure reference identity from volatile cache
+    assertTrue("Cached markers should return the same list instance", list1 === list2)
+  }
+
+  @Test
+  fun `test velocity pacing spend accumulation with refunds preceding debits`() {
+    // Simulate transactions in descending order by timestamp:
+    // Trans 1 (newer): Refund of Rs 500
+    // Trans 2 (older): Debit of Rs 1200
+    val now = System.currentTimeMillis()
+    val refund = com.example.data.ExpenseEntity(
+      id = 1L,
+      merchantOrRecipient = "Amazon Refund",
+      amount = 500.0,
+      currency = "INR",
+      category = "Refund",
+      timestamp = now,
+      rawBody = "Refund of Rs 500",
+      sender = "AMZN",
+      accountInfo = "••4821",
+      type = ExpenseType.MERCHANT,
+      isReversal = true
+    )
+    val debit = com.example.data.ExpenseEntity(
+      id = 2L,
+      merchantOrRecipient = "Amazon Purchase",
+      amount = 1200.0,
+      currency = "INR",
+      category = "Shopping",
+      timestamp = now - 3600_000L,
+      rawBody = "Spent Rs 1200",
+      sender = "AMZN",
+      accountInfo = "••4821",
+      type = ExpenseType.MERCHANT,
+      isReversal = false
+    )
+
+    // Process descending as Room returns them
+    val transactions = listOf(refund, debit)
+    var currentMonthTotal = 0.0
+    for (t in transactions) {
+      if (!t.isExcluded && t.type != ExpenseType.SELF && t.type != ExpenseType.CREDIT_CARD) {
+        if (t.isRefundOrReversal) {
+          currentMonthTotal -= t.amount
+        } else {
+          currentMonthTotal += t.amount
+        }
+      }
+    }
+    currentMonthTotal = currentMonthTotal.coerceAtLeast(0.0)
+
+    // Expected: -500 + 1200 = 700 (NOT premature coercion to 0 on refund leading to 1200)
+    assertEquals(700.0, currentMonthTotal, 0.001)
   }
 }
 

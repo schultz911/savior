@@ -276,8 +276,12 @@ fun CalendarAnalyticsTab(
         ((selectedTotalSpend - prevTotalSpend) / prevTotalSpend) * 100.0
     } else null
 
-    val displayedExpenses = remember(selectedMonthExpenses, analyticsFilter, selectedAccount, instrumentRules) {
-        val crossLinkMap = com.example.util.InstrumentResolver.buildCrossLinkMap(selectedMonthExpenses)
+    val crossLinkMap = remember(allExpenses, selectedMonthExpenses) {
+        val sourceList = if (allExpenses.isNotEmpty()) allExpenses else selectedMonthExpenses
+        com.example.util.InstrumentResolver.buildCrossLinkMap(sourceList)
+    }
+
+    val displayedExpenses = remember(selectedMonthExpenses, analyticsFilter, selectedAccount, instrumentRules, crossLinkMap) {
         selectedMonthExpenses.filter { item ->
             val matchesFilter = when (analyticsFilter) {
                 ExpenseFilter.ALL -> true

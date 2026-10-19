@@ -71,9 +71,11 @@ object ExcelExportHelper {
                     w.write("""   </Row>"""); w.newLine()
 
                     // Rows — streamed one at a time, never buffered in memory
+                    val reusableDate = Date()
                     for (item in expenses) {
-                        val dateStr = sdfDate.format(Date(item.timestamp))
-                        val timeStr = sdfTime.format(Date(item.timestamp))
+                        reusableDate.time = item.timestamp
+                        val dateStr = sdfDate.format(reusableDate)
+                        val timeStr = sdfTime.format(reusableDate)
                         val cleanMerchant = escapeXml(item.merchantOrRecipient)
                         val cleanCategory = escapeXml(item.category)
                         val cleanAccount = escapeXml(item.accountInfo)

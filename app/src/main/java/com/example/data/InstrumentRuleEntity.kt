@@ -18,11 +18,19 @@ data class InstrumentRuleEntity(
     val markers: String = "", // Stored newline-separated to support complex regex patterns
     val createdAt: Long = System.currentTimeMillis()
 ) {
+    @androidx.room.Ignore
+    @Volatile
+    private var cachedMarkers: List<String>? = null
+
     fun getMarkerList(): List<String> {
         if (markers.isBlank()) return emptyList()
-        return markers.split("\n")
+        val cached = cachedMarkers
+        if (cached != null) return cached
+        val parsed = markers.split("\n")
             .map { it.trim() }
             .filter { it.isNotBlank() }
+        cachedMarkers = parsed
+        return parsed
     }
 
     val canonicalName: String

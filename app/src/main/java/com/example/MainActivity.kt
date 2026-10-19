@@ -272,7 +272,6 @@ fun SpendTrackerScreen(
     val monthlySavings by viewModel.monthlySavings.collectAsStateWithLifecycle()
     val monthlySalary by viewModel.monthlySalary.collectAsStateWithLifecycle()
     val savingsGoal by viewModel.savingsGoal.collectAsStateWithLifecycle()
-    val allExpenses by viewModel.allExpenses.collectAsStateWithLifecycle()
 
     val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
@@ -426,9 +425,9 @@ fun SpendTrackerScreen(
     }
 
     // Check if initialIdentifyInstrumentExpenseId is provided from notification
-    LaunchedEffect(initialIdentifyInstrumentExpenseId, allExpenses) {
+    LaunchedEffect(initialIdentifyInstrumentExpenseId) {
         if (initialIdentifyInstrumentExpenseId != null && initialIdentifyInstrumentExpenseId > 0) {
-            val exp = allExpenses.find { it.id == initialIdentifyInstrumentExpenseId }
+            val exp = viewModel.allExpenses.value.find { it.id == initialIdentifyInstrumentExpenseId }
             if (exp != null) {
                 val suffix = com.example.util.InstrumentResolver.extractSuffix(exp.accountInfo, exp.rawBody) ?: ""
                 val bank = com.example.util.InstrumentResolver.detectBankOrIssuer(exp.sender, exp.rawBody) ?: ""
@@ -731,6 +730,7 @@ fun SpendTrackerScreen(
         // Main view content switched by tab - cleanly below top app bar without overlap!
         when (currentTab) {
             SavioScreenTab.SETTINGS -> {
+                val allExpenses by viewModel.allExpenses.collectAsStateWithLifecycle()
                 val merchantRules by viewModel.merchantRules.collectAsStateWithLifecycle()
                 val openRouterApiKey by viewModel.openRouterApiKey.collectAsStateWithLifecycle()
                 val aiEngineTier by viewModel.aiEngineTier.collectAsStateWithLifecycle()
@@ -855,6 +855,7 @@ fun SpendTrackerScreen(
             }
 
             SavioScreenTab.ANALYTICS -> {
+                val allExpenses by viewModel.allExpenses.collectAsStateWithLifecycle()
                 val last12MonthsAnalytics by viewModel.last12MonthsAnalytics.collectAsStateWithLifecycle()
                 val dailyBurnDownData by viewModel.dailyBurnDownData.collectAsStateWithLifecycle()
                 val instrumentSummaries by viewModel.instrumentSummaries.collectAsStateWithLifecycle()
@@ -1219,8 +1220,9 @@ fun SpendTrackerScreen(
 
     // Native Merchant Intelligence & Drilldown Sheet
     selectedMerchantForSheet?.let { merchant ->
-        val merchantExpenses = remember(merchant, allExpenses) {
-            allExpenses.filter { it.merchantOrRecipient.equals(merchant, ignoreCase = true) }
+        val allExpensesForSheet by viewModel.allExpenses.collectAsStateWithLifecycle()
+        val merchantExpenses = remember(merchant, allExpensesForSheet) {
+            allExpensesForSheet.filter { it.merchantOrRecipient.equals(merchant, ignoreCase = true) }
         }
         MerchantDetailSheet(
             merchantName = merchant,

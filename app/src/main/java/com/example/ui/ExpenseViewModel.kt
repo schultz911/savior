@@ -779,7 +779,7 @@ class ExpenseViewModel(
             val year = loopCal.get(Calendar.YEAR)
             val monthNum = loopCal.get(Calendar.MONTH) + 1
 
-            val totalSpent = spendByMonth[monthKey] ?: 0.0
+            val totalSpent = (spendByMonth[monthKey] ?: 0.0).coerceAtLeast(0.0)
             val savedAmount = salary - totalSpent
             val isOverspent = totalSpent > salary
             val rate = if (salary > 0) (savedAmount / salary) * 100.0 else 0.0
