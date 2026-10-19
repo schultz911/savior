@@ -29,7 +29,13 @@ class SpendTrackerApplication : Application() {
 
         database = AppDatabase.getDatabase(this)
         preferences = ExpensePreferences(this)
-        repository = ExpenseRepository(this, database.expenseDao(), preferences, database.merchantRuleDao())
+        repository = ExpenseRepository(
+            this,
+            database.expenseDao(),
+            preferences,
+            database.merchantRuleDao(),
+            database.instrumentRuleDao()
+        )
 
         // Initialize Notification Channels
         LiveExpenditureNotificationService.createNotificationChannel(this)

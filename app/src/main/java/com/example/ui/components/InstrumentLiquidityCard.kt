@@ -58,15 +58,24 @@ import com.example.ui.theme.SavioTransferIndigoBg
 import java.text.NumberFormat
 import java.util.Locale
 
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+
 @Composable
 fun InstrumentLiquidityCard(
     instruments: List<InstrumentSpendSummary>,
     selectedAccount: String?,
     onSelectAccount: (String?) -> Unit,
     currency: String,
+    onEditInstrument: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     if (instruments.isEmpty()) return
+
+    val haptic = LocalHapticFeedback.current
 
     val numberFormatter = remember {
         NumberFormat.getNumberInstance(Locale.US).apply {
@@ -108,36 +117,67 @@ fun InstrumentLiquidityCard(
                             color = SavioSlateDark
                         )
                         Text(
-                            text = "Tap to filter transactions by instrument",
+                            text = "Tap to filter • Hold to edit rules",
                             style = MaterialTheme.typography.bodySmall,
                             color = SavioSlateMuted
                         )
                     }
                 }
 
-                if (selectedAccount != null) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = SavioEmeraldContainer,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder),
-                        modifier = Modifier.clickable { onSelectAccount(null) }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (onEditInstrument != null) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = SavioEmeraldContainer.copy(alpha = 0.5f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder),
+                            modifier = Modifier
+                                .clickable { onEditInstrument("") }
+                                .testTag("add_instrument_rule_button")
                         ) {
-                            Text(
-                                text = "Clear",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = SavioEmerald
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Clear filter",
-                                tint = SavioEmerald,
-                                modifier = Modifier.size(12.dp)
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Add Rule",
+                                    tint = SavioEmerald,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "Add",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = SavioEmerald
+                                )
+                            }
+                        }
+                    }
+
+                    if (selectedAccount != null) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = SavioEmeraldContainer,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, SavioEmeraldBorder),
+                            modifier = Modifier.clickable { onSelectAccount(null) }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Clear",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = SavioEmerald
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Clear filter",
+                                    tint = SavioEmerald,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -171,7 +211,15 @@ fun InstrumentLiquidityCard(
                         modifier = Modifier
                             .width(160.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .clickable { onSelectAccount(item.accountInfo) }
+                            .pointerInput(item.accountInfo) {
+                                detectTapGestures(
+                                    onTap = { onSelectAccount(item.accountInfo) },
+                                    onLongPress = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onEditInstrument?.invoke(item.accountInfo)
+                                    }
+                                )
+                            }
                             .testTag("instrument_chip_${item.accountInfo}")
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {

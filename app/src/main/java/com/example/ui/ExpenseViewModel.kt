@@ -34,6 +34,7 @@ import com.example.ai.AiCoreCategorizer
 import com.example.engine.PredictedRecurringBill
 import com.example.engine.RecurringDetectionEngine
 import com.example.data.MerchantRuleEntity
+import com.example.data.InstrumentRuleEntity
 import com.example.ui.models.DailyBurnDownData
 import com.example.ui.models.DaySpendPoint
 import com.example.ui.models.InstrumentSpendSummary
@@ -681,12 +682,22 @@ class ExpenseViewModel(
         initialValue = DailyBurnDownData()
     )
 
+    // User-Defined Instrument Rules Flow
+    val allInstrumentRules: StateFlow<List<InstrumentRuleEntity>> = repository.allInstrumentRules
+        .flowOn(Dispatchers.Default)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     // Feature 5: Multi-Account & Instrument Liquidity Intelligence
     val instrumentSummaries: StateFlow<List<InstrumentSpendSummary>> = combine(
         currentMonthExpenses,
         repository.allExpenses,
+        repository.allInstrumentRules,
         _blacklistedMerchants
-    ) { currentExpenses, allExpenses, blacklisted ->
+    ) { currentExpenses, allExpenses, rules, blacklisted ->
         val valid = currentExpenses.filter {
             !it.isExcluded && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) && !isSelf(it)
         }
@@ -694,7 +705,7 @@ class ExpenseViewModel(
         val crossLinkMap = com.example.util.InstrumentResolver.buildCrossLinkMap(allExpenses)
 
         val grouped = valid.groupBy { expense ->
-            com.example.util.InstrumentResolver.resolveInstrument(expense, crossLinkMap)
+            com.example.util.InstrumentResolver.resolveInstrument(expense, crossLinkMap, rules)
         }
 
         grouped.map { (account, list) ->
@@ -1288,6 +1299,23 @@ class ExpenseViewModel(
             if (_selectedMonthKey.value == monthKey) {
                 _selectedMonthKey.value = currentDefaultMonth
             }
+            LiveExpenditureNotificationService.updateLiveExpenditure(getApplication())
+        }
+    }
+
+    fun saveInstrumentRule(rule: InstrumentRuleEntity, onComplete: ((InstrumentRuleEntity) -> Unit)? = null) {
+        viewModelScope.launch {
+            val saved = repository.saveAndClubInstrumentRule(rule)
+            _syncFeedback.value = "Instrument '${saved.canonicalName}' saved"
+            onComplete?.invoke(saved)
+            LiveExpenditureNotificationService.updateLiveExpenditure(getApplication())
+        }
+    }
+
+    fun deleteInstrumentRule(id: Long) {
+        viewModelScope.launch {
+            repository.deleteInstrumentRule(id)
+            _syncFeedback.value = "Instrument rule deleted"
             LiveExpenditureNotificationService.updateLiveExpenditure(getApplication())
         }
     }

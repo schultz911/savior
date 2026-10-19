@@ -364,6 +364,57 @@ object SpendAlertManager {
     }
 
     /**
+     * Unidentified instrument alert prompting user to identify transaction source.
+     */
+    fun notifyUnidentifiedInstrument(
+        context: Context,
+        expenseId: Long,
+        merchant: String,
+        amount: Double,
+        currency: String
+    ) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val alertPrefs = context.getSharedPreferences("savio_instrument_alerts_state", Context.MODE_PRIVATE)
+        val alertKey = "unidentified_$expenseId"
+        if (alertPrefs.getBoolean(alertKey, false)) return
+
+        val notifId = (alertKey.hashCode() and 0x7FFFFFFF)
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_IDENTIFY_INSTRUMENT_EXPENSE_ID, expenseId)
+            putExtra(MainActivity.EXTRA_NAVIGATE_TAB, MainActivity.TAB_ANALYTICS)
+            putExtra("extra_open_tab", 1)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            notifId,
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val amtFmt = formatCurrency(amount, currency)
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS)
+            .setSmallIcon(R.drawable.ic_stat_rupee)
+            .setLargeIcon(getNotificationLargeIcon(context))
+            .setColor(0xFF059669.toInt())
+            .setContentTitle("💳 Unidentified Instrument Detected")
+            .setContentText("Spend of $amtFmt at $merchant from an unrecognized source. Tap to identify.")
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText("We detected a spend of $amtFmt at '$merchant' from an unrecognized account or card. Tap to identify this instrument and configure automatic categorization rules.")
+            )
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        manager.notify(notifId, notification)
+        alertPrefs.edit().putBoolean(alertKey, true).apply()
+    }
+
+    /**
      * Proactive velocity pacing alert when spend burn rate is >30% ahead of expected day-of-month budget pacing.
      */
     fun checkAndNotifySpendVelocity(

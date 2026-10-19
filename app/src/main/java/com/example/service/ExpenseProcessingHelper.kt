@@ -478,6 +478,16 @@ object ExpenseProcessingHelper {
             else -> "Unknown"
         }
 
+        val appInstance = context.applicationContext as? SpendTrackerApplication
+        val instrumentRules = appInstance?.repository?.getAllInstrumentRulesSync() ?: emptyList()
+        val matchedInstrumentRule = com.example.util.InstrumentResolver.findMatchingRule(
+            accountInfo = parsed.accountInfo,
+            rawBody = parsed.rawText,
+            sender = sender,
+            rules = instrumentRules
+        )
+        val finalAccountInfo = matchedInstrumentRule?.canonicalName ?: parsed.accountInfo
+
         val entity = ExpenseEntity(
             smsId = smsId,
             amount = parsed.amount,
@@ -485,7 +495,7 @@ object ExpenseProcessingHelper {
             type = resolvedType,
             merchantOrRecipient = effectiveMerchant,
             originalMerchant = firstParsedMerchant,
-            accountInfo = parsed.accountInfo,
+            accountInfo = finalAccountInfo,
             category = finalCategory,
             rawBody = parsed.rawText,
             sender = sender,
@@ -521,6 +531,17 @@ object ExpenseProcessingHelper {
 
             // 4. Check for possible duplicate spends within 120s window within ±20% amount
             checkPossibleDuplicateSpend(context, insertedExpense)
+
+            // 5. Unidentified instrument alert asking user to identify transaction source
+            if (com.example.util.InstrumentResolver.isUnidentified(insertedExpense, instrumentRules)) {
+                SpendAlertManager.notifyUnidentifiedInstrument(
+                    context = context,
+                    expenseId = insertedId,
+                    merchant = entity.merchantOrRecipient,
+                    amount = entity.amount,
+                    currency = entity.currency
+                )
+            }
         }
 
         // 4. Update persistent notification (deferred during batch sync)

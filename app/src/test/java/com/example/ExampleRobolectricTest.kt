@@ -1475,9 +1475,9 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `test version name is 2_0_1`() {
-    assertEquals("2.0.1", com.example.BuildConfig.VERSION_NAME)
-    assertEquals(15, com.example.BuildConfig.VERSION_CODE)
+  fun `test version name is 2_0_2`() {
+    assertEquals("2.0.2", com.example.BuildConfig.VERSION_NAME)
+    assertEquals(16, com.example.BuildConfig.VERSION_CODE)
   }
 
   @Test
@@ -2100,6 +2100,112 @@ class ExampleRobolectricTest {
     assertTrue(com.example.util.InstrumentResolver.matchesInstrument(exp2, resolved1, crossLinkMap))
     assertTrue(com.example.util.InstrumentResolver.matchesInstrument(card1, "HDFC Millennia Card ••4821", crossLinkMap))
     assertTrue(com.example.util.InstrumentResolver.matchesInstrument(card2, "HDFC Millennia Card ••4821", crossLinkMap))
+  }
+
+  @Test
+  fun `test user instrument rules and regex marker matching`() = runBlocking {
+    val rule = com.example.data.InstrumentRuleEntity(
+      id = 1L,
+      bankName = "HDFC Bank",
+      cardOrAccountName = "Millennia Card",
+      last4 = "4821",
+      markers = "(?i)millennia\nVM-HDFCBK"
+    )
+
+    val exp = com.example.data.ExpenseEntity(
+      amount = 750.0,
+      currency = "₹",
+      merchantOrRecipient = "Swiggy",
+      accountInfo = "Card ••4821",
+      rawBody = "INR 750.00 debited on your Millennia card ending 4821",
+      sender = "VM-HDFCBK"
+    )
+
+    val rules = listOf(rule)
+    val matched = com.example.util.InstrumentResolver.findMatchingRule(exp.accountInfo, exp.rawBody, exp.sender, rules)
+    assertNotNull(matched)
+    assertEquals("HDFC Bank Millennia Card ••4821", matched!!.canonicalName)
+
+    val resolved = com.example.util.InstrumentResolver.resolveInstrument(exp, rules = rules)
+    assertEquals("HDFC Bank Millennia Card ••4821", resolved)
+
+    // Verify isUnidentified returns false for recognized instrument
+    assertFalse(com.example.util.InstrumentResolver.isUnidentified(exp, rules))
+  }
+
+  @Test
+  fun `test clubbing instruments with same last 4 digits by appending markers`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val db = androidx.room.Room.inMemoryDatabaseBuilder(context, com.example.data.AppDatabase::class.java)
+      .allowMainThreadQueries()
+      .build()
+    val dao = db.instrumentRuleDao()
+    val repo = com.example.data.ExpenseRepository(
+      context = context,
+      expenseDao = db.expenseDao(),
+      preferences = com.example.data.ExpensePreferences(context),
+      merchantRuleDao = db.merchantRuleDao(),
+      instrumentRuleDao = dao
+    )
+
+    // 1. Insert Instrument 1 with last4 "4821" and initial marker
+    val inst1 = com.example.data.InstrumentRuleEntity(
+      bankName = "HDFC Bank",
+      cardOrAccountName = "Millennia",
+      last4 = "4821",
+      markers = "(?i)hdfc.*millennia"
+    )
+    val saved1 = repo.saveAndClubInstrumentRule(inst1)
+    assertEquals(1, dao.getAllInstrumentsSync().size)
+
+    // 2. Insert Instrument 2 with same last4 "4821" and additional markers
+    val inst2 = com.example.data.InstrumentRuleEntity(
+      bankName = "HDFC Bank",
+      cardOrAccountName = "Millennia Credit Card",
+      last4 = "4821",
+      markers = "VM-HDFCBK\n4821"
+    )
+    val clubbed = repo.saveAndClubInstrumentRule(inst2)
+
+    // 3. Verify exactly 1 consolidated instrument remains
+    val allInDb = dao.getAllInstrumentsSync()
+    assertEquals(1, allInDb.size)
+
+    // 4. Verify markers are appended / merged
+    val markers = clubbed.getMarkerList()
+    assertTrue("Should contain first marker", markers.contains("(?i)hdfc.*millennia"))
+    assertTrue("Should contain second marker", markers.contains("VM-HDFCBK"))
+    assertTrue("Should contain last4 marker", markers.contains("4821"))
+    assertEquals(3, markers.size)
+
+    db.close()
+  }
+
+  @Test
+  fun `test unidentified instrument alert detection`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val expUnidentified = com.example.data.ExpenseEntity(
+      id = 101L,
+      amount = 1200.0,
+      currency = "₹",
+      merchantOrRecipient = "Local Vendor",
+      accountInfo = "",
+      rawBody = "INR 1,200 spent at Local Vendor",
+      sender = "UNKNOWN-ALERT"
+    )
+
+    // When no rules match and accountInfo lacks suffix, instrument is unidentified
+    val isUnid = com.example.util.InstrumentResolver.isUnidentified(expUnidentified, emptyList())
+    assertTrue("Transaction without account suffix should be unidentified", isUnid)
+
+    // Verify SpendAlertManager.notifyUnidentifiedInstrument executes without exception
+    com.example.service.SpendAlertManager.notifyUnidentifiedInstrument(
+      context = context,
+      expenseId = expUnidentified.id,
+      merchant = expUnidentified.merchantOrRecipient,
+      amount = expUnidentified.amount,
+      currency = expUnidentified.currency
+    )
   }
 }
 

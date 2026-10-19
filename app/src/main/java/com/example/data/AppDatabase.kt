@@ -8,12 +8,13 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [ExpenseEntity::class, MerchantRuleEntity::class], version = 6, exportSchema = false)
+@Database(entities = [ExpenseEntity::class, MerchantRuleEntity::class, InstrumentRuleEntity::class], version = 7, exportSchema = false)
 @TypeConverters(ExpenseTypeConverter::class)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun expenseDao(): ExpenseDao
     abstract fun merchantRuleDao(): MerchantRuleDao
+    abstract fun instrumentRuleDao(): InstrumentRuleDao
 
     companion object {
         @Volatile
@@ -62,6 +63,22 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS instrument_rules (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        bankName TEXT NOT NULL,
+                        cardOrAccountName TEXT NOT NULL,
+                        last4 TEXT NOT NULL,
+                        markers TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_instrument_rules_last4 ON instrument_rules(last4)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             val dbFile = context.getDatabasePath("spend_tracker_database")
             val existing = INSTANCE
@@ -82,7 +99,7 @@ abstract class AppDatabase : RoomDatabase() {
                         AppDatabase::class.java,
                         "spend_tracker_database"
                     )
-                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                         .fallbackToDestructiveMigration(dropAllTables = false)
                         .build()
                     INSTANCE = instance

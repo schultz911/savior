@@ -94,6 +94,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.ExpenseEntity
+import com.example.data.InstrumentRuleEntity
+import com.example.ui.components.InstrumentEditorSheet
 import com.example.service.LiveExpenditureNotificationService
 import com.example.ui.ExpenseFilter
 import com.example.ui.ExpenseViewModel
@@ -156,8 +158,10 @@ class MainActivity : FragmentActivity() {
                     manualAddTrigger = manualAddTrigger,
                     syncTrigger = syncTrigger,
                     initialAssignExpenseId = assignCategoryExpenseIdState,
+                    initialIdentifyInstrumentExpenseId = identifyInstrumentExpenseIdState,
                     initialNavigateTab = initialNavigateTab,
-                    onTabNavigated = { initialNavigateTab = null }
+                    onTabNavigated = { initialNavigateTab = null },
+                    onInstrumentIdentified = { identifyInstrumentExpenseIdState = null }
                 )
             }
         }
@@ -191,6 +195,7 @@ class MainActivity : FragmentActivity() {
     private var manualAddTrigger by mutableStateOf(0L)
     private var syncTrigger by mutableStateOf(0L)
     private var assignCategoryExpenseIdState by mutableStateOf<Long?>(null)
+    private var identifyInstrumentExpenseIdState by mutableStateOf<Long?>(null)
     private var initialNavigateTab by mutableStateOf<SavioScreenTab?>(null)
 
     private fun handleIntent(intent: android.content.Intent?) {
@@ -208,7 +213,13 @@ class MainActivity : FragmentActivity() {
             if (intent.hasExtra(EXTRA_ASSIGN_CATEGORY_EXPENSE_ID)) {
                 assignCategoryExpenseIdState = intent.getLongExtra(EXTRA_ASSIGN_CATEGORY_EXPENSE_ID, -1L)
             }
-            if (intent.getIntExtra("extra_open_tab", -1) == 1) {
+            if (intent.hasExtra(EXTRA_IDENTIFY_INSTRUMENT_EXPENSE_ID)) {
+                identifyInstrumentExpenseIdState = intent.getLongExtra(EXTRA_IDENTIFY_INSTRUMENT_EXPENSE_ID, -1L)
+                initialNavigateTab = SavioScreenTab.ANALYTICS
+            }
+            if (intent.getIntExtra("extra_open_tab", -1) == 1 ||
+                intent.getStringExtra(EXTRA_NAVIGATE_TAB) == TAB_ANALYTICS ||
+                intent.getStringExtra("extra_open_tab") == "ANALYTICS") {
                 initialNavigateTab = SavioScreenTab.ANALYTICS
             } else if (intent.getStringExtra(EXTRA_NAVIGATE_TAB) == TAB_DASHBOARD) {
                 initialNavigateTab = SavioScreenTab.DASHBOARD
@@ -223,8 +234,10 @@ class MainActivity : FragmentActivity() {
         const val EXTRA_TRIGGER_SYNC = "extra_trigger_sync"
         const val EXTRA_SHOW_MANUAL_ADD = "extra_show_manual_add"
         const val EXTRA_ASSIGN_CATEGORY_EXPENSE_ID = "extra_assign_category_expense_id"
+        const val EXTRA_IDENTIFY_INSTRUMENT_EXPENSE_ID = "extra_identify_instrument_expense_id"
         const val EXTRA_NAVIGATE_TAB = "extra_navigate_tab"
         const val TAB_DASHBOARD = "tab_dashboard"
+        const val TAB_ANALYTICS = "tab_analytics"
     }
 }
 
@@ -235,8 +248,10 @@ fun SpendTrackerScreen(
     manualAddTrigger: Long = 0L,
     syncTrigger: Long = 0L,
     initialAssignExpenseId: Long? = null,
+    initialIdentifyInstrumentExpenseId: Long? = null,
     initialNavigateTab: SavioScreenTab? = null,
     onTabNavigated: () -> Unit = {},
+    onInstrumentIdentified: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -383,6 +398,7 @@ fun SpendTrackerScreen(
     var showManualAddDialog by remember { mutableStateOf(false) }
     var showResetRescanConfirmDialog by remember { mutableStateOf(false) }
     var assignCategoryTargetExpense by remember { mutableStateOf<ExpenseEntity?>(null) }
+    var editingInstrumentRule by remember { mutableStateOf<InstrumentRuleEntity?>(null) }
 
     LaunchedEffect(manualAddTrigger) {
         if (manualAddTrigger > 0L) {
@@ -403,6 +419,30 @@ fun SpendTrackerScreen(
             val found = currentMonthExpenses.find { it.id == initialAssignExpenseId }
             if (found != null) {
                 assignCategoryTargetExpense = found
+            }
+        }
+    }
+
+    // Check if initialIdentifyInstrumentExpenseId is provided from notification
+    LaunchedEffect(initialIdentifyInstrumentExpenseId, allExpenses) {
+        if (initialIdentifyInstrumentExpenseId != null && initialIdentifyInstrumentExpenseId > 0) {
+            val exp = allExpenses.find { it.id == initialIdentifyInstrumentExpenseId }
+            if (exp != null) {
+                val suffix = com.example.util.InstrumentResolver.extractSuffix(exp.accountInfo, exp.rawBody) ?: ""
+                val bank = com.example.util.InstrumentResolver.detectBankOrIssuer(exp.sender, exp.rawBody) ?: ""
+                val cardProduct = com.example.util.InstrumentResolver.detectCardProduct(exp.rawBody) ?: ""
+                val markers = mutableListOf<String>()
+                if (exp.sender.isNotBlank()) markers.add(exp.sender)
+                if (suffix.isNotBlank()) markers.add(suffix)
+                if (cardProduct.isNotBlank()) markers.add(cardProduct)
+
+                editingInstrumentRule = InstrumentRuleEntity(
+                    bankName = bank,
+                    cardOrAccountName = cardProduct,
+                    last4 = suffix,
+                    markers = InstrumentRuleEntity.markersToString(markers)
+                )
+                onInstrumentIdentified()
             }
         }
     }
@@ -810,6 +850,7 @@ fun SpendTrackerScreen(
                 val last12MonthsAnalytics by viewModel.last12MonthsAnalytics.collectAsStateWithLifecycle()
                 val dailyBurnDownData by viewModel.dailyBurnDownData.collectAsStateWithLifecycle()
                 val instrumentSummaries by viewModel.instrumentSummaries.collectAsStateWithLifecycle()
+                val instrumentRules by viewModel.allInstrumentRules.collectAsStateWithLifecycle()
                 val selectedAccountFilter by viewModel.selectedAccountFilter.collectAsStateWithLifecycle()
                 Box(
                     modifier = Modifier
@@ -827,8 +868,32 @@ fun SpendTrackerScreen(
                         allExpenses = allExpenses,
                         burnDownData = dailyBurnDownData,
                         instruments = instrumentSummaries,
+                        instrumentRules = instrumentRules,
                         selectedAccount = selectedAccountFilter,
                         onSelectAccount = { viewModel.selectAccountFilter(it) },
+                        onEditInstrument = { accountInfo ->
+                            val cleanSuffix = com.example.util.InstrumentResolver.extractSuffix(accountInfo) ?: ""
+                            val existing = instrumentRules.find {
+                                it.canonicalName.equals(accountInfo, ignoreCase = true) ||
+                                (cleanSuffix.isNotBlank() && it.last4.equals(cleanSuffix, ignoreCase = true))
+                            }
+                            if (existing != null) {
+                                editingInstrumentRule = existing
+                            } else {
+                                val bank = com.example.util.InstrumentResolver.detectBankOrIssuer("", accountInfo) ?: ""
+                                val cardProduct = com.example.util.InstrumentResolver.detectCardProduct(accountInfo) ?: ""
+                                val markers = mutableListOf<String>()
+                                if (cleanSuffix.isNotBlank()) markers.add(cleanSuffix)
+                                if (cardProduct.isNotBlank()) markers.add(cardProduct)
+
+                                editingInstrumentRule = InstrumentRuleEntity(
+                                    bankName = bank,
+                                    cardOrAccountName = cardProduct,
+                                    last4 = cleanSuffix,
+                                    markers = InstrumentRuleEntity.markersToString(markers)
+                                )
+                            }
+                        },
                         onSelectMonth = { viewModel.selectMonth(it) },
                         onNavigateToDashboard = { viewModel.setTab(SavioScreenTab.DASHBOARD) },
                         onDeleteMonth = { viewModel.deleteMonthData(it) },
@@ -1207,6 +1272,24 @@ fun SpendTrackerScreen(
                 ) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    // Instrument Editor Bottom Sheet
+    editingInstrumentRule?.let { rule ->
+        InstrumentEditorSheet(
+            initialRule = rule,
+            onSave = { updatedRule ->
+                viewModel.saveInstrumentRule(updatedRule)
+                editingInstrumentRule = null
+            },
+            onDelete = { id ->
+                viewModel.deleteInstrumentRule(id)
+                editingInstrumentRule = null
+            },
+            onDismiss = {
+                editingInstrumentRule = null
             }
         )
     }

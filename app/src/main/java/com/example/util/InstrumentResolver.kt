@@ -2,6 +2,7 @@ package com.example.util
 
 import com.example.data.ExpenseEntity
 import com.example.data.ExpenseType
+import com.example.data.InstrumentRuleEntity
 import com.example.ui.models.InstrumentType
 import java.util.Locale
 import java.util.regex.Pattern
@@ -9,6 +10,69 @@ import java.util.regex.Pattern
 object InstrumentResolver {
 
     private val PREFIX_STRIP_REGEX = Regex("""(?i)^(?:a/c|acct|account|card|credit\s+card|upi)[\s:/\-•*]*""")
+
+    /**
+     * Finds a matching user-defined instrument rule by evaluating regex markers and last 4 digits.
+     */
+    fun findMatchingRule(
+        accountInfo: String,
+        rawBody: String = "",
+        sender: String = "",
+        rules: List<InstrumentRuleEntity>
+    ): InstrumentRuleEntity? {
+        if (rules.isEmpty()) return null
+        val suffix = extractSuffix(accountInfo, rawBody)?.uppercase(Locale.US)
+
+        for (rule in rules) {
+            // 1. Evaluate user regex markers against rawBody, accountInfo, and sender
+            val markers = rule.getMarkerList()
+            for (marker in markers) {
+                try {
+                    val regex = Regex(marker, RegexOption.IGNORE_CASE)
+                    if (regex.containsMatchIn(rawBody) || regex.containsMatchIn(accountInfo) || regex.containsMatchIn(sender)) {
+                        return rule
+                    }
+                } catch (_: Exception) {
+                    if (rawBody.contains(marker, ignoreCase = true) ||
+                        accountInfo.contains(marker, ignoreCase = true) ||
+                        sender.contains(marker, ignoreCase = true)
+                    ) {
+                        return rule
+                    }
+                }
+            }
+
+            // 2. Check last 4 digits / suffix
+            val ruleLast4 = rule.last4.trim().uppercase(Locale.US)
+            if (ruleLast4.isNotBlank()) {
+                if (suffix != null && suffix == ruleLast4) {
+                    return rule
+                }
+                if (accountInfo.contains(ruleLast4, ignoreCase = true) || rawBody.contains(ruleLast4, ignoreCase = true)) {
+                    return rule
+                }
+            }
+        }
+        return null
+    }
+
+    /**
+     * Determines if a transaction has an unidentified instrument.
+     */
+    fun isUnidentified(
+        expense: ExpenseEntity,
+        rules: List<InstrumentRuleEntity>
+    ): Boolean {
+        if (expense.isRefundOrReversal || expense.type == ExpenseType.CREDIT_CARD || expense.type == ExpenseType.SELF) {
+            return false
+        }
+        val matchedRule = findMatchingRule(expense.accountInfo, expense.rawBody, expense.sender, rules)
+        if (matchedRule != null) return false
+
+        val suffix = extractSuffix(expense.accountInfo, expense.rawBody)
+        val raw = expense.accountInfo.trim()
+        return suffix == null || raw.isBlank() || raw.equals("Other / Cash", ignoreCase = true) || raw.contains("Unknown", ignoreCase = true)
+    }
 
     /**
      * Extracts the 3 to 6 character account identifier / last 4 digits (e.g. "4821", "XXXX").
@@ -218,11 +282,23 @@ object InstrumentResolver {
 
     /**
      * Resolves an individual transaction to its canonical instrument name.
+     * Evaluates user-defined instrument rules first before falling back to crossLinkMap or standard extraction.
      */
-    fun resolveInstrument(expense: ExpenseEntity, crossLinkMap: Map<String, String>): String {
+    fun resolveInstrument(
+        expense: ExpenseEntity,
+        crossLinkMap: Map<String, String> = emptyMap(),
+        rules: List<InstrumentRuleEntity> = emptyList()
+    ): String {
         if (expense.type == ExpenseType.CREDIT_CARD || expense.category.equals("Credit Card Bill", ignoreCase = true)) {
             return "Credit Card Bills"
         }
+
+        // 1. Check user-defined instrument rules first
+        val matchedRule = findMatchingRule(expense.accountInfo, expense.rawBody, expense.sender, rules)
+        if (matchedRule != null) {
+            return matchedRule.canonicalName
+        }
+
         val raw = expense.accountInfo.trim()
         if (raw.isBlank() || raw.equals("null", ignoreCase = true) || raw.equals("Other / Cash", ignoreCase = true) || raw.equals("Cash / Manual", ignoreCase = true)) {
             return "Other / Cash"
@@ -273,7 +349,12 @@ object InstrumentResolver {
     /**
      * Checks if a given transaction matches the selected instrument filter.
      */
-    fun matchesInstrument(expense: ExpenseEntity, selectedAccount: String?, crossLinkMap: Map<String, String>): Boolean {
+    fun matchesInstrument(
+        expense: ExpenseEntity,
+        selectedAccount: String?,
+        crossLinkMap: Map<String, String> = emptyMap(),
+        rules: List<InstrumentRuleEntity> = emptyList()
+    ): Boolean {
         if (selectedAccount == null) return true
 
         if (selectedAccount.equals("Credit Card Bills", ignoreCase = true)) {
@@ -289,10 +370,10 @@ object InstrumentResolver {
                     raw.equals("null", ignoreCase = true) ||
                     raw.equals("Other / Cash", ignoreCase = true) ||
                     raw.equals("Cash / Manual", ignoreCase = true) ||
-                    resolveInstrument(expense, crossLinkMap).equals("Other / Cash", ignoreCase = true)
+                    resolveInstrument(expense, crossLinkMap, rules).equals("Other / Cash", ignoreCase = true)
         }
 
-        val resolved = resolveInstrument(expense, crossLinkMap)
+        val resolved = resolveInstrument(expense, crossLinkMap, rules)
         if (resolved.equals(selectedAccount, ignoreCase = true)) return true
 
         // Deep matching by suffix & type (e.g. matching A/CXXXX with A/c ••XXXX or HDFC Card ••4821 with Card ••4821)

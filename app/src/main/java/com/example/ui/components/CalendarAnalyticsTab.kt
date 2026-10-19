@@ -96,6 +96,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.filled.DeleteOutline
 import com.example.ui.models.InstrumentSpendSummary
+import com.example.data.InstrumentRuleEntity
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -112,8 +113,10 @@ fun CalendarAnalyticsTab(
     allExpenses: List<ExpenseEntity> = emptyList(),
     burnDownData: DailyBurnDownData? = null,
     instruments: List<InstrumentSpendSummary> = emptyList(),
+    instrumentRules: List<InstrumentRuleEntity> = emptyList(),
     selectedAccount: String? = null,
     onSelectAccount: (String?) -> Unit = {},
+    onEditInstrument: ((String) -> Unit)? = null,
     onSelectMonth: (String) -> Unit,
     onNavigateToDashboard: () -> Unit = {},
     onDeleteMonth: ((String) -> Unit)? = null,
@@ -273,7 +276,7 @@ fun CalendarAnalyticsTab(
         ((selectedTotalSpend - prevTotalSpend) / prevTotalSpend) * 100.0
     } else null
 
-    val displayedExpenses = remember(selectedMonthExpenses, analyticsFilter, selectedAccount) {
+    val displayedExpenses = remember(selectedMonthExpenses, analyticsFilter, selectedAccount, instrumentRules) {
         val crossLinkMap = com.example.util.InstrumentResolver.buildCrossLinkMap(selectedMonthExpenses)
         selectedMonthExpenses.filter { item ->
             val matchesFilter = when (analyticsFilter) {
@@ -289,7 +292,12 @@ fun CalendarAnalyticsTab(
                 ExpenseFilter.SELF -> item.type == ExpenseType.SELF ||
                         item.category.equals("Self", ignoreCase = true)
             }
-            val matchesAccount = com.example.util.InstrumentResolver.matchesInstrument(item, selectedAccount, crossLinkMap)
+            val matchesAccount = com.example.util.InstrumentResolver.matchesInstrument(
+                item,
+                selectedAccount,
+                crossLinkMap,
+                instrumentRules
+            )
             matchesFilter && matchesAccount
         }
     }
@@ -705,7 +713,8 @@ fun CalendarAnalyticsTab(
                     instruments = instruments,
                     selectedAccount = selectedAccount,
                     onSelectAccount = onSelectAccount,
-                    currency = currency
+                    currency = currency,
+                    onEditInstrument = onEditInstrument
                 )
             }
         }

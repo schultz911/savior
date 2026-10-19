@@ -13,7 +13,8 @@ class ExpenseRepository(
     private val context: Context,
     private val expenseDao: ExpenseDao,
     private val preferences: ExpensePreferences,
-    private val merchantRuleDao: MerchantRuleDao? = null
+    private val merchantRuleDao: MerchantRuleDao? = null,
+    private val instrumentRuleDao: InstrumentRuleDao? = null
 ) {
     private val syncMutex = Mutex()
 
@@ -21,6 +22,8 @@ class ExpenseRepository(
     val allMonthKeys: Flow<List<String>> = expenseDao.getAllMonthKeys()
     val allMerchantRules: Flow<List<MerchantRuleEntity>> =
         merchantRuleDao?.getAllRules() ?: kotlinx.coroutines.flow.flowOf(emptyList())
+    val allInstrumentRules: Flow<List<InstrumentRuleEntity>> =
+        instrumentRuleDao?.getAllInstruments() ?: kotlinx.coroutines.flow.flowOf(emptyList())
 
     suspend fun insertMerchantRule(rule: MerchantRuleEntity): Long = withContext(Dispatchers.IO) {
         merchantRuleDao?.insertRule(rule) ?: -1L
@@ -32,6 +35,73 @@ class ExpenseRepository(
 
     suspend fun getAllMerchantRulesSync(): List<MerchantRuleEntity> = withContext(Dispatchers.IO) {
         merchantRuleDao?.getAllRulesSync() ?: emptyList()
+    }
+
+    suspend fun getAllInstrumentRulesSync(): List<InstrumentRuleEntity> = withContext(Dispatchers.IO) {
+        instrumentRuleDao?.getAllInstrumentsSync() ?: emptyList()
+    }
+
+    /**
+     * Saves a user-defined instrument rule.
+     * If two instruments have the same last 4 digits, they are automatically clubbed
+     * into a single instrument by appending the markers and consolidating details.
+     */
+    suspend fun saveAndClubInstrumentRule(rule: InstrumentRuleEntity): InstrumentRuleEntity = withContext(Dispatchers.IO) {
+        val dao = instrumentRuleDao ?: return@withContext rule
+        val cleanLast4 = rule.last4.trim().uppercase(java.util.Locale.US)
+
+        if (cleanLast4.isNotBlank()) {
+            val existingMatches = dao.getInstrumentsByLast4(cleanLast4)
+                .filter { it.id != rule.id }
+
+            if (existingMatches.isNotEmpty()) {
+                val mergedMarkers = (existingMatches.flatMap { it.getMarkerList() } + rule.getMarkerList()).distinct()
+                val mergedBank = if (rule.bankName.isNotBlank()) rule.bankName.trim() else existingMatches.map { it.bankName.trim() }.firstOrNull { it.isNotBlank() } ?: ""
+                val mergedCard = if (rule.cardOrAccountName.isNotBlank()) rule.cardOrAccountName.trim() else existingMatches.map { it.cardOrAccountName.trim() }.firstOrNull { it.isNotBlank() } ?: ""
+
+                val primaryId = if (rule.id != 0L) rule.id else existingMatches.first().id
+                val consolidated = InstrumentRuleEntity(
+                    id = primaryId,
+                    bankName = mergedBank,
+                    cardOrAccountName = mergedCard,
+                    last4 = cleanLast4,
+                    markers = InstrumentRuleEntity.markersToString(mergedMarkers),
+                    createdAt = rule.createdAt
+                )
+
+                // Delete any other redundant records with same last 4
+                for (match in existingMatches) {
+                    if (match.id != primaryId) {
+                        dao.deleteInstrumentById(match.id)
+                    }
+                }
+
+                if (rule.id != 0L) {
+                    dao.updateInstrument(consolidated)
+                } else {
+                    dao.updateInstrument(consolidated)
+                }
+                return@withContext consolidated
+            }
+        }
+
+        val cleanRule = rule.copy(
+            bankName = rule.bankName.trim(),
+            cardOrAccountName = rule.cardOrAccountName.trim(),
+            last4 = cleanLast4,
+            markers = InstrumentRuleEntity.markersToString(rule.getMarkerList())
+        )
+        if (cleanRule.id == 0L) {
+            val newId = dao.insertInstrument(cleanRule)
+            cleanRule.copy(id = newId)
+        } else {
+            dao.updateInstrument(cleanRule)
+            cleanRule
+        }
+    }
+
+    suspend fun deleteInstrumentRule(id: Long) = withContext(Dispatchers.IO) {
+        instrumentRuleDao?.deleteInstrumentById(id)
     }
 
     suspend fun updateMerchantName(
