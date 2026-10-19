@@ -117,6 +117,18 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE timestamp >= :sinceTimestamp ORDER BY timestamp DESC")
     suspend fun getExpensesSinceSync(sinceTimestamp: Long): List<ExpenseEntity>
 
+    @Query("""
+        SELECT * FROM expenses 
+        WHERE timestamp >= :minTimestamp 
+          AND timestamp <= :maxTimestamp 
+          AND id != :excludeId 
+          AND isReversal = 0 
+          AND isExcluded = 0
+          AND type != 'SELF'
+        ORDER BY timestamp DESC
+    """)
+    suspend fun getExpensesInTimeWindowSync(minTimestamp: Long, maxTimestamp: Long, excludeId: Long): List<ExpenseEntity>
+
     @Query("SELECT COUNT(*) > 0 FROM expenses WHERE smsId = :smsId AND smsId > 0")
     suspend fun existsBySmsId(smsId: Long): Boolean
 

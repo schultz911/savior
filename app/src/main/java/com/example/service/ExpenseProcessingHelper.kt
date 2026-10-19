@@ -518,6 +518,9 @@ object ExpenseProcessingHelper {
             if (prefs.isAnomalyAlertsEnabled) {
                 checkAnomalySpikeAlert(context, entity)
             }
+
+            // 4. Check for possible duplicate spends within 120s window within ±20% amount
+            checkPossibleDuplicateSpend(context, insertedExpense)
         }
 
         // 4. Update persistent notification (deferred during batch sync)
@@ -603,5 +606,33 @@ object ExpenseProcessingHelper {
             medianAmount = median,
             currency = prefs.currency
         )
+    }
+
+    suspend fun checkPossibleDuplicateSpend(context: Context, expense: ExpenseEntity) = withContext(Dispatchers.IO) {
+        if (expense.isRefundOrReversal || expense.amount <= 0.0) return@withContext
+        val app = context.applicationContext as? SpendTrackerApplication ?: return@withContext
+        val dao = app.database.expenseDao()
+        val prefs = app.preferences
+
+        val windowMillis = 120_000L // 120 seconds
+        val minTimestamp = expense.timestamp - windowMillis
+        val maxTimestamp = expense.timestamp + windowMillis
+
+        val candidates = dao.getExpensesInTimeWindowSync(minTimestamp, maxTimestamp, expense.id)
+        val duplicates = candidates.filter { candidate ->
+            if (candidate.isRefundOrReversal || candidate.amount <= 0.0) return@filter false
+            val minAmt = expense.amount * 0.80
+            val maxAmt = expense.amount * 1.20
+            candidate.amount in minAmt..maxAmt || (candidate.amount > 0.0 && expense.amount in (candidate.amount * 0.80)..(candidate.amount * 1.20))
+        }
+
+        if (duplicates.isNotEmpty()) {
+            SpendAlertManager.checkAndNotifyPossibleDuplicateSpend(
+                context = context,
+                primaryExpense = expense,
+                duplicateExpenses = duplicates,
+                currency = prefs.currency
+            )
+        }
     }
 }

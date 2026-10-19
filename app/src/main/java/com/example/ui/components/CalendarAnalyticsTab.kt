@@ -274,6 +274,7 @@ fun CalendarAnalyticsTab(
     } else null
 
     val displayedExpenses = remember(selectedMonthExpenses, analyticsFilter, selectedAccount) {
+        val crossLinkMap = com.example.util.InstrumentResolver.buildCrossLinkMap(selectedMonthExpenses)
         selectedMonthExpenses.filter { item ->
             val matchesFilter = when (analyticsFilter) {
                 ExpenseFilter.ALL -> true
@@ -288,19 +289,7 @@ fun CalendarAnalyticsTab(
                 ExpenseFilter.SELF -> item.type == ExpenseType.SELF ||
                         item.category.equals("Self", ignoreCase = true)
             }
-            val matchesAccount = when {
-                selectedAccount == null -> true
-                selectedAccount.equals("Credit Card Bills", ignoreCase = true) ->
-                    item.type == ExpenseType.CREDIT_CARD ||
-                            item.category.equals("Credit Card Bill", ignoreCase = true) ||
-                            item.accountInfo.contains("Credit", ignoreCase = true) ||
-                            item.accountInfo.contains("Card", ignoreCase = true)
-                selectedAccount.equals("Other / Cash", ignoreCase = true) ->
-                    item.accountInfo.isBlank() ||
-                            item.accountInfo.equals("null", ignoreCase = true) ||
-                            item.accountInfo.equals("Other / Cash", ignoreCase = true)
-                else -> item.accountInfo.contains(selectedAccount, ignoreCase = true)
-            }
+            val matchesAccount = com.example.util.InstrumentResolver.matchesInstrument(item, selectedAccount, crossLinkMap)
             matchesFilter && matchesAccount
         }
     }

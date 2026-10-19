@@ -1475,9 +1475,9 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `test version name is 2_0_0`() {
-    assertEquals("2.0.0", com.example.BuildConfig.VERSION_NAME)
-    assertEquals(14, com.example.BuildConfig.VERSION_CODE)
+  fun `test version name is 2_0_1`() {
+    assertEquals("2.0.1", com.example.BuildConfig.VERSION_NAME)
+    assertEquals(15, com.example.BuildConfig.VERSION_CODE)
   }
 
   @Test
@@ -1897,14 +1897,14 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `test manual sms parsing assigns extracted date and places transaction in correct chronological order`() = runBlocking {
+  fun `test manual sms parsed date chronological order`() = runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
-    val db = com.example.data.AppDatabase.getDatabase(context)
-    val dao = db.expenseDao()
+    val app = context as SpendTrackerApplication
+    val dao = app.database.expenseDao()
     dao.clearAll()
 
-    val prefs = com.example.data.ExpensePreferences(context)
-    val repo = com.example.data.ExpenseRepository(context, dao, prefs)
+    val prefs = app.preferences
+    val repo = app.repository
 
     // Setup: Create two anchor transactions: Today (Sep 12) and 10 days ago (Sep 02)
     val cal12 = java.util.Calendar.getInstance().apply {
@@ -1948,6 +1948,158 @@ class ExampleRobolectricTest {
     assertEquals(java.util.Calendar.SEPTEMBER, middleCal.get(java.util.Calendar.MONTH))
     assertEquals(15, middleCal.get(java.util.Calendar.HOUR_OF_DAY))
     assertEquals(30, middleCal.get(java.util.Calendar.MINUTE))
+  }
+
+  @Test
+  fun `test ordinal formatting for recurring bill notifications`() {
+    assertEquals("1st", com.example.service.SpendAlertManager.formatOrdinal(1))
+    assertEquals("2nd", com.example.service.SpendAlertManager.formatOrdinal(2))
+    assertEquals("3rd", com.example.service.SpendAlertManager.formatOrdinal(3))
+    assertEquals("4th", com.example.service.SpendAlertManager.formatOrdinal(4))
+    assertEquals("11th", com.example.service.SpendAlertManager.formatOrdinal(11))
+    assertEquals("12th", com.example.service.SpendAlertManager.formatOrdinal(12))
+    assertEquals("13th", com.example.service.SpendAlertManager.formatOrdinal(13))
+    assertEquals("14th", com.example.service.SpendAlertManager.formatOrdinal(14))
+    assertEquals("21st", com.example.service.SpendAlertManager.formatOrdinal(21))
+    assertEquals("22nd", com.example.service.SpendAlertManager.formatOrdinal(22))
+    assertEquals("23rd", com.example.service.SpendAlertManager.formatOrdinal(23))
+    assertEquals("24th", com.example.service.SpendAlertManager.formatOrdinal(24))
+    assertEquals("31st", com.example.service.SpendAlertManager.formatOrdinal(31))
+  }
+
+  @Test
+  fun `test possible duplicate spend detection in 120s window within 20 percent`() = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val db = androidx.room.Room.inMemoryDatabaseBuilder(context, com.example.data.AppDatabase::class.java)
+      .allowMainThreadQueries()
+      .build()
+    val dao = db.expenseDao()
+
+    val now = System.currentTimeMillis()
+    val exp1 = com.example.data.ExpenseEntity(
+      amount = 1000.0,
+      currency = "₹",
+      merchantOrRecipient = "Starbucks",
+      timestamp = now,
+      accountInfo = "Card ••4821"
+    )
+    val id1 = dao.insertExpense(exp1)
+
+    // Exp2: within 60 seconds (<= 120s) and amount 1100.0 (+10%, which is within ±20%)
+    val exp2 = com.example.data.ExpenseEntity(
+      amount = 1100.0,
+      currency = "₹",
+      merchantOrRecipient = "Starbucks",
+      timestamp = now + 60_000L,
+      accountInfo = "Card ••4821"
+    )
+    val id2 = dao.insertExpense(exp2)
+
+    val windowMillis = 120_000L
+    val candidates = dao.getExpensesInTimeWindowSync(exp2.timestamp - windowMillis, exp2.timestamp + windowMillis, id2)
+    assertEquals(1, candidates.size)
+    assertEquals(id1, candidates[0].id)
+
+    val isWithin20Pct = candidates.any { candidate ->
+      val minAmt = exp2.amount * 0.80
+      val maxAmt = exp2.amount * 1.20
+      candidate.amount in minAmt..maxAmt || (candidate.amount > 0.0 && exp2.amount in (candidate.amount * 0.80)..(candidate.amount * 1.20))
+    }
+    assertTrue("Should be detected as duplicate within ±20% amount", isWithin20Pct)
+
+    // Exp3: within 60s but amount 1500.0 (+50%, outside ±20%)
+    val exp3 = com.example.data.ExpenseEntity(
+      amount = 1500.0,
+      currency = "₹",
+      merchantOrRecipient = "Starbucks",
+      timestamp = now + 90_000L,
+      accountInfo = "Card ••4821"
+    )
+    val id3 = dao.insertExpense(exp3)
+    val candidatesFor3 = dao.getExpensesInTimeWindowSync(exp3.timestamp - windowMillis, exp3.timestamp + windowMillis, id3)
+    val dupFor3 = candidatesFor3.filter { candidate ->
+      val minAmt = exp3.amount * 0.80
+      val maxAmt = exp3.amount * 1.20
+      candidate.amount in minAmt..maxAmt || (candidate.amount > 0.0 && exp3.amount in (candidate.amount * 0.80)..(candidate.amount * 1.20))
+    }
+    assertTrue("Exp3 (1500 vs 1000/1100) should not match ±20% amount filter", dupFor3.isEmpty())
+
+    // Exp4: amount 1050 (+5%) but 300 seconds later (>120s window)
+    val exp4 = com.example.data.ExpenseEntity(
+      amount = 1050.0,
+      currency = "₹",
+      merchantOrRecipient = "Starbucks",
+      timestamp = now + 300_000L,
+      accountInfo = "Card ••4821"
+    )
+    val id4 = dao.insertExpense(exp4)
+    val candidatesFor4 = dao.getExpensesInTimeWindowSync(exp4.timestamp - windowMillis, exp4.timestamp + windowMillis, id4)
+    assertTrue("Exp4 (300s later) should have no candidates in 120s window", candidatesFor4.isEmpty())
+    db.close()
+  }
+
+  @Test
+  fun `test instrument normalization for ACXXXX and AcXXXX and cross-linking card name with numbers`() {
+    val exp1 = com.example.data.ExpenseEntity(
+      id = 1L,
+      amount = 500.0,
+      currency = "₹",
+      merchantOrRecipient = "Swiggy",
+      accountInfo = "A/CXXXX",
+      rawBody = "INR 500 debited from A/CXXXX to Swiggy",
+      sender = "VM-HDFCBK"
+    )
+
+    val exp2 = com.example.data.ExpenseEntity(
+      id = 2L,
+      amount = 200.0,
+      currency = "₹",
+      merchantOrRecipient = "Zomato",
+      accountInfo = "A/cXXXX",
+      rawBody = "INR 200 debited from A/cXXXX to Zomato",
+      sender = "VM-HDFCBK"
+    )
+
+    val card1 = com.example.data.ExpenseEntity(
+      id = 3L,
+      amount = 1500.0,
+      currency = "₹",
+      merchantOrRecipient = "Amazon",
+      accountInfo = "Card ••4821",
+      rawBody = "Spent INR 1500 on your HDFC Bank Millennia Card ending 4821 at Amazon",
+      sender = "VM-HDFCBK"
+    )
+
+    val card2 = com.example.data.ExpenseEntity(
+      id = 4L,
+      amount = 350.0,
+      currency = "₹",
+      merchantOrRecipient = "Uber",
+      accountInfo = "Card ••4821",
+      rawBody = "INR 350 debited from Card 4821",
+      sender = "VM-HDFCBK"
+    )
+
+    val allList = listOf(exp1, exp2, card1, card2)
+    val crossLinkMap = com.example.util.InstrumentResolver.buildCrossLinkMap(allList)
+
+    // 1. Verify A/CXXXX and A/cXXXX resolve to the exact same canonical instrument
+    val resolved1 = com.example.util.InstrumentResolver.resolveInstrument(exp1, crossLinkMap)
+    val resolved2 = com.example.util.InstrumentResolver.resolveInstrument(exp2, crossLinkMap)
+    assertEquals(resolved1, resolved2)
+    assertTrue("Expected resolved1 to contain A/c ••XXXX, but was: $resolved1", resolved1.contains("A/c ••XXXX"))
+
+    // 2. Verify card cross-linking: card2 inherits the rich bank & product name from card1's SMS
+    val resolvedCard1 = com.example.util.InstrumentResolver.resolveInstrument(card1, crossLinkMap)
+    val resolvedCard2 = com.example.util.InstrumentResolver.resolveInstrument(card2, crossLinkMap)
+    assertEquals(resolvedCard1, resolvedCard2)
+    assertEquals("HDFC Millennia Card ••4821", resolvedCard2)
+
+    // 3. Verify filtering matches both A/CXXXX and A/cXXXX under the same selectedAccount
+    assertTrue(com.example.util.InstrumentResolver.matchesInstrument(exp1, resolved1, crossLinkMap))
+    assertTrue(com.example.util.InstrumentResolver.matchesInstrument(exp2, resolved1, crossLinkMap))
+    assertTrue(com.example.util.InstrumentResolver.matchesInstrument(card1, "HDFC Millennia Card ••4821", crossLinkMap))
+    assertTrue(com.example.util.InstrumentResolver.matchesInstrument(card2, "HDFC Millennia Card ••4821", crossLinkMap))
   }
 }
 

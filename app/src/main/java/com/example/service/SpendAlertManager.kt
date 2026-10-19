@@ -223,6 +223,17 @@ object SpendAlertManager {
         "$currency${currencyFormatter.format(amount)}"
     }
 
+    fun formatOrdinal(day: Int): String {
+        val mod100 = day % 100
+        if (mod100 in 11..13) return "${day}th"
+        return when (day % 10) {
+            1 -> "${day}st"
+            2 -> "${day}nd"
+            3 -> "${day}rd"
+            else -> "${day}th"
+        }
+    }
+
     /**
      * Proactive reminder when an unpaid recurring bill or subscription is due within 48 hours.
      */
@@ -275,7 +286,7 @@ object SpendAlertManager {
                     .setLargeIcon(getNotificationLargeIcon(context))
                     .setColor(0xFF059669.toInt())
                     .setContentTitle("⚡ Upcoming Bill: $formattedAmt for ${bill.merchant}")
-                    .setContentText("Subscription/bill is $dueText (~${bill.typicalDayOfMonth}th). Safe daily spend is protected.")
+                    .setContentText("Subscription/bill is $dueText (~${formatOrdinal(bill.typicalDayOfMonth)}). Safe daily spend is protected.")
                     .setStyle(
                         NotificationCompat.BigTextStyle()
                             .bigText("Heads up: Your recurring commitment for ${bill.merchant} of $formattedAmt is $dueText. Your daily pacing has reserved this amount.")
@@ -293,6 +304,64 @@ object SpendAlertManager {
 
     const val NOTIF_ID_VELOCITY = 5001
     private const val NOTIF_ID_ANOMALY_BASE = 6000
+    private const val NOTIF_ID_DUPLICATE_BASE = 7000
+
+    /**
+     * Alert user when multiple transactions within a 120-second window within ±20% amount are detected,
+     * prompting manual audit of the spends.
+     */
+    fun checkAndNotifyPossibleDuplicateSpend(
+        context: Context,
+        primaryExpense: com.example.data.ExpenseEntity,
+        duplicateExpenses: List<com.example.data.ExpenseEntity>,
+        currency: String
+    ) {
+        if (duplicateExpenses.isEmpty()) return
+        val other = duplicateExpenses.first()
+
+        val alertPrefs = context.getSharedPreferences("spend_tracker_duplicate_alerts", Context.MODE_PRIVATE)
+        val smallerId = minOf(primaryExpense.id, other.id)
+        val largerId = maxOf(primaryExpense.id, other.id)
+        val alertKey = "dup_${smallerId}_$largerId"
+        if (alertPrefs.getBoolean(alertKey, false)) return
+
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notifId = (NOTIF_ID_DUPLICATE_BASE + (primaryExpense.id % 1000)).toInt()
+
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_ASSIGN_CATEGORY_EXPENSE_ID, primaryExpense.id)
+            putExtra(MainActivity.EXTRA_NAVIGATE_TAB, MainActivity.TAB_DASHBOARD)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            notifId,
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val amt1Fmt = formatCurrency(primaryExpense.amount, currency)
+        val amt2Fmt = formatCurrency(other.amount, currency)
+        val merchant = primaryExpense.merchantOrRecipient
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS)
+            .setSmallIcon(R.drawable.ic_stat_rupee)
+            .setLargeIcon(getNotificationLargeIcon(context))
+            .setColor(0xFFE11D48.toInt())
+            .setContentTitle("⚠️ Possible Duplicate Spends Detected")
+            .setContentText("Multiple spends ($amt1Fmt & $amt2Fmt) at $merchant within 2 min. Tap to audit.")
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText("We detected multiple transactions within 120 seconds of each other ($amt1Fmt and $amt2Fmt at '$merchant') with amounts within 20%. Please manually audit these spends.")
+            )
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        manager.notify(notifId, notification)
+        alertPrefs.edit().putBoolean(alertKey, true).apply()
+    }
 
     /**
      * Proactive velocity pacing alert when spend burn rate is >30% ahead of expected day-of-month budget pacing.

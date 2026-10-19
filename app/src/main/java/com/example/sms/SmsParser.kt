@@ -52,9 +52,9 @@ object SmsParser {
 
     // Regex for card / account / UPI references
     private val ACCOUNT_PATTERNS = listOf(
-        Pattern.compile("""(?i)(?:card|a/c|account|acct)(?:\s*(?:no\.?|ending|xx|\*+|-))*\s*([0-9]{3,4})"""),
-        Pattern.compile("""(?i)(?:ending\s+in\s+)([0-9]{4})"""),
-        Pattern.compile("""(?i)(?:xx|[*]{2,})([0-9]{4})"""),
+        Pattern.compile("""(?i)(?:card|a/c|account|acct)(?:\s*(?:no\.?|ending|xx|\*+|••|-))*\s*([0-9A-Za-z]{3,4})"""),
+        Pattern.compile("""(?i)(?:ending\s+in\s+)([0-9A-Za-z]{4})"""),
+        Pattern.compile("""(?i)(?:xx|[*]{2,}|••)([0-9A-Za-z]{4})"""),
         Pattern.compile("""(?i)(?:upi\s*(?:ref|reference)?(?:\s*no\.?)?[\s:]+)([0-9]{4,16})""")
     )
 
@@ -469,7 +469,8 @@ object SmsParser {
                         isUpi -> "UPI ••"
                         else -> "A/c ••"
                     }
-                    val suffix = if (num.length > 4) num.takeLast(4) else num
+                    val rawSuffix = if (num.length > 4) num.takeLast(4) else num
+                    val suffix = rawSuffix.uppercase(Locale.US)
                     return "$prefix$suffix"
                 }
             }

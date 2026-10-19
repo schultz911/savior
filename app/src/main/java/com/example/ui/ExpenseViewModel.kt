@@ -684,20 +684,17 @@ class ExpenseViewModel(
     // Feature 5: Multi-Account & Instrument Liquidity Intelligence
     val instrumentSummaries: StateFlow<List<InstrumentSpendSummary>> = combine(
         currentMonthExpenses,
+        repository.allExpenses,
         _blacklistedMerchants
-    ) { expenses, blacklisted ->
-        val valid = expenses.filter {
+    ) { currentExpenses, allExpenses, blacklisted ->
+        val valid = currentExpenses.filter {
             !it.isExcluded && !isBlacklistedMerchant(it.merchantOrRecipient, blacklisted) && !isSelf(it)
         }
         val netMonthTotal = valid.sumOf { it.effectiveSpendAmount }.coerceAtLeast(0.0)
-        val grouped = valid.groupBy {
-            val raw = it.accountInfo.trim()
-            when {
-                it.type == ExpenseType.CREDIT_CARD || it.category.equals("Credit Card Bill", ignoreCase = true) -> "Credit Card Bills"
-                raw.equals("null", ignoreCase = true) -> "Other / Cash"
-                raw.isNotBlank() -> raw
-                else -> "Other / Cash"
-            }
+        val crossLinkMap = com.example.util.InstrumentResolver.buildCrossLinkMap(allExpenses)
+
+        val grouped = valid.groupBy { expense ->
+            com.example.util.InstrumentResolver.resolveInstrument(expense, crossLinkMap)
         }
 
         grouped.map { (account, list) ->
@@ -1127,6 +1124,7 @@ class ExpenseViewModel(
 
             val inserted = entity.copy(id = id)
             com.example.service.ExpenseProcessingHelper.checkCategoryLimitAlert(context, inserted)
+            com.example.service.ExpenseProcessingHelper.checkPossibleDuplicateSpend(context, inserted)
 
             if (preferences.isPersistentNotificationEnabled) {
                 LiveExpenditureNotificationService.updateLiveExpenditure(context)

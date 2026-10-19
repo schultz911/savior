@@ -63,17 +63,40 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         fun getDatabase(context: Context): AppDatabase {
-            return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "spend_tracker_database"
-                )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
-                    .fallbackToDestructiveMigration(dropAllTables = false)
-                    .build()
-                INSTANCE = instance
-                instance
+            val dbFile = context.getDatabasePath("spend_tracker_database")
+            val existing = INSTANCE
+            if (existing != null && existing.isOpen && dbFile.exists()) {
+                return existing
+            }
+            return synchronized(this) {
+                val current = INSTANCE
+                if (current != null && current.isOpen && dbFile.exists()) {
+                    current
+                } else {
+                    try {
+                        current?.close()
+                    } catch (_: Exception) {}
+                    dbFile.parentFile?.mkdirs()
+                    val instance = Room.databaseBuilder(
+                        context.applicationContext,
+                        AppDatabase::class.java,
+                        "spend_tracker_database"
+                    )
+                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                        .fallbackToDestructiveMigration(dropAllTables = false)
+                        .build()
+                    INSTANCE = instance
+                    instance
+                }
+            }
+        }
+
+        fun resetForTesting() {
+            synchronized(this) {
+                try {
+                    INSTANCE?.close()
+                } catch (_: Exception) {}
+                INSTANCE = null
             }
         }
     }
