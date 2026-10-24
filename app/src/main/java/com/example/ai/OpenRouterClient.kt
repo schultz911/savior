@@ -25,7 +25,7 @@ data class OpenRouterReasoning(
 
 @JsonClass(generateAdapter = true)
 data class OpenRouterChatRequest(
-    @param:Json(name = "model") val model: String = "google/gemini-3.5-flash-lite",
+    @param:Json(name = "model") val model: String = "anthropic/claude-haiku-5.5",
     @param:Json(name = "messages") val messages: List<OpenRouterMessage>,
     @param:Json(name = "temperature") val temperature: Double = 0.0,
     @param:Json(name = "max_tokens") val maxTokens: Int = 1000,

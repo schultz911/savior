@@ -96,7 +96,7 @@ data class FilterCriteria(
 )
 
 enum class AiEngineTier(val label: String, val subtitle: String) {
-    CLOUD_OPENROUTER("Cloud AI Active", "Gemini 3.5 Flash Lite • Cloud Intelligence"),
+    CLOUD_OPENROUTER("Cloud AI Active", "Claude Haiku 5.5 • Cloud Intelligence"),
     ON_DEVICE_AICORE("On-Device AI Active", "Gemini Nano • Local AICore NPU Inference"),
     LOCAL_RULES("Local Rules Active", "Deterministic Rule & Regex Engine • Low Power")
 }

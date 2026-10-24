@@ -235,7 +235,7 @@ class ExpenseRepository(
             for ((index, msg) in candidateMessages.withIndex()) {
                 onProgress?.invoke(index + 1, candidateMessages.size)
 
-                // Validate with AI (gemini-3.5-flash-lite) to confirm if actually spend/transfer and intelligently enhance
+                // Validate with AI (anthropic/claude-haiku-5.5) to confirm if actually spend/transfer and intelligently enhance
                 val inserted = com.example.service.ExpenseProcessingHelper.processRawSms(
                     context = context,
                     rawText = msg.body,

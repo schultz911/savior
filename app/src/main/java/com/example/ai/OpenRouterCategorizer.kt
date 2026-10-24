@@ -30,7 +30,7 @@ data class CategorizationResult(
 
 object OpenRouterCategorizer {
     private const val TAG = "OpenRouterCategorizer"
-    const val DEFAULT_MODEL = "google/gemini-3.5-flash-lite"
+    const val DEFAULT_MODEL = "anthropic/claude-haiku-5.5"
     const val FALLBACK_MODEL = "google/gemini-2.5-flash-lite"
 
     // Standard SAVIO spend categories
@@ -352,7 +352,7 @@ object OpenRouterCategorizer {
     }
 
     /**
-     * Parses and validates an SMS message using OpenRouter (gemini-3.5-flash-lite).
+     * Parses and validates an SMS message using OpenRouter (anthropic/claude-haiku-5.5).
      * Rigorously confirms whether message is an actual OUTGOING EXPENDITURE vs CREDIT/INTIMATION/AD/OTP.
      * Intelligently cleans and enhances merchant name, amount, account reference, and category.
      */
@@ -618,7 +618,7 @@ SMS Body: "$rawText"
     }
 
     /**
-     * Categorizes SMS text using gemini-3.5-flash-lite via OpenRouter.
+     * Categorizes SMS text using anthropic/claude-haiku-5.5 via OpenRouter.
      */
     suspend fun categorizeSms(
         rawText: String,

@@ -56,7 +56,7 @@ class ExpensePreferences(context: Context) {
         set(value) = prefs.edit().putString(KEY_OPENROUTER_API_KEY, value.trim()).apply()
 
     var openRouterModel: String
-        get() = prefs.getString(KEY_OPENROUTER_MODEL, "google/gemini-3.5-flash-lite")?.takeIf { it.isNotBlank() } ?: "google/gemini-3.5-flash-lite"
+        get() = prefs.getString(KEY_OPENROUTER_MODEL, "anthropic/claude-haiku-5.5")?.takeIf { it.isNotBlank() } ?: "anthropic/claude-haiku-5.5"
         set(value) = prefs.edit().putString(KEY_OPENROUTER_MODEL, value.trim()).apply()
 
     var isAiCoreForceEnabled: Boolean

@@ -170,6 +170,17 @@
 
 ## 3. Approved and Implemented
 
+- **[Version 2.1 Release: Default OpenRouter Model Upgrade to Claude Haiku 5.5] (Executed & Validated)**:
+  - **OpenRouter Default Model Upgrade (`OpenRouterCategorizer.kt`, `OpenRouterClient.kt`, `ExpensePreferences.kt`, `ExpenseViewModel.kt`, `SettingsScreen.kt`, `ExpenseProcessingHelper.kt`, `ExpenseRepository.kt`)**:
+    - Updated `OpenRouterCategorizer.DEFAULT_MODEL` from `google/gemini-3.5-flash-lite` to `anthropic/claude-haiku-5.5`. Retained automated fallback to `google/gemini-2.5-flash-lite` on HTTP 404/400 errors.
+    - Updated default model in `OpenRouterChatRequest` and fallback getter in `ExpensePreferences.openRouterModel`.
+    - Updated `AiEngineTier.CLOUD_OPENROUTER` badge description in `ExpenseViewModel.kt` to `"Claude Haiku 5.5 • Cloud Intelligence"` and updated Settings UI waterfall explanation to `"3-Tier Waterfall: Cloud Claude Haiku 5.5 → On-Device Gemini Nano (AICore) → Offline Regex Engine."`.
+  - **Version 2.1 Alignment & Packaging (`app/build.gradle.kts`, `ExampleRobolectricTest.kt`)**:
+    - Bumped `versionCode = 19` and `versionName = "2.1"`.
+    - Updated unit tests in `ExampleRobolectricTest.kt` asserting `VERSION_NAME == "2.1"` and `VERSION_CODE == 19`.
+    - Executed offline test suite (`.\gradlew test --offline`), passing with 100% test pass rate across 33 actionable tasks.
+    - Assembled minified production release APK with R8 (`.\gradlew assembleRelease --offline`), generating `savior-2.1.apk` (4.46 MB) in both project root and `public/`, and purged stale `savior-2.0.6.apk` binaries.
+
 - **[Version 2.0.6 Performance Optimization & Hardening Sweep: Phases 1, 2, & 3] (Executed & Validated)**:
   - **Phase 1: Mathematical Parity & Alert Cash-Flow Integrity (`ExpenseProcessingHelper.kt`, `ExpenseViewModel.kt`)**:
     - Resolved order-dependent premature in-loop coercion bug in `checkVelocityPacingAlert()`: when evaluating transactions ordered descending by timestamp, inline `.coerceAtLeast(0.0)` erased deductions when refunds preceded debits. Replaced with unclipped accumulation and a single post-loop `.coerceAtLeast(0.0)` clamp, restoring exact cash-flow parity with `LiveExpenditureNotificationService` and `ExpenseViewModel`.

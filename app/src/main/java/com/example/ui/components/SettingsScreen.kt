@@ -1732,7 +1732,7 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "3-Tier Waterfall: Cloud Gemini Flash-Lite → On-Device Gemini Nano (AICore) → Offline Regex Engine.",
+                        text = "3-Tier Waterfall: Cloud Claude Haiku 5.5 → On-Device Gemini Nano (AICore) → Offline Regex Engine.",
                         style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                         color = SavioSlateDark
                     )

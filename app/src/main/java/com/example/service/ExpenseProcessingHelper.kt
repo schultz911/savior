@@ -18,7 +18,7 @@ object ExpenseProcessingHelper {
     private const val TAG = "ExpenseProcessingHelper"
 
     /**
-     * Process raw incoming SMS using OpenRouter AI (gemini-3.5-flash-lite) if available,
+     * Process raw incoming SMS using OpenRouter AI (anthropic/claude-haiku-5.5) if available,
      * or fallback to local SmsParser.
      * Determines whether message is credit, debit, intimation, ad, OTP etc.
      */
@@ -56,7 +56,7 @@ object ExpenseProcessingHelper {
 
         val effectiveTimestamp = if (timestamp > 0L) timestamp else (localParsed?.parsedTimestamp ?: SmsParser.extractDateTime(rawText) ?: System.currentTimeMillis())
 
-        // 1. Tier 1: Cloud AI (OpenRouter Gemini 3.5 Flash Lite) if API key is provided
+        // 1. Tier 1: Cloud AI (OpenRouter Claude Haiku 5.5) if API key is provided
         if (apiKey.isNotEmpty()) {
             val aiParsed = OpenRouterCategorizer.parseSmsTransaction(
                 rawText = rawText,
@@ -293,7 +293,7 @@ object ExpenseProcessingHelper {
 
     /**
      * Categorizes using deterministic merchant rules & aliases, remembered merchant preferences,
-     * OpenRouter gemini-3.5-flash-lite, or heuristic classification.
+     * OpenRouter anthropic/claude-haiku-5.5, or heuristic classification.
      */
     suspend fun processAndInsertExpense(
         context: Context,
