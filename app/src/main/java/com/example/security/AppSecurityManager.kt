@@ -117,8 +117,8 @@ object AppSecurityManager {
         if (activity.supportFragmentManager.isStateSaved) return
 
         if (!canAuthenticate(activity)) {
-            unlock()
-            onSuccess()
+            lock()
+            onError("Authentication is unavailable. Check your device screen lock and try again. Savio remains locked.")
             return
         }
 

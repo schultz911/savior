@@ -1172,6 +1172,10 @@ class ExpenseViewModel(
     }
 
     fun setBiometricLockEnabled(enabled: Boolean) {
+        if (enabled && !com.example.security.AppSecurityManager.canAuthenticate(getApplication())) {
+            _syncFeedback.value = "Set up a device screen lock or biometric and try again."
+            return
+        }
         preferences.isBiometricLockEnabled = enabled
         _isBiometricLockEnabled.value = enabled
         _syncFeedback.value = if (enabled) "Biometric Lock enabled" else "Biometric Lock disabled"
