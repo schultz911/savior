@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -191,6 +193,8 @@ fun SettingsScreen(
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
+
+    val isExcelExporting by ExcelExportHelper.isExporting.collectAsStateWithLifecycle()
 
     var isCategoryLimitsExpanded by remember { mutableStateOf(false) }
     var isRulesExpanded by remember { mutableStateOf(false) }
@@ -1850,6 +1854,7 @@ fun SettingsScreen(
                             onClick = {
                                 ExcelExportHelper.exportExpensesToExcel(context, allExpenses)
                             },
+                            enabled = !isExcelExporting,
                             colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.weight(1f)
@@ -1860,7 +1865,7 @@ fun SettingsScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Export (.XLS)")
+                            Text(if (isExcelExporting) "Exporting..." else "Export (.XLS)")
                         }
 
                         Button(

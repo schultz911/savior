@@ -11,10 +11,39 @@ import java.io.OutputStreamWriter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.asStateFlow
 
 object ExcelExportHelper {
 
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+    private val inProgress = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val _isExporting = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val isExporting: kotlinx.coroutines.flow.StateFlow<Boolean> = _isExporting.asStateFlow()
+
     fun exportExpensesToExcel(context: Context, expenses: List<ExpenseEntity>) {
+        if (!inProgress.compareAndSet(false, true)) return
+        _isExporting.value = true
+        val appContext = context.applicationContext
+        scope.launch {
+            try {
+                val file = createExportFile(appContext, expenses)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    shareExport(appContext, file, expenses.size)
+                }
+            } catch (e: Exception) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    Toast.makeText(appContext, "Error exporting: " + e.localizedMessage, Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                inProgress.set(false)
+                _isExporting.value = false
+            }
+        }
+    }
+
+    internal fun createExportFile(context: Context, expenses: List<ExpenseEntity>): File {
+        var partial: File? = null
         try {
             val exportDir = File(context.cacheDir, "exports")
             if (!exportDir.exists()) {
@@ -22,8 +51,9 @@ object ExcelExportHelper {
             }
 
             val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
-            val fileName = "Savior_Expenses_${dateFormat.format(Date())}.xls"
+            val fileName = "Savior_Expenses_${dateFormat.format(Date())}_${java.util.UUID.randomUUID().toString().take(8)}.xls"
             val file = File(exportDir, fileName)
+            partial = file
 
             val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
             val sdfTime = SimpleDateFormat("HH:mm:ss", Locale.US)
@@ -103,6 +133,14 @@ object ExcelExportHelper {
                 }
             }
 
+            return file
+        } catch (e: Exception) {
+            partial?.delete()
+            throw e
+        }
+    }
+
+    private fun shareExport(context: Context, file: File, count: Int) {
             val uri = FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.fileprovider",
@@ -113,7 +151,7 @@ object ExcelExportHelper {
                 type = "application/vnd.ms-excel"
                 putExtra(Intent.EXTRA_STREAM, uri)
                 putExtra(Intent.EXTRA_SUBJECT, "Savio₹ Expenses Export")
-                putExtra(Intent.EXTRA_TEXT, "Exported ${expenses.size} transactions from Savio₹.")
+                putExtra(Intent.EXTRA_TEXT, "Exported ${count} transactions from Savio₹.")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
@@ -123,16 +161,7 @@ object ExcelExportHelper {
             }
             context.startActivity(chooser)
 
-            Toast.makeText(context, "Exported ${expenses.size} transactions to $fileName", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            e.printStackTrace()
-            try {
-                val exportDir = File(context.cacheDir, "exports")
-                val incompleteFiles = exportDir.listFiles { f -> f.isFile && f.name.startsWith("Savior_Expenses_") }
-                incompleteFiles?.forEach { it.delete() }
-            } catch (_: Exception) {}
-            Toast.makeText(context, "Error exporting: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
-        }
+            Toast.makeText(context, "Exported ${count} transactions to ${file.name}", Toast.LENGTH_SHORT).show()
     }
 
     private fun escapeXml(input: String): String {
