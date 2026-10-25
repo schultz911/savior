@@ -332,21 +332,24 @@ object OpenRouterCategorizer {
             maxTokens = maxTokens,
             reasoning = reasoningConfig
         )
-        return try {
-            OpenRouterClient.api.createChatCompletion(
-                authorization = bearer,
-                request = request
-            )
-        } catch (e: retrofit2.HttpException) {
-            if ((e.code() == 404 || e.code() == 400) && chosenModel == DEFAULT_MODEL) {
-                Log.w(TAG, "Model $chosenModel returned HTTP ${e.code()}, retrying with fallback model $FALLBACK_MODEL")
-                val fallbackReasoning = OpenRouterReasoning(effort = "minimal")
+        val session = kotlinx.coroutines.currentCoroutineContext()[CloudRequestSession] ?: CloudRequestSession()
+        return session.execute(bearer, chosenModel) {
+            try {
                 OpenRouterClient.api.createChatCompletion(
                     authorization = bearer,
-                    request = request.copy(model = FALLBACK_MODEL, reasoning = fallbackReasoning)
+                    request = request
                 )
-            } else {
-                throw e
+            } catch (e: retrofit2.HttpException) {
+                if ((e.code() == 404 || e.code() == 400) && chosenModel == DEFAULT_MODEL) {
+                    Log.w(TAG, "Model $chosenModel returned HTTP ${e.code()}, retrying with fallback model $FALLBACK_MODEL")
+                    val fallbackReasoning = OpenRouterReasoning(effort = "minimal")
+                    OpenRouterClient.api.createChatCompletion(
+                        authorization = bearer,
+                        request = request.copy(model = FALLBACK_MODEL, reasoning = fallbackReasoning)
+                    )
+                } else {
+                    throw e
+                }
             }
         }
     }
@@ -607,6 +610,10 @@ SMS Body: "$rawText"
                 isAiClassified = true,
                 rawText = rawText
             )
+        } catch (e: CloudRequestSuppressedException) {
+            null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: retrofit2.HttpException) {
             val errorBody = try { e.response()?.errorBody()?.string() } catch (_: Exception) { null }
             Log.e(TAG, "OpenRouter HTTP ${e.code()} parse error: $errorBody", e)
@@ -733,6 +740,10 @@ Output category:
                     )
                 }
             }
+        } catch (e: CloudRequestSuppressedException) {
+            CategorizationResult("UNKNOWN", false, 0f, e.message)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: retrofit2.HttpException) {
             val errorBody = try { e.response()?.errorBody()?.string() } catch (_: Exception) { null }
             Log.e(TAG, "OpenRouter HTTP ${e.code()} categorization error: $errorBody", e)

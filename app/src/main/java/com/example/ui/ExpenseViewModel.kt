@@ -999,6 +999,7 @@ class ExpenseViewModel(
     }
 
     fun updateApiKey(key: String) {
+        com.example.ai.CloudRetryControl.retry()
         val trimmed = key.trim()
         preferences.openRouterApiKey = trimmed
         _openRouterApiKey.value = trimmed

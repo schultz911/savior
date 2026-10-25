@@ -31,7 +31,7 @@ object ExpenseProcessingHelper {
         isBatchSync: Boolean = false,
         preloadedRules: List<MerchantRuleEntity>? = null,
         preloadedInstrumentRules: List<InstrumentRuleEntity>? = null
-    ): ExpenseEntity? = withContext(Dispatchers.IO) {
+    ): ExpenseEntity? = withContext(Dispatchers.IO + (kotlinx.coroutines.currentCoroutineContext()[com.example.ai.CloudRequestSession] ?: com.example.ai.CloudRequestSession())) {
         val app = context.applicationContext as? SpendTrackerApplication ?: return@withContext null
         val prefs = app.preferences
         val apiKey = prefs.openRouterApiKey.trim()

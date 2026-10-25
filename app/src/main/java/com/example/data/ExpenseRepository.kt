@@ -197,7 +197,7 @@ class ExpenseRepository(
             inserted != null
         }
 
-    suspend fun syncInbox(onProgress: ((current: Int, total: Int) -> Unit)? = null): Int = withContext(Dispatchers.IO) {
+    suspend fun syncInbox(onProgress: ((current: Int, total: Int) -> Unit)? = null): Int = withContext(Dispatchers.IO + com.example.ai.CloudRequestSession()) {
         if (!SmsReader.hasReadSmsPermission(context)) {
             return@withContext 0
         }
@@ -261,7 +261,7 @@ class ExpenseRepository(
         }
     }
 
-    suspend fun rescanAllInbox(onProgress: ((current: Int, total: Int) -> Unit)? = null): Int = withContext(Dispatchers.IO) {
+    suspend fun rescanAllInbox(onProgress: ((current: Int, total: Int) -> Unit)? = null): Int = withContext(Dispatchers.IO + com.example.ai.CloudRequestSession()) {
         if (!SmsReader.hasReadSmsPermission(context)) {
             return@withContext 0
         }

@@ -194,6 +194,7 @@ fun SettingsScreen(
         }
     }
 
+    val cloudFailureMessage by com.example.ai.CloudRetryControl.message.collectAsStateWithLifecycle()
     val isExcelExporting by ExcelExportHelper.isExporting.collectAsStateWithLifecycle()
 
     var isCategoryLimitsExpanded by remember { mutableStateOf(false) }
@@ -1779,6 +1780,13 @@ fun SettingsScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = SavioEmerald)
                     ) {
                         Text("Save API Key")
+                    }
+                    cloudFailureMessage?.let { message ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(message, style = MaterialTheme.typography.bodySmall, color = SavioSlateMuted)
+                        TextButton(onClick = { com.example.ai.CloudRetryControl.retry() }) {
+                            Text("Retry Cloud AI on next SMS or scan")
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
