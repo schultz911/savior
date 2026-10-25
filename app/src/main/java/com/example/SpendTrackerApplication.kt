@@ -6,7 +6,10 @@ import com.example.data.ExpensePreferences
 import com.example.data.ExpenseRepository
 import com.example.service.LiveExpenditureNotificationService
 
-class SpendTrackerApplication : Application() {
+class SpendTrackerApplication : Application(), androidx.work.Configuration.Provider {
+
+    override val workManagerConfiguration: androidx.work.Configuration
+        get() = androidx.work.Configuration.Builder().build()
 
     lateinit var database: AppDatabase
         private set

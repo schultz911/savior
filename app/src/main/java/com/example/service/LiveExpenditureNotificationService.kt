@@ -7,11 +7,9 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import com.example.MainActivity
 import com.example.R
 import com.example.SpendTrackerApplication
@@ -22,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -38,66 +37,35 @@ class LiveExpenditureNotificationService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onCreate() {
-        super.onCreate()
-        createNotificationChannel(this)
-        val initialNotification = buildNotification(
-            monthTitle = "Spend Tracker",
-            contentText = "Monitoring SMS for debits, transfers & spends",
-            pacingStatus = PacingStatus.ON_TRACK,
-            progress = 0
-        )
-
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    startForeground(
-                        NOTIFICATION_ID,
-                        initialNotification,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-                    )
-                } else {
-                    startForeground(NOTIFICATION_ID, initialNotification)
-                }
-            } else {
-                startForeground(NOTIFICATION_ID, initialNotification)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            try {
-                val notificationManager =
-                    getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                notificationManager.notify(NOTIFICATION_ID, initialNotification)
-            } catch (ne: Exception) {
-                ne.printStackTrace()
-            }
-            stopSelf()
-        }
-    }
-
+    // Compatibility entry point for intents from an older installed release. No idle service remains.
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val action = intent?.action
-        if (action == ACTION_STOP) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
-            return START_NOT_STICKY
+        if (intent?.action == ACTION_STOP) {
+            stopNotification(this)
+            stopSelf(startId)
+        } else {
+            serviceScope.launch {
+                try { refreshNotification(applicationContext) }
+                finally { stopSelfResult(startId) }
+            }
         }
-
-        refreshExpenditure()
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
-    private fun refreshExpenditure() {
-        serviceScope.launch {
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        stopForeground(STOP_FOREGROUND_DETACH)
+        stopSelf()
+    }
+
+    private class NotificationRenderer(private val context: Context) {
+    suspend fun refreshExpenditure() {
             try {
-                val app = application as? SpendTrackerApplication ?: return@launch
+                val app = context.applicationContext as? SpendTrackerApplication ?: return
                 val dao = app.database.expenseDao()
                 val prefs = app.preferences
 
                 if (!prefs.isPersistentNotificationEnabled) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    stopSelf()
-                    return@launch
+                    cancelNotification(context)
+                    return
                 }
 
                 val currentMonthKey = ExpenseEntity.formatMonthKey(System.currentTimeMillis())
@@ -166,7 +134,7 @@ class LiveExpenditureNotificationService : Service() {
                 val safeDaily = if (budget > 0) remainingDiscretionary / daysRemaining else 0.0
 
                 // Proactively alert user if any recurring bill is due in the next 48 hours
-                SpendAlertManager.checkAndNotifyUpcomingBills(this@LiveExpenditureNotificationService, recurringCommitments, currency)
+                SpendAlertManager.checkAndNotifyUpcomingBills(context, recurringCommitments, currency)
 
                 val progress = if (budget > 0) {
                     ((totalSpend / budget) * 100).toInt().coerceIn(0, 100)
@@ -202,12 +170,15 @@ class LiveExpenditureNotificationService : Service() {
                 )
 
                 val notificationManager =
-                    getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                notificationManager.notify(NOTIFICATION_ID, notification)
-            } catch (e: Exception) {
-                e.printStackTrace()
+                    context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                synchronized(notificationLock) {
+                    if (prefs.isPersistentNotificationEnabled) notificationManager.notify(NOTIFICATION_ID, notification)
+                    else notificationManager.cancel(NOTIFICATION_ID)
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             }
-        }
     }
 
     private fun buildNotification(
@@ -217,31 +188,31 @@ class LiveExpenditureNotificationService : Service() {
         progress: Int,
         currency: String = "₹"
     ): Notification {
-        val openAppIntent = Intent(this, MainActivity::class.java).apply {
+        val openAppIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         val pendingOpenIntent = PendingIntent.getActivity(
-            this,
+            context,
             0,
             openAppIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val addExpenseIntent = Intent(this, MainActivity::class.java).apply {
+        val addExpenseIntent = Intent(context, MainActivity::class.java).apply {
             action = ACTION_ADD_SPEND
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(MainActivity.EXTRA_SHOW_MANUAL_ADD, true)
         }
         val pendingAddExpenseIntent = PendingIntent.getActivity(
-            this,
+            context,
             2,
             addExpenseIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val pacedLargeIcon = getPacedNotificationLargeIcon(this, pacingStatus, currency)
+        val pacedLargeIcon = getPacedNotificationLargeIcon(context, pacingStatus, currency)
 
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_rupee)
             .setLargeIcon(pacedLargeIcon)
             .setColor(0xFF059669.toInt())
@@ -319,12 +290,25 @@ class LiveExpenditureNotificationService : Service() {
         "$currency${currencyFormatter.format(amount)}"
     }
 
+    }
+
     override fun onDestroy() {
         serviceScope.cancel()
         super.onDestroy()
     }
 
     companion object {
+        private val notificationLock = Any()
+        const val REFRESH_WORK_NAME = "savio_live_notification_refresh"
+
+        internal suspend fun refreshNotification(context: Context) {
+            NotificationRenderer(context.applicationContext).refreshExpenditure()
+        }
+
+        private fun cancelNotification(context: Context) = synchronized(notificationLock) {
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID)
+        }
+
         private val pacedIconCache = java.util.concurrent.ConcurrentHashMap<String, Bitmap>()
 
         private val monthKeyParser = java.text.SimpleDateFormat("yyyy-MM", Locale.US)
@@ -377,25 +361,17 @@ class LiveExpenditureNotificationService : Service() {
         }
 
         fun updateLiveExpenditure(context: Context) {
-            val intent = Intent(context, LiveExpenditureNotificationService::class.java).apply {
-                action = ACTION_SYNC
-            }
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    ContextCompat.startForegroundService(context, intent)
-                } else {
-                    context.startService(intent)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            val request = androidx.work.OneTimeWorkRequestBuilder<NotificationRefreshWorker>().build()
+            // Serialize events, including an event arriving while a previous refresh is reading Room.
+            androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+                REFRESH_WORK_NAME, androidx.work.ExistingWorkPolicy.APPEND_OR_REPLACE, request
+            )
         }
 
         fun stopNotification(context: Context) {
-            val intent = Intent(context, LiveExpenditureNotificationService::class.java).apply {
-                action = ACTION_STOP
-            }
-            context.startService(intent)
+            androidx.work.WorkManager.getInstance(context).cancelUniqueWork(REFRESH_WORK_NAME)
+            cancelNotification(context)
+            context.stopService(Intent(context, LiveExpenditureNotificationService::class.java))
         }
     }
 }
