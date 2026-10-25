@@ -42,6 +42,7 @@ object DatabaseBackupHelper {
     private const val ITERATIONS = 10000
     private const val KEY_LENGTH_BITS = 256
     const val BACKUP_VERSION = 2
+    @Deprecated("Only for importing legacy local snapshots")
     const val DEFAULT_SNAPSHOT_PASSPHRASE = "Savio_Vault_Snapshot_Local_Secure_Key"
     val MAGIC_HEADER = byteArrayOf(0x53, 0x41, 0x56, 0x31) // "SAV1"
 
@@ -129,30 +130,7 @@ object DatabaseBackupHelper {
                 baos.toByteArray()
             }
 
-            // Generate salt & IV
-            val random = SecureRandom()
-            val salt = ByteArray(SALT_LENGTH_BYTES)
-            random.nextBytes(salt)
-            val iv = ByteArray(IV_LENGTH_BYTES)
-            random.nextBytes(iv)
-
-            // Derive key
-            val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-            val spec = PBEKeySpec(passphrase.toCharArray(), salt, ITERATIONS, KEY_LENGTH_BITS)
-            val secretKey = SecretKeySpec(factory.generateSecret(spec).encoded, "AES")
-
-            val cipher = Cipher.getInstance(ALGORITHM)
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey, GCMParameterSpec(TAG_LENGTH_BITS, iv))
-            val cipherBytes = cipher.doFinal(plainBytes)
-
-            // Output format: [Magic: 4 bytes][Salt: 16 bytes][IV: 12 bytes][Ciphertext]
-            outputStream.use { out ->
-                out.write(MAGIC_HEADER)
-                out.write(salt)
-                out.write(iv)
-                out.write(cipherBytes)
-                out.flush()
-            }
+            encryptPayload(plainBytes, passphrase, outputStream)
 
             Result.success(allExpenses.size)
         } catch (e: Exception) {
@@ -300,6 +278,34 @@ object DatabaseBackupHelper {
         }
     }
 
+    private fun encryptPayload(plainBytes: ByteArray, passphrase: String, outputStream: OutputStream) {
+        // Generate salt & IV
+        val random = SecureRandom()
+        val salt = ByteArray(SALT_LENGTH_BYTES)
+        random.nextBytes(salt)
+        val iv = ByteArray(IV_LENGTH_BYTES)
+        random.nextBytes(iv)
+
+        // Derive key
+        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        val spec = PBEKeySpec(passphrase.toCharArray(), salt, ITERATIONS, KEY_LENGTH_BITS)
+        val secretKey = SecretKeySpec(factory.generateSecret(spec).encoded, "AES")
+
+        val cipher = Cipher.getInstance(ALGORITHM)
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, GCMParameterSpec(TAG_LENGTH_BITS, iv))
+        val cipherBytes = cipher.doFinal(plainBytes)
+
+        // Output format: [Magic: 4 bytes][Salt: 16 bytes][IV: 12 bytes][Ciphertext]
+        outputStream.use { out ->
+            out.write(MAGIC_HEADER)
+            out.write(salt)
+            out.write(iv)
+            out.write(cipherBytes)
+            out.flush()
+            if (out is FileOutputStream) out.fd.sync()
+        }
+    }
+
     private fun decryptPayload(inputStream: InputStream, passphrase: String, allowLegacyWithoutHeader: Boolean = true): ByteArray {
         val allBytes = inputStream.use { it.readBytes() }
         val minLegacySize = SALT_LENGTH_BYTES + IV_LENGTH_BYTES + 16
@@ -366,12 +372,35 @@ object DatabaseBackupHelper {
     // ==========================================
     // Rolling Local Encrypted Snapshot Engine
     // ==========================================
-    fun getSnapshotsDirectory(context: Context): File {
-        val dir = File(context.getExternalFilesDir(null) ?: context.filesDir, "snapshots")
-        if (!dir.exists()) {
-            dir.mkdirs()
+    private const val DEVICE_SNAPSHOT_PREFIX = "savior_snapshot_device_"
+    private val snapshotMutex = kotlinx.coroutines.sync.Mutex()
+
+    fun getSnapshotsDirectory(context: Context): File = File(context.filesDir, "snapshots").apply {
+        check(isDirectory || mkdirs()) { "Could not open the local snapshot directory." }
+    }
+
+    private fun snapshotDirectories(context: Context): List<File> = listOfNotNull(
+        getSnapshotsDirectory(context), context.getExternalFilesDir(null)?.let { File(it, "snapshots") }
+    ).distinctBy { it.absolutePath }
+
+    private fun isDeviceSnapshot(file: File) = file.name.startsWith(DEVICE_SNAPSHOT_PREFIX)
+
+    internal fun migrateLegacySnapshot(source: File, directory: File, secret: String, legacyPassphrase: String): File {
+        // Authenticate first. A bad password/corrupt file cannot replace or delete the original.
+        val plain = FileInputStream(source).use { decryptPayload(it, legacyPassphrase) }
+        val target = File(directory, DEVICE_SNAPSHOT_PREFIX + java.util.UUID.randomUUID() + ".savior")
+        val pending = File(directory, target.name + ".partial")
+        try {
+            FileOutputStream(pending).use { encryptPayload(plain, secret, it) }
+            val verified = FileInputStream(pending).use { decryptPayload(it, secret, false) }
+            check(plain.contentEquals(verified)) { "Snapshot verification failed; original preserved." }
+            check(pending.renameTo(target)) { "Could not publish migrated snapshot; original preserved." }
+            target.setLastModified(source.lastModified())
+            check(source.delete()) { "Snapshot migrated but the old copy could not be removed." }
+            return target
+        } finally {
+            pending.delete()
         }
-        return dir
     }
 
     suspend fun createLocalRollingSnapshot(
@@ -379,56 +408,71 @@ object DatabaseBackupHelper {
         dao: ExpenseDao,
         preferences: ExpensePreferences,
         ruleDao: MerchantRuleDao?,
-        passphrase: String = DEFAULT_SNAPSHOT_PASSPHRASE,
+        passphrase: String = "",
         maxSnapshots: Int = 3,
         instrumentRuleDao: InstrumentRuleDao? = null
     ): Result<File> = withContext(Dispatchers.IO) {
+        snapshotMutex.lock()
         try {
+            require(maxSnapshots > 0)
             val dir = getSnapshotsDirectory(context)
-            val timestampStr = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            val snapshotFile = File(dir, "savior_snapshot_$timestampStr.savior")
-
-            FileOutputStream(snapshotFile).use { out ->
-                val result = createEncryptedBackup(dao, preferences, passphrase, out, ruleDao, instrumentRuleDao)
-                if (result.isFailure) {
-                    snapshotFile.delete()
-                    return@withContext Result.failure(result.exceptionOrNull() ?: Exception("Snapshot creation failed"))
+            val existing = listLocalSnapshots(context)
+            val deviceBound = passphrase.isEmpty()
+            val secret = if (deviceBound) {
+                com.example.security.SnapshotSecretStore(context).readOrCreate(existing.none { isDeviceSnapshot(it) })
+            } else passphrase
+            if (deviceBound) {
+                for (legacy in existing.filterNot { isDeviceSnapshot(it) }) {
+                    migrateLegacySnapshot(legacy, dir, secret, DEFAULT_SNAPSHOT_PASSPHRASE)
                 }
             }
-
-            // Prune older snapshots to keep only the 3 most recent
-            val existing = dir.listFiles { _, name -> name.startsWith("savior_snapshot_") && name.endsWith(".savior") }
-            if (existing != null && existing.size > maxSnapshots) {
-                existing.sortedBy { it.lastModified() }
-                    .take(existing.size - maxSnapshots)
-                    .forEach { it.delete() }
-            }
-
+            val prefix = if (deviceBound) DEVICE_SNAPSHOT_PREFIX else "savior_snapshot_"
+            val snapshotFile = File(dir, prefix + java.util.UUID.randomUUID() + ".savior")
+            val pending = File(dir, snapshotFile.name + ".partial")
+            try {
+                FileOutputStream(pending).use { out ->
+                    createEncryptedBackup(dao, preferences, secret, out, ruleDao, instrumentRuleDao).getOrThrow()
+                }
+                FileInputStream(pending).use { decryptPayload(it, secret, false) }
+                check(pending.renameTo(snapshotFile)) { "Could not publish local snapshot." }
+            } finally { pending.delete() }
+            // Prune only the same kind of snapshot after verification. Other recovery files stay intact.
+            listLocalSnapshots(context).filter { isDeviceSnapshot(it) == deviceBound }
+                .drop(maxSnapshots).forEach { it.delete() }
             Result.success(snapshotFile)
         } catch (e: Exception) {
             Result.failure(e)
-        }
+        } finally { snapshotMutex.unlock() }
     }
 
-    fun listLocalSnapshots(context: Context): List<File> {
-        val dir = getSnapshotsDirectory(context)
-        return dir.listFiles { _, name -> name.startsWith("savior_snapshot_") && name.endsWith(".savior") }
-            ?.sortedByDescending { it.lastModified() }
-            ?: emptyList()
-    }
+    fun listLocalSnapshots(context: Context): List<File> = snapshotDirectories(context).flatMap { dir ->
+        dir.listFiles { file -> file.isFile && file.name.startsWith("savior_snapshot_") && file.name.endsWith(".savior") }
+            ?.toList() ?: emptyList()
+    }.sortedByDescending { it.lastModified() }
 
     suspend fun restoreLatestLocalSnapshot(
         context: Context,
         dao: ExpenseDao,
         preferences: ExpensePreferences,
         ruleDao: MerchantRuleDao?,
-        passphrase: String = DEFAULT_SNAPSHOT_PASSPHRASE,
+        passphrase: String = "",
         instrumentRuleDao: InstrumentRuleDao? = null
     ): Result<Int> = withContext(Dispatchers.IO) {
-        val snapshots = listLocalSnapshots(context)
-        val latest = snapshots.firstOrNull() ?: return@withContext Result.failure(IllegalStateException("No local snapshot available to restore."))
-        FileInputStream(latest).use { input ->
-            restoreEncryptedBackup(input, passphrase, dao, preferences, ruleDao, instrumentRuleDao = instrumentRuleDao)
-        }
+        snapshotMutex.lock()
+        try {
+            val snapshots = listLocalSnapshots(context)
+            val latest = snapshots.firstOrNull() ?: error("No local snapshot available to restore.")
+            val secret = if (isDeviceSnapshot(latest) || passphrase.isEmpty()) {
+                com.example.security.SnapshotSecretStore(context).readOrCreate(snapshots.none { isDeviceSnapshot(it) })
+            } else passphrase
+            val verified = if (!isDeviceSnapshot(latest) && passphrase.isEmpty()) {
+                migrateLegacySnapshot(latest, getSnapshotsDirectory(context), secret, DEFAULT_SNAPSHOT_PASSPHRASE)
+            } else latest
+            FileInputStream(verified).use { input ->
+                restoreEncryptedBackup(input, secret, dao, preferences, ruleDao, instrumentRuleDao = instrumentRuleDao)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        } finally { snapshotMutex.unlock() }
     }
 }

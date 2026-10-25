@@ -1945,7 +1945,7 @@ fun SettingsScreen(
                         color = SavioSlateDark
                     )
                     Text(
-                        text = "Instant 1-tap backup stored safely inside device sandbox without needing a file picker.",
+                        text = "Device-only recovery. Use Backup Vault before reinstalling Savio or changing phones.",
                         style = MaterialTheme.typography.bodySmall,
                         color = SavioSlateMuted
                     )
