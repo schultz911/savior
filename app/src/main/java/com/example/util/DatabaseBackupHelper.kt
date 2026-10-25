@@ -64,79 +64,67 @@ object DatabaseBackupHelper {
             val allInstrumentRules = instrumentRuleDao?.getAllInstrumentsSync() ?: emptyList()
             val allCategoryLimits = preferences.getAllCategoryLimits()
 
-            val rootJson = JSONObject().apply {
-                put("version", BACKUP_VERSION)
-                put("exportTimestamp", System.currentTimeMillis())
-                put("currency", preferences.currency)
-                put("monthlySalary", preferences.monthlySalary)
-                put("monthlyBudget", preferences.monthlyBudget)
-                put("savingsGoal", preferences.savingsGoal)
-
-                val blacklistedArray = JSONArray()
-                preferences.getBlacklistedMerchants().forEach { blacklistedArray.put(it) }
-                put("blacklistedMerchants", blacklistedArray)
-
-                // Category limits map
-                val categoryLimitsObj = JSONObject()
-                allCategoryLimits.forEach { (cat, lim) -> categoryLimitsObj.put(cat, lim) }
-                put("categoryLimits", categoryLimitsObj)
-
-                // Merchant rules (Auto-Rule & Merchant Alias Engine)
-                val rulesArray = JSONArray()
-                allRules.forEach { r ->
-                    val rObj = JSONObject().apply {
-                        put("merchantPattern", r.merchantPattern)
-                        put("assignedCategory", r.assignedCategory)
-                        put("normalizedAlias", r.normalizedAlias)
-                        put("isRegex", r.isRegex)
-                    }
-                    rulesArray.put(rObj)
-                }
-                put("merchantRules", rulesArray)
-
-                // User-defined Instrument Rules & Regex Markers
-                val instrumentRulesArray = JSONArray()
-                allInstrumentRules.forEach { ir ->
-                    val irObj = JSONObject().apply {
-                        put("bankName", ir.bankName)
-                        put("cardOrAccountName", ir.cardOrAccountName)
-                        put("last4", ir.last4)
-                        put("markers", ir.markers)
-                    }
-                    instrumentRulesArray.put(irObj)
-                }
-                put("instrumentRules", instrumentRulesArray)
-
-                // Expenses with refund & reversal state
-                val expensesArray = JSONArray()
-                allExpenses.forEach { exp ->
-                    val obj = JSONObject().apply {
-                        put("smsId", exp.smsId)
-                        put("amount", exp.amount)
-                        put("currency", exp.currency)
-                        put("type", exp.type.name)
-                        put("merchantOrRecipient", exp.merchantOrRecipient)
-                        put("accountInfo", exp.accountInfo)
-                        put("category", exp.category)
-                        put("rawBody", exp.rawBody)
-                        put("sender", exp.sender)
-                        put("timestamp", exp.timestamp)
-                        put("monthKey", exp.monthKey)
-                        put("isRecurring", exp.isRecurring)
-                        put("refundedAmount", exp.refundedAmount)
-                        put("isReversal", exp.isReversal)
-                        put("isExcluded", exp.isExcluded)
-                        put("originalMerchant", exp.originalMerchant.ifEmpty { exp.merchantOrRecipient })
-                    }
-                    expensesArray.put(obj)
-                }
-                put("expenses", expensesArray)
-            }
-
-            val uncompressedBytes = rootJson.toString().toByteArray(Charsets.UTF_8)
+            // Write JSON directly into GZIP: no full document tree, string or UTF-8 buffer.
             val plainBytes = ByteArrayOutputStream().use { baos ->
                 GZIPOutputStream(baos).use { gzip ->
-                    gzip.write(uncompressedBytes)
+                    android.util.JsonWriter(gzip.writer(Charsets.UTF_8).buffered()).use { json ->
+                        json.beginObject()
+                        json.name("version").value(BACKUP_VERSION.toLong())
+                        json.name("exportTimestamp").value(System.currentTimeMillis())
+                        json.name("currency").value(preferences.currency)
+                        json.name("monthlySalary").value(preferences.monthlySalary)
+                        json.name("monthlyBudget").value(preferences.monthlyBudget)
+                        json.name("savingsGoal").value(preferences.savingsGoal)
+                        json.name("blacklistedMerchants").beginArray()
+                        preferences.getBlacklistedMerchants().forEach { json.value(it) }
+                        json.endArray()
+                        json.name("categoryLimits").beginObject()
+                        allCategoryLimits.forEach { (cat, limit) -> json.name(cat).value(limit) }
+                        json.endObject()
+                        json.name("merchantRules").beginArray()
+                        for (rule in allRules) {
+                            json.beginObject()
+                            json.name("merchantPattern").value(rule.merchantPattern)
+                            json.name("assignedCategory").value(rule.assignedCategory)
+                            json.name("normalizedAlias").value(rule.normalizedAlias)
+                            json.name("isRegex").value(rule.isRegex)
+                            json.endObject()
+                        }
+                        json.endArray()
+                        json.name("instrumentRules").beginArray()
+                        for (rule in allInstrumentRules) {
+                            json.beginObject()
+                            json.name("bankName").value(rule.bankName)
+                            json.name("cardOrAccountName").value(rule.cardOrAccountName)
+                            json.name("last4").value(rule.last4)
+                            json.name("markers").value(rule.markers)
+                            json.endObject()
+                        }
+                        json.endArray()
+                        json.name("expenses").beginArray()
+                        for (exp in allExpenses) {
+                            json.beginObject()
+                            json.name("smsId").value(exp.smsId)
+                            json.name("amount").value(exp.amount)
+                            json.name("currency").value(exp.currency)
+                            json.name("type").value(exp.type.name)
+                            json.name("merchantOrRecipient").value(exp.merchantOrRecipient)
+                            json.name("accountInfo").value(exp.accountInfo)
+                            json.name("category").value(exp.category)
+                            json.name("rawBody").value(exp.rawBody)
+                            json.name("sender").value(exp.sender)
+                            json.name("timestamp").value(exp.timestamp)
+                            json.name("monthKey").value(exp.monthKey)
+                            json.name("isRecurring").value(exp.isRecurring)
+                            json.name("refundedAmount").value(exp.refundedAmount)
+                            json.name("isReversal").value(exp.isReversal)
+                            json.name("isExcluded").value(exp.isExcluded)
+                            json.name("originalMerchant").value(exp.originalMerchant.ifEmpty { exp.merchantOrRecipient })
+                            json.endObject()
+                        }
+                        json.endArray()
+                        json.endObject()
+                    }
                 }
                 baos.toByteArray()
             }
@@ -182,48 +170,7 @@ object DatabaseBackupHelper {
         instrumentRuleDao: InstrumentRuleDao? = null
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
-            val allBytes = inputStream.use { it.readBytes() }
-            val minLegacySize = SALT_LENGTH_BYTES + IV_LENGTH_BYTES + 16
-            val minMagicSize = MAGIC_HEADER.size + minLegacySize
-
-            if (allBytes.size < minLegacySize) {
-                return@withContext Result.failure(IllegalArgumentException("File is too small or corrupted."))
-            }
-
-            val byteBuffer = ByteBuffer.wrap(allBytes)
-
-            val hasMagic = allBytes.size >= minMagicSize &&
-                    allBytes[0] == MAGIC_HEADER[0] &&
-                    allBytes[1] == MAGIC_HEADER[1] &&
-                    allBytes[2] == MAGIC_HEADER[2] &&
-                    allBytes[3] == MAGIC_HEADER[3]
-
-            if (hasMagic) {
-                byteBuffer.position(MAGIC_HEADER.size)
-            } else {
-                if (!allowLegacyWithoutHeader || isKnownNonBackupFormat(allBytes)) {
-                    return@withContext Result.failure(IllegalArgumentException("Invalid or corrupted Savio₹ backup file."))
-                }
-            }
-
-            val salt = ByteArray(SALT_LENGTH_BYTES)
-            byteBuffer.get(salt)
-
-            val iv = ByteArray(IV_LENGTH_BYTES)
-            byteBuffer.get(iv)
-
-            val cipherBytes = ByteArray(byteBuffer.remaining())
-            byteBuffer.get(cipherBytes)
-
-            // Derive key
-            val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-            val spec = PBEKeySpec(passphrase.toCharArray(), salt, ITERATIONS, KEY_LENGTH_BITS)
-            val secretKey = SecretKeySpec(factory.generateSecret(spec).encoded, "AES")
-
-            val cipher = Cipher.getInstance(ALGORITHM)
-            cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(TAG_LENGTH_BITS, iv))
-            val decryptedBytes = cipher.doFinal(cipherBytes)
-
+            val decryptedBytes = decryptPayload(inputStream, passphrase, allowLegacyWithoutHeader)
             // Transparent GZIP decompression with legacy fallback
             val isGzip = decryptedBytes.size >= 2 &&
                     decryptedBytes[0] == 0x1F.toByte() &&
@@ -351,6 +298,51 @@ object DatabaseBackupHelper {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private fun decryptPayload(inputStream: InputStream, passphrase: String, allowLegacyWithoutHeader: Boolean = true): ByteArray {
+        val allBytes = inputStream.use { it.readBytes() }
+        val minLegacySize = SALT_LENGTH_BYTES + IV_LENGTH_BYTES + 16
+        val minMagicSize = MAGIC_HEADER.size + minLegacySize
+
+        if (allBytes.size < minLegacySize) {
+            throw IllegalArgumentException("File is too small or corrupted.")
+        }
+
+        val byteBuffer = ByteBuffer.wrap(allBytes)
+
+        val hasMagic = allBytes.size >= minMagicSize &&
+                allBytes[0] == MAGIC_HEADER[0] &&
+                allBytes[1] == MAGIC_HEADER[1] &&
+                allBytes[2] == MAGIC_HEADER[2] &&
+                allBytes[3] == MAGIC_HEADER[3]
+
+        if (hasMagic) {
+            byteBuffer.position(MAGIC_HEADER.size)
+        } else {
+            if (!allowLegacyWithoutHeader || isKnownNonBackupFormat(allBytes)) {
+                throw IllegalArgumentException("Invalid or corrupted Savio₹ backup file.")
+            }
+        }
+
+        val salt = ByteArray(SALT_LENGTH_BYTES)
+        byteBuffer.get(salt)
+
+        val iv = ByteArray(IV_LENGTH_BYTES)
+        byteBuffer.get(iv)
+
+        val ciphertextOffset = byteBuffer.position()
+        val ciphertextLength = byteBuffer.remaining()
+
+        // Derive key
+        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        val spec = PBEKeySpec(passphrase.toCharArray(), salt, ITERATIONS, KEY_LENGTH_BITS)
+        val secretKey = SecretKeySpec(factory.generateSecret(spec).encoded, "AES")
+
+        val cipher = Cipher.getInstance(ALGORITHM)
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(TAG_LENGTH_BITS, iv))
+        return cipher.doFinal(allBytes, ciphertextOffset, ciphertextLength)
+
     }
 
     private fun isKnownNonBackupFormat(bytes: ByteArray): Boolean {
