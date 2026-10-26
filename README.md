@@ -28,7 +28,7 @@
 
 Unlike conventional spend trackers that compromise user privacy by syncing financial data to third-party cloud servers, Savior operates **100% locally on your device**. It listens to transactional SMS messages emitted by Indian banks, UPI providers, and credit card issuers, instantaneously extracting expenditures, auto-detecting refunds/reversals, and organizing finances into actionable insights—without bank credentials, screen-scraping, or intrusive cloud lock-in.
 
-Savior features a **hybrid multi-tier AI categorization engine**: zero-latency deterministic regex rules on the edge, on-device NPU inference via **Android AICore / Gemini Nano**, and optional high-precision cloud reasoning via **OpenRouter (Claude 3.5 Haiku)** using your own API key.
+Savior features a **hybrid multi-tier AI categorization engine**: zero-latency deterministic regex rules on the edge, on-device NPU inference via **Android AICore / Gemini Nano**, and optional high-precision cloud reasoning via **OpenRouter (Claude 5.5 Haiku)** using your own API key.
 
 ---
 
