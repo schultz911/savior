@@ -1,6 +1,6 @@
-# Savio₹ (Savio)
+# Savior (Savio₹)
 
-![Savio Logo](app/src/main/res/mipmap-xxxhdpi/ic_savio_launcher.png)
+![Savior Logo](app/src/main/res/mipmap-xxxhdpi/ic_savio_launcher.png)
 
 ## Privacy-First, Local-First Intelligent SMS Expense Tracker & Financial Intelligence Engine for Android
 
@@ -24,11 +24,11 @@
 
 ## 📖 Overview
 
-**Savio₹** is an offline-first, high-performance personal finance tracking and savings acceleration application built natively for Android using modern Jetpack Compose and Material 3.
+**Savior (Savio₹)** is an offline-first, high-performance personal finance tracking and savings acceleration application built natively for Android using modern Jetpack Compose and Material 3.
 
-Unlike conventional spend trackers that compromise user privacy by syncing financial data to third-party cloud servers, Savio operates **100% locally on your device**. It listens to transactional SMS messages emitted by Indian banks, UPI providers, and credit card issuers, instantaneously extracting expenditures, auto-detecting refunds/reversals, and organizing finances into actionable insights—without bank credentials, screen-scraping, or intrusive cloud lock-in.
+Unlike conventional spend trackers that compromise user privacy by syncing financial data to third-party cloud servers, Savior operates **100% locally on your device**. It listens to transactional SMS messages emitted by Indian banks, UPI providers, and credit card issuers, instantaneously extracting expenditures, auto-detecting refunds/reversals, and organizing finances into actionable insights—without bank credentials, screen-scraping, or intrusive cloud lock-in.
 
-Savio features a **hybrid multi-tier AI categorization engine**: zero-latency deterministic regex rules on the edge, on-device NPU inference via **Android AICore / Gemini Nano**, and optional high-precision cloud reasoning via **OpenRouter (Claude 3.5 Haiku)** using your own API key.
+Savior features a **hybrid multi-tier AI categorization engine**: zero-latency deterministic regex rules on the edge, on-device NPU inference via **Android AICore / Gemini Nano**, and optional high-precision cloud reasoning via **OpenRouter (Claude 3.5 Haiku)** using your own API key.
 
 ---
 
@@ -93,7 +93,7 @@ Savio features a **hybrid multi-tier AI categorization engine**: zero-latency de
 
 ## 🏛 System Architecture
 
-Savio is engineered following modern Android architecture guidelines: Clean Architecture principles with **Model-View-ViewModel (MVVM)**, the **Repository Pattern**, and **Unidirectional Data Flow (UDF)** powered by Kotlin Coroutines and Kotlin Flows (`StateFlow`).
+Savior is engineered following modern Android architecture guidelines: Clean Architecture principles with **Model-View-ViewModel (MVVM)**, the **Repository Pattern**, and **Unidirectional Data Flow (UDF)** powered by Kotlin Coroutines and Kotlin Flows (`StateFlow`).
 
 ```mermaid
 graph TD
@@ -146,7 +146,7 @@ graph TD
 
 ## 🤖 Hybrid AI Categorization Engine
 
-Savio uses a graceful 3-tier cascade to maximize categorization accuracy while minimizing latency, battery usage, and network consumption:
+Savior uses a graceful 3-tier cascade to maximize categorization accuracy while minimizing latency, battery usage, and network consumption:
 
 | Tier | Engine | Latency | Network | Description |
 | :--- | :--- | :--- | :--- | :--- |
@@ -164,7 +164,7 @@ Savio uses a graceful 3-tier cascade to maximize categorization accuracy while m
 
 ## 🔒 Security Architecture & Cryptography
 
-Savio is engineered with strict financial data protection:
+Savior is engineered with strict financial data protection:
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -332,7 +332,7 @@ The release APK will be placed at `app/build/outputs/apk/release/app-release.apk
 
 ### Running Unit & Screenshot Tests
 
-Savio maintains strict test coverage across Room migrations, SMS parsing, security protocols, and screenshot UI fidelity via **Robolectric** and **Roborazzi**:
+Savior maintains strict test coverage across Room migrations, SMS parsing, security protocols, and screenshot UI fidelity via **Robolectric** and **Roborazzi**:
 
 ```bash
 # Run all unit and Robolectric tests (87 tests)
@@ -369,7 +369,7 @@ adb install -r public/savior-2.5.apk
 
 ## 🛡 Permissions Overview
 
-Savio requests only the permissions strictly required to perform local expenditure tracking:
+Savior requests only the permissions strictly required to perform local expenditure tracking:
 
 | Permission | Necessity | Privacy Rationale |
 | :--- | :--- | :--- |
@@ -380,7 +380,7 @@ Savio requests only the permissions strictly required to perform local expenditu
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Optional | Prevents aggressive OEM background task termination for real-time alerts. |
 | `INTERNET` | Optional | Used **only** if the user configures an OpenRouter API key for Cloud AI categorization. |
 
-Savio explicitly does **not** request contacts, storage (uses scoped app cache and Storage Access Framework), microphone, location, or broad package visibility queries.
+Savior explicitly does **not** request contacts, storage (uses scoped app cache and Storage Access Framework), microphone, location, or broad package visibility queries.
 
 ---
 
